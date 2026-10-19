@@ -57,7 +57,7 @@ bunx wrangler deploy
 
 | 配置 | 方式 | 用途 |
 |---|---|---|
-| `DB` | D1 binding | 实例、布局、快照、插件安装及变更记录；需要包含 `0004.sql` 的全部迁移 |
+| `DB` | D1 binding | 实例、布局、快照、分页刷新与插件变更；需要包含 `0005.sql` 的全部迁移 |
 | `ASSETS` | 静态资源 binding | 根页面和 `/assets/*`，与管理 API/DAV 共用一个 Worker |
 | `CF_ACCOUNT_ID`、`CF_WORKER_NAME` | 模板 vars | 定位当前部署；Worker 名称必须与实际目标一致 |
 | `CF_API_TOKEN` | Secret | 后台读取当前代码集合、发布替换代码；仅宿主使用 |
@@ -69,6 +69,14 @@ bunx wrangler deploy
 插件变更只发送代码模块和主模块名，使用平台承诺不修改配置的 Content API，以避免自行重建 Secrets、D1 和 ASSETS 设置；本项目已验证请求没有发送覆盖配置的字段，**尚未以真实 Cloudflare 部署证明这些配置确实全部保留**。发布 Token 不下发 WebUI，也不写入插件包或模块源码。
 
 模板开启 `nodejs_compat` 供控制面依赖使用；QQ 预构建插件已有独立的无此开关探测。这一开关既不是插件公共合同，也不证明免费计划的 CPU、包体或请求额度足够。
+
+## 目录准备与跨请求续步
+
+目录刷新使用[持久分页接口](management-api.md)。一次 POST step 最多执行一页插件读取，D1 保存暂存条目和下一游标，末页后才切换完整快照。操作 ID 可跨页面重载、Worker isolate 重建和进程重启恢复；GET 只查询。已有成功目录在刷新期间继续可读，冷读取返回带 Retry-After 的 503，由页面或客户端重试。
+
+开始刷新及冷读取响应可以经 `waitUntil` 安排一页；它不会在同一次调用中循环。WebUI 后续逐次 POST step；模板另配置每分钟 Cron，正式 scheduled 入口最多推进一个就绪任务的一页，供页面关闭后的慢速续跑。Cron 不保证精确完成时间，大集合应在页面中推进；平台配置保留的真实验收也应覆盖此触发器。
+
+单页预算与完整集合预算仍需分开测量。分页化不证明加密 CPU、插件内部请求、CDN 出口或逐文件 DAV 元数据满足免费额度；当前没有真实 Cloudflare 测试账号，继续本地验证，云端项保持待验。设计与已测边界见 [ADR 0007](adr/0007-durable-paged-refresh.md)和[分页记录](verification/p2-durable-refresh.md)。
 
 ## 在后台安装与移除插件
 

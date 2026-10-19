@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import { Alert, App, Button, Drawer, Empty, Input, Modal, Select, Skeleton, Space, Tag, Typography } from 'antd';
+import { App, Button, Drawer, Empty, Input, Modal, Select, Skeleton, Space, Tag, Typography } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -7,6 +7,7 @@ import type { Json } from '@musicfs/plugin-api';
 import type { SourceInstance } from '../../contracts/management';
 import type { Api } from '../api';
 import { Failure } from '../components/feedback';
+import { pendingRefreshId, RefreshProgress, usePersistentRefresh } from '../components/refresh';
 
 const SchemaForm = lazy(() => import('../components/schema-form'));
 const Authentication = lazy(() => import('../components/authentication'));
@@ -71,37 +72,29 @@ function InstanceEditor({ api, instance, close, showPlugins }: { api: Api; insta
 }
 
 function Roots({ api, instance }: { api: Api; instance: SourceInstance }) {
-  const client = useQueryClient(); const { message } = App.useApp();
-  const roots = useQuery({ queryKey: ['roots', instance.id, instance.epoch], queryFn: ({ signal }) => api.roots(instance.id, signal) });
+  const { message } = App.useApp();
+  const roots = useQuery({ queryKey: ['roots', instance.id, instance.epoch], queryFn: ({ signal }) => api.roots(instance.id, signal), retry: false });
+  const pending = pendingRefreshId(roots.error);
   const configuration = useQuery({ queryKey: ['configuration', instance.pluginId], queryFn: ({ signal }) => api.configuration(instance.pluginId, signal) });
   const statuses = useQueries({ queries: (roots.data ?? []).map(root => ({ queryKey: ['directory-status', instance.id, instance.epoch, root.directoryRef],
     queryFn: ({ signal }: { signal: AbortSignal }) => api.directoryStatus(instance.id, root.directoryRef, signal) })) });
-  const invalidate = async () => {
-    await client.invalidateQueries({ queryKey: ['roots', instance.id] }); await client.invalidateQueries({ queryKey: ['library'] });
-    await client.invalidateQueries({ queryKey: ['directory-status', instance.id] });
-  };
-  const refresh = useMutation({ mutationFn: () => api.refresh(instance.id), onSuccess: async result => {
-    await invalidate();
+  const refresh = usePersistentRefresh(api, { instanceId: instance.id, operationId: pending, onCompleted: result => {
     if (result.failures.length) message.warning(`${result.failures.length} 个目录刷新失败，请查看下方详情`);
-    else message.success(`实例内容已刷新（${result.refreshedDirectories} 个目录）`);
-  }, onError: invalidate });
-  const refreshDirectory = useMutation({ mutationFn: (ref: string) => api.refreshDirectory(instance.id, ref), onSuccess: async () => {
-    await invalidate(); message.success('目录已刷新');
-  }, onError: invalidate });
-  const busy = refresh.isPending || refreshDirectory.isPending || roots.isFetching;
-  return <><div className="page-actions"><Typography.Text type="secondary">可添加到目录布局的内容入口</Typography.Text><Button icon={<ReloadOutlined />} loading={refresh.isPending} disabled={busy && !refresh.isPending} onClick={() => { refreshDirectory.reset(); refresh.mutate(); }}>刷新实例内容</Button></div>
+    else message.success(result.scope.kind === 'instance' ? `实例内容已刷新（${result.refreshedDirectories} 个目录）`
+      : result.scope.directoryRef === undefined ? '内容入口已准备' : '目录已刷新');
+  } });
+  const busy = refresh.active || refresh.starting || refresh.preparing || roots.isFetching;
+  return <><div className="page-actions"><Typography.Text type="secondary">可添加到目录布局的内容入口</Typography.Text><Button icon={<ReloadOutlined />} loading={refresh.starting || refresh.active && refresh.view?.scope.kind === 'instance'} disabled={busy} onClick={() => refresh.start({ kind: 'instance' })}>刷新实例内容</Button></div>
     <p className="page-footnote">刷新各内容入口及已浏览的子目录；新子目录首次打开时加载。刷新失败的目录保留上次成功内容。</p>
-    <Failure error={roots.error} retry={() => void roots.refetch()} /><Failure error={configuration.error} /><Failure error={refresh.error} /><Failure error={refreshDirectory.error} />
-    {refresh.data && <Alert className="feedback" showIcon type={refresh.data.failures.length ? 'warning' : 'success'}
-      title={refresh.data.failures.length ? `${refresh.data.refreshedDirectories} 个目录已刷新，${refresh.data.failures.length} 个目录失败` : `实例内容已刷新（${refresh.data.refreshedDirectories} 个目录）`}
-      description={refresh.data.failures.length ? [...new Set(refresh.data.failures.map(failure => failure.error.message))].join('；') : undefined} />}
+    <Failure error={pending ? null : roots.error} retry={() => void roots.refetch()} /><Failure error={configuration.error} />
+    <RefreshProgress operation={refresh} labels={configuration.data?.statistics} reload={() => refresh.view && refresh.start(refresh.view.scope)} />
     {roots.isPending ? <Skeleton active /> : roots.data?.length ? roots.data.map((root, index) => <div className="root-row" key={root.sourceId}><div><Typography.Text strong>{root.name}</Typography.Text><div className="secondary-id">{root.sourceId}</div>
       {statuses[index]?.data && <><div className="directory-statistics">{Object.entries(configuration.data?.statistics ?? {}).flatMap(([key, label]) => {
         const count = statuses[index]?.data?.statistics?.[key]; return count === undefined ? [] : [<span key={key}>{label} <strong>{count}</strong></span>];
       })}</div><div className="secondary-id">最近成功：{new Date(statuses[index]!.data!.completedAt).toLocaleString()}</div></>}
       <Failure error={statuses[index]?.error ?? null} />
     </div>
-      <Button size="small" icon={<ReloadOutlined />} disabled={busy} loading={refreshDirectory.isPending && refreshDirectory.variables === root.directoryRef} onClick={() => { refresh.reset(); refreshDirectory.mutate(root.directoryRef); }}>刷新目录</Button>
+      <Button size="small" icon={<ReloadOutlined />} disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'directory' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'directory', directoryRef: root.directoryRef })}>刷新目录</Button>
     </div>) : !roots.isError && <Empty description="此实例暂时没有内容源" />}
   </>;
 }

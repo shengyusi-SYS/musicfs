@@ -22,6 +22,7 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun run probe:worker:netease` | 实际网易云 ESM 在 Bun/workerd 请求真实二维码；可显式选取已授权实例验证 D1 会话恢复和每日目录；需要网络 |
 | `bun run build:worker` | 组装正式 Worker core/薄入口/独立 registry、WebUI、模板及迁移；可附已有插件 ZIP 路径 |
 | `bun run probe:worker:service` | 实际正式入口在本地 workerd 的页面/API/DAV、D1重启、未配置发布凭据及坏插件启动拒绝 |
+| `bun scripts/probe-worker-refresh.ts` | 正式 Worker service 的 42 页独立 HTTP 推进、D1重启续接和每步查询数量；使用本地来源样本，不证明云端免费 CPU |
 | `bun run build:desktop -- --all` | 构建四个桌面目标，含共用页面、校验后的 rclone 和三个插件 ZIP；具体参数见[桌面说明](desktop.md) |
 | `bun scripts/probe-desktop-product.ts --mount` | 在原生Linux运行实际发行物、外置sample、后台复用及真实FUSE全文/偏移/忙卸载/退出；不用源码服务代替发行物 |
 | `bun run build:web` | 构建共用 React/Vite 页面至 dist/web |
@@ -74,6 +75,6 @@ bun scripts/probe-real-dav.ts --path-file /tmp/selected-library-path.txt
 | 网易云来源认证、目录和音频 | [网易云插件说明](../plugins/netease/README.md) |
 | 无账号、歌单或音质设置的来源 | [sample](../plugins/sample/index.ts) |
 
-安装器目前拒绝配置/私有状态 schema 版本变化，直到候选迁移与统一激活实现；失败候选保留当前安装。桌面仍保留不可变修订文件，后续补齐回收与中断恢复。完整示例、续期合并、真实云端和目标系统仍按[台账](verification.md)收口。SQLite 使用四份顺序迁移，D1 正式模板执行相同 SQL；旧基础探针只应用自己覆盖路径所需的历史 schema。不要修改已应用的历史迁移来补新字段。
+安装器目前拒绝配置/私有状态 schema 版本变化，直到候选迁移与统一激活实现；失败候选保留当前安装。桌面仍保留不可变修订文件，后续补齐回收与中断恢复。完整示例、续期合并、真实云端和目标系统仍按[台账](verification.md)收口。SQLite 使用五份顺序迁移，D1 正式模板和探针按文件名应用相同 SQL；不要修改已应用的历史迁移来补新字段。
 
 变更后的检查以实际职责为准；本地 Worker、真实 Cloudflare、桌面二进制和目标系统挂载分别记录证据，不相互替代。结果见[插件基础](verification/p0-plugin-foundation.md)及[目录/DAV/管理链路](verification/p0-library-dav.md)。

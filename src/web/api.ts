@@ -1,7 +1,8 @@
 import type { Json, PluginFault } from '@musicfs/plugin-api';
-import type { Status, SourceInstance, PluginInstallation, SourceConfiguration, ContentSources, DirectoryStatus, InstanceRefresh, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
+import type { Status, SourceInstance, PluginInstallation, SourceConfiguration, ContentSources, DirectoryStatus, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
 import type { PluginChange } from '../contracts/plugin-changes';
 import type { MountInput, MountView } from '../contracts/mounts';
+import type { RefreshScope, RefreshView } from '../contracts/refreshes';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -18,6 +19,10 @@ export class ApiError extends Error {
   get code(): string | undefined {
     return typeof this.detail === 'object' && this.detail !== null && 'error' in this.detail && typeof this.detail.error === 'string'
       ? this.detail.error : undefined;
+  }
+  get refreshOperationId(): string | undefined {
+    return this.code === 'refresh_pending' && typeof this.detail === 'object' && this.detail !== null
+      && 'operationId' in this.detail && typeof this.detail.operationId === 'string' ? this.detail.operationId : undefined;
   }
 }
 
@@ -52,8 +57,14 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     deleteInstance: (id: string) => request<void>(`/instances/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     roots: (id: string, signal: AbortSignal) => request<ContentSources>(`/instances/${encodeURIComponent(id)}/roots`, { signal }),
     directoryStatus: (id: string, ref: string, signal: AbortSignal) => request<DirectoryStatus | null>(`/instances/${encodeURIComponent(id)}/directory-status?directoryRef=${encodeURIComponent(ref)}`, { signal }),
-    refresh: (id: string) => request<InstanceRefresh>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', { scope: 'instance' })),
-    refreshDirectory: (id: string, directoryRef: string) => request<unknown>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', { directoryRef })),
+    refresh: (id: string) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', { scope: 'instance' })),
+    refreshDirectory: (id: string, directoryRef?: string) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', directoryRef === undefined ? {} : { directoryRef })),
+    startRefresh: (id: string, scope: RefreshScope) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', scope.kind === 'instance' ? { scope: 'instance' }
+      : scope.directoryRef === undefined ? {} : { directoryRef: scope.directoryRef })),
+    currentRefresh: (id: string, signal: AbortSignal) => request<RefreshView | null>(`/instances/${encodeURIComponent(id)}/refresh`, { signal }),
+    refreshOperation: (id: string, signal: AbortSignal) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}`, { signal }),
+    stepRefresh: (id: string, signal?: AbortSignal) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}/step`, { method: 'POST', ...(signal ? { signal } : {}) }),
+    cancelRefresh: (id: string) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     layout: (signal: AbortSignal) => request<Layout>('/layout', { signal }),
     saveLayout: (expectedRevision: number, nodes: LayoutNode[] | null) => request<Layout>('/layout', json('PUT', { expectedRevision, nodes })),
     library: (path: string, signal: AbortSignal) => request<ViewEntry[]>(`/library?path=${encodeURIComponent(path)}`, { signal }),

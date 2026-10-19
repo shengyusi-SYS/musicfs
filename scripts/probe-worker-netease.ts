@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -7,6 +7,7 @@ import { Miniflare, Log, LogLevel } from 'miniflare';
 import { Database } from 'bun:sqlite';
 import type { Context, SourcePlugin } from '@musicfs/plugin-api';
 import { buildNetease } from './build-netease';
+import { completeRefresh, publishedDirectory, requestReady } from './helpers/refresh-http';
 
 await buildNetease();
 const desktopPlugin = (await import(pathToFileURL(resolve('dist/netease/org.musicfs.netease/index.mjs')).href) as { default: SourcePlugin }).default;
@@ -27,8 +28,11 @@ const mf = new Miniflare({ modules: [{ type: 'ESModule', path: resolve('dist/net
   d1Databases: { DB: 'musicfs-netease-p0' }, d1Persist: directory, log: new Log(LogLevel.ERROR) });
 try {
   const db = await mf.getD1Database('DB');
-  for (const migration of ['0001', '0002', '0003']) await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${migration}.sql`).text()).replaceAll('\n', ' '));
+  for (const name of (await readdir('src/infrastructure/persistence/migrations')).filter(name => name.endsWith('.sql')).sort()) {
+    await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${name}`).text()).replace(/^\s*--.*$/gm, '').replaceAll('\n', ' '));
+  }
   const headers = { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' };
+  const dispatch = (url: string, init?: Pick<RequestInit, 'method' | 'headers'>) => mf.dispatchFetch(url, { ...init, headers: Object.fromEntries(new Headers(init?.headers)) });
   const ids: string[] = [];
   for (const name of ['网易云甲', '网易云乙']) {
     const created = await mf.dispatchFetch('http://probe/api/instances', { method: 'POST', headers, body: JSON.stringify({ pluginId: 'org.musicfs.netease', name, config: {} }) });
@@ -51,10 +55,11 @@ try {
     finally { desktop.close(); }
     assert(selected && JSON.parse(selected.private_state).accountId, 'The selected instance must already be authorized');
     await db.prepare('UPDATE instances SET private_state = ?, config = ? WHERE id = ?').bind(selected.private_state, selected.config, ids[1]!).run();
-    const roots = await mf.dispatchFetch(`http://probe/api/instances/${ids[1]}/roots`, { headers }); assert.equal(roots.status, 200); assert.equal((await roots.json() as unknown[]).length, 5);
+    const roots = await requestReady(dispatch, `http://probe/api/instances/${ids[1]}/roots`, { headers }); assert.equal(roots.status, 200); assert.equal((await roots.json() as unknown[]).length, 5);
     const content = await mf.dispatchFetch(`http://probe/api/instances/${ids[1]}/refresh`, { method: 'POST', headers, body: JSON.stringify({ directoryRef: 'daily' }) });
-    assert.equal(content.status, 200); const page = await content.json() as { items: unknown[]; statistics: Record<string, number> };
-    console.log(JSON.stringify({ runtime: 'local workerd', realDailyFiles: page.items.length, statistics: page.statistics }));
+    await completeRefresh(dispatch, content, 'http://probe', headers);
+    const page = await publishedDirectory(dispatch, 'http://probe', ids[1]!, 'daily', headers);
+    console.log(JSON.stringify({ runtime: 'local workerd', realDailyFiles: page.entries.length, statistics: page.status?.statistics }));
     restoredRealSession = true;
   }
   console.log(JSON.stringify({ runtime: 'local workerd', sdk: 'NeteaseCloudMusicApi 4.32.0', packedBundle: true, nodeCompatibility: true, isolatedCookieJars: true,

@@ -19,7 +19,7 @@
 | [网易云真实来源](verification/p2-netease-source.md) | 真实扫码、4,158 曲完整喜欢、MP3/DAV/rclone、workerd恢复及多表示响应修正 | 全部音质/续期、完整分类、免费云端及播放器 |
 | [桌面宿主](desktop.md)与[限定验证](verification/p2-desktop-host.md) | 点击启动、后台复用、凭据、rclone挂载和四目标构建入口 | 四目标原生运行及系统挂载均通过 |
 | [Worker 宿主与发布](worker.md) | 正式入口、模板、持久发布与核对恢复、本地证据 | 真云配置保留、免费配额及零中断 |
-| [实例刷新](verification/p1-instance-refresh.md) | 实例/单目录范围、可达缓存遍历、失败保留、SQLite/D1 与浏览器结果 | 全树预读、后台进度或真实云端大集合验收 |
+| [实例刷新](verification/p1-instance-refresh.md)与[持久分页](verification/p2-durable-refresh.md) | 范围、完整发布、页检查点、后台/跨请求续步及本地 SQL 预算 | 全树预读、DAV 大目录预算或真实云端免费验收 |
 | [共用界面设计](architecture/web-ui.md) | 已确认视觉基线、页面责任、前后端合同与令牌边界 | 产品全部管理能力已完成 |
 | [管理 HTTP 接口](management-api.md) | WebUI 可调用的实际路由与凭据合同 | 尚未实现的认证/部署/挂载入口 |
 | [统一需求](../outputs/musicfs-requirements-and-technical-design.md) | 产品范围、用户结果、FR01—FR25 与发布验收 | 已实现或兼容通过 |
@@ -39,6 +39,7 @@
 - [ADR 0004 共用 Fetch 只读 DAV](adr/0004-shared-fetch-readonly-dav.md)
 - [ADR 0005 QQ 固定 SDK 的原始读取适配](adr/0005-pinned-qq-sdk-read-adapter.md)
 - [ADR 0006 普通 Worker 的代码发布与安装激活](adr/0006-worker-code-publication.md)
+- [ADR 0007 目录刷新按持久页推进](adr/0007-durable-paged-refresh.md)
 - [需求澄清记录](../outputs/musicfs-design-review.md)：保留产品问题、回答和历史修正，不作为另一份独立实现方案。
 
 ## 技术证据与候选调查

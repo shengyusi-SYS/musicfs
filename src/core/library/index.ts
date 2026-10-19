@@ -1,10 +1,13 @@
 import { z } from 'zod';
-import type { ByteRange, Entry, FileInfo, Outcome, Page, ReadResult, Root } from '@musicfs/plugin-api';
+import type { ByteRange, FileInfo, Outcome, ReadResult } from '@musicfs/plugin-api';
 import type { Sources, SourceStamp } from '../sources';
 import { nameEntries } from './names';
-import { LibraryError, type Description, type FileDescription, type FileView, type LayoutNode,
+import { createRefreshes } from './refresh';
+import type { RefreshScope, RefreshStore, RefreshView } from './refresh-types';
+import { LibraryError, PendingRefreshError, type Description, type FileDescription, type FileView, type LayoutNode,
   type DirectoryStatus, type InstanceRefresh, type LibraryStore, type Snapshot, type SnapshotKey, type ViewEntry } from './types';
 export * from './types';
+export type { RefreshView, RefreshScope, Refreshes } from './refresh-types';
 
 const epochDate = '1970-01-01T00:00:00.000Z';
 const sameStamp = (a: SourceStamp, b: SourceStamp) => a.id === b.id && a.epoch === b.epoch
@@ -95,92 +98,60 @@ type Target =
 type Child = { id: string; name: string; target: Target; modifiedAt: string };
 type Resolved = { target: Target; name: string; path: string; modifiedAt: string };
 
-export function createLibrary(sources: Sources, store: LibraryStore, budgets: { pages: number; entries: number; directories?: number } = { pages: 1000, entries: 100_000 }) {
-  async function refresh(stamp: SourceStamp, key: SnapshotKey, signal: AbortSignal): Promise<Snapshot> {
-    const requestId = crypto.randomUUID();
-    if (!await store.beginRefresh(stamp, key, requestId)) throw new LibraryError('stale_call', 'Source changed before refresh');
+export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore,
+  budgets: { pages: number; entries: number; directories?: number } = { pages: 1000, entries: 100_000 },
+  options: { execution?: 'inline' | 'deferred' } = {}) {
+  const refreshes = createRefreshes(sources, store, budgets);
+  async function drain(initial: RefreshView, signal: AbortSignal): Promise<RefreshView> {
+    let progress = initial;
     try {
-      const roots: Root[] = []; const entries: Entry[] = []; const cursors = new Set<string>(); const identities = new Set<string>();
-      let cursor: string | undefined; const counters = new Map<string, number>(); let reportedStatistics = false;
-      let counterKeys: string | undefined;
-      for (let pageNumber = 0; ; pageNumber++) {
+      while (progress.status === 'queued' || progress.status === 'running') {
         signal.throwIfAborted();
-        if (pageNumber >= budgets.pages) throw new LibraryError('invalid_source', 'Source pagination budget exceeded');
-        const page: Page<Root> | Page<Entry> = key.kind === 'roots'
-          ? unwrap(await sources.roots(stamp.id, signal, cursor))
-          : unwrap(await sources.list(stamp.id, key.ref, signal, cursor));
-        if (!Array.isArray(page.items)) throw new LibraryError('invalid_source', 'Source returned an invalid page');
-        const keys = JSON.stringify(Object.keys(page.statistics ?? {}).sort());
-        if (counterKeys !== undefined && counterKeys !== keys) throw new LibraryError('invalid_source', 'Source page counters changed during pagination');
-        counterKeys = keys;
-        if (page.statistics !== undefined) {
-          const statistics = z.record(z.string().min(1).max(64), z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)).safeParse(page.statistics);
-          if (!statistics.success || Object.keys(statistics.data).length > 100) throw new LibraryError('invalid_source', 'Source returned invalid page counters');
-          reportedStatistics = true;
-          for (const [key, value] of Object.entries(statistics.data)) {
-            const total = (counters.get(key) ?? 0) + value;
-            if (!Number.isSafeInteger(total)) throw new LibraryError('invalid_source', 'Source counter total overflowed');
-            counters.set(key, total);
-          }
+        const previous = JSON.stringify(progress.current);
+        progress = await refreshes.step(progress.operationId, signal);
+        if (progress.status === 'running' && JSON.stringify(progress.current) === previous) {
+          await new Promise(resolve => setTimeout(resolve, 20));
         }
-        for (const item of page.items) {
-          const identity = 'sourceId' in item ? item.sourceId : item.entryId;
-          if (!identity || typeof item.name !== 'string' || identities.has(identity)) throw new LibraryError('invalid_source', 'Source repeated a directory occurrence identity');
-          identities.add(identity);
-          if (identities.size > budgets.entries) throw new LibraryError('invalid_source', 'Source entry budget exceeded');
-          if (key.kind === 'roots' && 'sourceId' in item && typeof item.directoryRef === 'string') roots.push(item);
-          else if (key.kind === 'directory' && 'entryId' in item
-            && (item.kind === 'file' && typeof item.fileRef === 'string' || item.kind === 'directory' && typeof item.directoryRef === 'string')) entries.push(item);
-          else throw new LibraryError('invalid_source', 'Source returned an invalid directory entry');
-        }
-        if (page.nextCursor === undefined) break;
-        if (typeof page.nextCursor !== 'string' || cursors.has(page.nextCursor)) throw new LibraryError('invalid_source', 'Source returned a cyclic page cursor');
-        cursors.add(page.nextCursor); cursor = page.nextCursor;
       }
-      signal.throwIfAborted();
-      const common = { stamp, id: requestId, completedAt: new Date().toISOString(), ...(reportedStatistics ? { statistics: Object.fromEntries(counters) } : {}) };
-      const snapshot: Snapshot = key.kind === 'roots' ? { ...common, kind: 'roots', items: roots } : { ...common, kind: 'directory', items: entries };
-      if (!await store.publishSnapshot(stamp, key, requestId, snapshot)) throw new LibraryError('stale_call', 'Source or refresh changed before publication');
-      return snapshot;
     } catch (error) {
-      await store.failRefresh(stamp, key, requestId, error instanceof LibraryError ? error.sourceFault?.kind ?? error.code : 'source_failed');
+      if (signal.aborted) await refreshes.cancel(progress.operationId);
       throw error;
     }
+    if (progress.status !== 'completed') throw new LibraryError(progress.status === 'superseded' || progress.status === 'cancelled' ? 'stale_call'
+      : progress.error?.code === 'invalid_source' ? 'invalid_source' : 'source_failed',
+      progress.error?.message ?? 'Directory refresh did not complete', progress.error?.sourceFault);
+    return progress;
+  }
+  async function refresh(stamp: SourceStamp, key: SnapshotKey, signal: AbortSignal): Promise<Snapshot> {
+    signal.throwIfAborted();
+    if (!await sources.current(stamp)) throw new LibraryError('stale_call', 'Source changed before refresh');
+    const scope: RefreshScope = { kind: 'directory', ...(key.kind === 'directory' ? { directoryRef: key.ref } : {}) };
+    const initial = await refreshes.start(stamp.id, scope);
+    const record = await store.refreshRecord(initial.operationId);
+    if (!record || !sameStamp(record.stamp, stamp)) throw new LibraryError('stale_call', 'Source changed before refresh');
+    await drain(initial, signal);
+    const published = await store.snapshot(stamp.id, key);
+    if (!published?.value || !sameStamp(published.value.stamp, stamp) || !await sources.current(stamp)) {
+      throw new LibraryError('stale_call', 'Source changed before refreshed content was read');
+    }
+    return published.value;
   }
   async function snapshot(stamp: SourceStamp, key: SnapshotKey, signal: AbortSignal): Promise<Snapshot> {
-    const cached = await store.snapshot(stamp.id, key);
-    if (cached?.value && sameStamp(cached.value.stamp, stamp)) return cached.value;
-    return refresh(stamp, key, signal);
+    for (;;) {
+      signal.throwIfAborted();
+      const cached = await store.snapshot(stamp.id, key);
+      if (cached?.value && sameStamp(cached.value.stamp, stamp)) return cached.value;
+      const pending = await refreshes.ensure(stamp, key);
+      if (options.execution === 'deferred') throw new PendingRefreshError(pending.operationId);
+      await drain(pending, signal);
+      // A concurrent miss may have reused a job for another directory of this instance.
+      // Read this key again; never return that other directory as this result.
+    }
   }
   async function refreshInstance(instanceId: string, signal: AbortSignal): Promise<InstanceRefresh> {
-    const stamp = await sources.view(instanceId);
-    const known = new Set(await store.knownDirectoryRefs(instanceId));
-    const roots = await refresh(stamp, { kind: 'roots', ref: '' }, signal);
-    if (roots.kind !== 'roots') throw new LibraryError('invalid_source', 'Invalid root snapshot');
-    const pending = roots.items.map(root => root.directoryRef); const seen = new Set<string>();
-    const result: InstanceRefresh = { refreshedDirectories: 0, failures: [] };
-    for (let index = 0; index < pending.length; index++) {
-      signal.throwIfAborted();
-      const ref = pending[index]!;
-      if (seen.has(ref)) continue;
-      if (seen.size >= (budgets.directories ?? 1000)) throw new LibraryError('invalid_source', 'Instance refresh directory budget exceeded');
-      seen.add(ref);
-      try {
-        const value = await refresh(stamp, { kind: 'directory', ref }, signal);
-        result.refreshedDirectories++;
-        // Refresh reachable, previously visited children. New subtrees load on first browse.
-        if (value.kind === 'directory') for (const item of value.items) {
-          if (item.kind === 'directory' && known.has(item.directoryRef) && !seen.has(item.directoryRef)) pending.push(item.directoryRef);
-        }
-      } catch (error) {
-        signal.throwIfAborted();
-        if (!(error instanceof LibraryError) || error.code === 'stale_call') throw error;
-        result.failures.push({ directoryRef: ref, error: { code: error.code, message: error.message,
-          ...(error.sourceFault ? { sourceFault: error.sourceFault } : {}) } });
-      }
-    }
-    if (!await sources.current(stamp)) throw new LibraryError('stale_call', 'Source changed during instance refresh');
-    return result;
+    signal.throwIfAborted();
+    const result = await drain(await refreshes.start(instanceId, { kind: 'instance' }), signal);
+    return { refreshedDirectories: result.refreshedDirectories, failures: result.failures };
   }
   async function children(target: Target, signal: AbortSignal): Promise<Child[]> {
     if (target.kind === 'instances') return (await sources.instances()).map(instance => ({
@@ -269,12 +240,13 @@ export function createLibrary(sources: Sources, store: LibraryStore, budgets: { 
   };
   return {
     files,
+    refreshes,
     refreshInstance,
     async directoryStatus(instanceId: string, directoryRef: string): Promise<DirectoryStatus | null> {
       const stamp = await sources.view(instanceId);
-      const cached = await store.snapshot(instanceId, { kind: 'directory', ref: directoryRef });
-      if (!cached?.value || !sameStamp(cached.value.stamp, stamp) || !await sources.current(stamp)) return null;
-      return { completedAt: cached.value.completedAt, statistics: cached.value.statistics ?? null };
+      const cached = await store.snapshotHeader(instanceId, { kind: 'directory', ref: directoryRef });
+      if (!cached || !sameStamp(cached.stamp, stamp) || !await sources.current(stamp)) return null;
+      return { completedAt: cached.completedAt, statistics: cached.statistics ?? null };
     },
     async contentSources(instanceId: string, signal: AbortSignal) {
       const stamp = await sources.view(instanceId);

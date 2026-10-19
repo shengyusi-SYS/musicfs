@@ -5,6 +5,8 @@ import { createManagementApi } from '../src/transport/http';
 import { createApi } from '../src/web/api';
 import { libraryFixture } from './helpers/library-fixture';
 import { createLibrary } from '../src/core/library';
+import { completeRefresh, driveRefresh } from '../scripts/helpers/refresh-http';
+import type { RefreshView } from '../src/contracts/refreshes';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const close of cleanups.splice(0)) close(); });
@@ -31,7 +33,8 @@ async function setup() {
   const http = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin', sources: f.sources, library: f.library,
     extensions: createExtensions(f.store, async () => {}), maxPackageBytes: 1024, install: async () => installation });
   const fetcher = ((input, init) => http.request(new Request(new URL(String(input), 'http://fixture'), init))) as typeof fetch;
-  return { ...f, source, content, calls, failures, api: createApi('fixture-admin', fetcher), http };
+  const finish = (view: RefreshView) => driveRefresh((url: string, init?: RequestInit) => fetcher(url, init), view, 'http://fixture', { Authorization: 'Bearer fixture-admin' });
+  return { ...f, source, content, calls, failures, api: createApi('fixture-admin', fetcher), http, finish };
 }
 
 test('the WebUI refresh action updates cached song directories, with new child directories left lazy', async () => {
@@ -39,7 +42,7 @@ test('the WebUI refresh action updates cached song directories, with new child d
   const path = '/实例 & #/集合/已浏览';
   expect((await f.library.files.list(path, signal())).map(item => item.name)).toEqual(['old.wav']);
   f.content.set('cached', [file('new.wav')]); f.calls.length = 0;
-  await f.api.refresh(f.id);
+  await f.finish(await f.api.refresh(f.id));
   expect((await f.library.files.list(path, signal())).map(item => item.name)).toEqual(['new.wav']);
   expect(f.calls).toEqual(['collection', 'cached']);
   expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'lazy' })).toBeUndefined();
@@ -51,14 +54,14 @@ test('instance refresh reports partial failure, keeps last complete content and 
   const before = f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' });
   const layout = await f.library.saveLayout(0, [{ kind: 'source', id: 'export', name: '我的导出', instanceId: f.id, sourceId: 'collection' }]);
   f.failures.add('cached'); f.content.set('collection', [directory('cached', '已浏览'), directory('new')]);
-  const result = await f.api.refresh(f.id);
+  const result = await f.finish(await f.api.refresh(f.id));
   expect(result).toMatchObject({ refreshedDirectories: 1, failures: [{ directoryRef: 'cached', error: { code: 'source_failed', sourceFault: { kind: 'temporary' } } }] });
   expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' })?.value).toEqual(before?.value);
   expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' })?.error).toBe('temporary');
   expect(await f.library.layout()).toEqual(layout);
   expect((await f.library.files.list('/我的导出/已浏览', signal())).map(item => item.name)).toEqual(['old.wav']);
   f.failures.clear(); f.content.set('cached', [file('recovered.wav')]);
-  expect((await f.api.refresh(f.id)).failures).toEqual([]);
+  expect((await f.finish(await f.api.refresh(f.id))).failures).toEqual([]);
   expect((await f.library.files.list('/我的导出/已浏览', signal())).map(item => item.name)).toEqual(['recovered.wav']);
 });
 
@@ -71,17 +74,18 @@ test('instance refresh skips unreachable old snapshots, isolates instances and v
   await f.library.refresh(other.value.id, 'cached', signal());
   const otherSnapshot = f.store.snapshot(other.value.id, { kind: 'directory', ref: 'cached' });
   f.content.set('cached', [directory('collection')]); f.calls.length = 0;
-  expect(await f.api.refresh(f.id)).toEqual({ refreshedDirectories: 2, failures: [] });
+  expect(await f.finish(await f.api.refresh(f.id))).toMatchObject({ status: 'completed', refreshedDirectories: 2, failures: [] });
   expect(f.calls).toEqual(['collection', 'cached']);
   expect(f.store.snapshot(other.value.id, { kind: 'directory', ref: 'cached' })).toEqual(otherSnapshot);
 });
 
 test('directory refresh is narrow, and the legacy empty request still refreshes only roots', async () => {
   const f = await setup();
-  await f.api.refreshDirectory(f.id, 'cached'); expect(f.calls).toEqual(['cached']);
+  await f.finish(await f.api.refreshDirectory(f.id, 'cached')); expect(f.calls).toEqual(['cached']);
   f.calls.length = 0;
   const legacy = await f.http.request(`/api/instances/${f.id}/refresh`, { method: 'POST', headers: { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' }, body: '{}' });
-  expect(legacy.status).toBe(200); expect(f.calls).toEqual([]);
+  expect(legacy.status).toBe(202);
+  await completeRefresh(async (url, init) => f.http.request(url, init), legacy, 'http://fixture', { Authorization: 'Bearer fixture-admin' }); expect(f.calls).toEqual([]);
   const invalid = await f.http.request(`/api/instances/${f.id}/refresh`, { method: 'POST', headers: { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'instance', directoryRef: 'cached' }) });
   expect(invalid.status).toBe(400);
 });
@@ -118,7 +122,7 @@ test('the management caller gets plugin-defined labels and cached counters witho
   const f = await setup(); f.source.statistics = { records: '项目' };
   f.source.list = async () => ({ ok: true, value: { items: [], statistics: { records: 7 } } });
   expect(await f.api.directoryStatus(f.id, 'collection', signal())).toBeNull();
-  await f.api.refreshDirectory(f.id, 'collection');
+  await f.finish(await f.api.refreshDirectory(f.id, 'collection'));
   expect((await f.api.configuration('org.musicfs.sample', signal())).statistics).toEqual({ records: '项目' });
   const status = await f.api.directoryStatus(f.id, 'collection', signal());
   expect(status?.statistics).toEqual({ records: 7 });

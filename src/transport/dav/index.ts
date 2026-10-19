@@ -3,7 +3,7 @@ import { basicAuth } from 'hono/basic-auth';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import parseRange from 'range-parser';
-import { LibraryError, type FileView } from '../../core/library';
+import { LibraryError, PendingRefreshError, type FileView } from '../../core/library';
 import { SourceError } from '../../core/sources';
 import { parsePropfind, propfindResponse } from './xml';
 
@@ -17,7 +17,7 @@ export function davStatus(error: unknown): 400 | 404 | 409 | 412 | 502 | 503 | 5
     if (error.code === 'invalid_layout') return 400;
     if (error.code === 'conflict') return 409;
     if (error.code === 'content_changed') return 412;
-    if (error.code === 'stale_call' || error.code === 'source_failed') return 503;
+    if (error.code === 'stale_call' || error.code === 'source_failed' || error.code === 'refresh_pending') return 503;
     return 502;
   }
   return error instanceof SourceError ? 503 : 500;
@@ -40,6 +40,9 @@ export function createDav(view: FileView, credentials: ReadCredentials, options:
   const limit = bodyLimit({ maxSize: 64 * 1024 });
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();
+    if (error instanceof PendingRefreshError) {
+      c.header('Retry-After', '2'); c.header('X-MusicFS-Refresh', error.operationId);
+    }
     return c.text(`MusicFS request failed (${davStatus(error)})`, davStatus(error));
   });
   const handler = async (c: Context) => {

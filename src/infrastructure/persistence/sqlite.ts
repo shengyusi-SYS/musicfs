@@ -6,7 +6,12 @@ import initialSchema from './migrations/0001.sql' with { type: 'text' };
 import librarySchema from './migrations/0002.sql' with { type: 'text' };
 import authenticationSchema from './migrations/0003.sql' with { type: 'text' };
 import workerChangesSchema from './migrations/0004.sql' with { type: 'text' };
-import type { LayoutNode, LibraryStore, Snapshot } from '../../core/library/types';
+import refreshSchema from './migrations/0005.sql' with { type: 'text' };
+import type { LayoutNode, LibraryStore } from '../../core/library/types';
+import type { RefreshStore } from '../../core/library/refresh-types';
+import { cancelRefreshPlan, claimRefreshStatement, commitRefreshPlan, createdRefresh, createRefreshPlan, currentRefreshSQL,
+  readyRefreshesSQL, refreshFromRow, refreshRecordSQL, snapshotEntriesSQL, snapshotFromRows, snapshotHeaderFromRow, snapshotHeaderSQL,
+  type RefreshDocumentRow, type RefreshOutcome, type SnapshotEntryRow, type SnapshotHeaderRow, type SqlStatement, type SqlValue } from './refresh-sql';
 
 type InstallationRow = { manifest: string; revision: string; generation: number; status: 'active' | 'missing' };
 type InstanceRow = { id: string; plugin_id: string; name: string; config: string; epoch: number };
@@ -20,12 +25,13 @@ export function openSqlite(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = db.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version;
-  if (version === undefined || version < 0 || version > 4) { db.close(); throw new Error('Unsupported MusicFS database version'); }
-  if (version < 4) db.transaction(() => {
+  if (version === undefined || version < 0 || version > 5) { db.close(); throw new Error('Unsupported MusicFS database version'); }
+  if (version < 5) db.transaction(() => {
     if (version === 0) db.exec(initialSchema);
     if (version < 2) db.exec(librarySchema);
     if (version < 3) db.exec(authenticationSchema);
-    db.exec(workerChangesSchema); db.exec('PRAGMA user_version = 4');
+    if (version < 4) db.exec(workerChangesSchema);
+    db.exec(refreshSchema); db.exec('PRAGMA user_version = 5');
   })();
 
   const installation = (id: string): Installation | undefined => {
@@ -38,9 +44,8 @@ export function openSqlite(path: string) {
   const bindings = (snapshot: SourceStamp) => ({
     id: snapshot.id, epoch: snapshot.epoch, revision: snapshot.pluginRevision, generation: snapshot.pluginGeneration
   });
-  const currentSource = `EXISTS (SELECT 1 FROM instances i JOIN installations p ON p.id = i.plugin_id
-    WHERE i.id = ? AND i.epoch = ? AND p.revision = ? AND p.generation = ? AND p.status = 'active')`;
-  const sourceValues = (stamp: SourceStamp) => [stamp.id, stamp.epoch, stamp.pluginRevision, stamp.pluginGeneration];
+  const execute = <T>(query: SqlStatement): T[] => db.query<T, SqlValue[]>(query.sql).all(...query.values);
+  const batch = <T>(queries: SqlStatement[]): T[][] => db.transaction(() => queries.map(query => execute<T>(query)))();
 
   return {
     installation,
@@ -100,28 +105,35 @@ export function openSqlite(path: string) {
         .run(nodes === null ? null : JSON.stringify(nodes), expectedRevision).changes === 1;
     },
     snapshot(instanceId, key) {
-      const row = db.query<{ document: string | null; error: string | null }, [string, string, string]>(
-        'SELECT document, error FROM directory_snapshots WHERE instance_id = ? AND kind = ? AND ref = ?').get(instanceId, key.kind, key.ref);
-      return row ? { value: row.document === null ? null : JSON.parse(row.document) as Snapshot, error: row.error } : undefined;
+      return snapshotFromRows(db.query<SnapshotEntryRow, [string, string, string]>(snapshotEntriesSQL).all(instanceId, key.kind, key.ref));
+    },
+    snapshotHeader(instanceId, key) {
+      return snapshotHeaderFromRow(db.query<SnapshotHeaderRow, [string, string, string]>(snapshotHeaderSQL).get(instanceId, key.kind, key.ref));
     },
     knownDirectoryRefs(instanceId) {
       return db.query<{ ref: string }, [string]>("SELECT ref FROM directory_snapshots WHERE instance_id = ? AND kind = 'directory'")
         .all(instanceId).map(row => row.ref);
     },
-    beginRefresh(stamp, key, requestId) {
-      return db.query(`INSERT INTO directory_snapshots (instance_id, kind, ref, request_id) SELECT ?, ?, ?, ? WHERE ${currentSource}
-        ON CONFLICT(instance_id, kind, ref) DO UPDATE SET request_id = excluded.request_id`)
-        .run(stamp.id, key.kind, key.ref, requestId, ...sourceValues(stamp)).changes === 1;
+    createRefresh(record, replace) {
+      const results = batch<RefreshDocumentRow>(createRefreshPlan(record, replace));
+      return createdRefresh(results.at(-1)!);
     },
-    publishSnapshot(stamp, key, requestId, value) {
-      return db.query(`UPDATE directory_snapshots SET document = ?, error = NULL
-        WHERE instance_id = ? AND kind = ? AND ref = ? AND request_id = ? AND ${currentSource}`)
-        .run(JSON.stringify(value), stamp.id, key.kind, key.ref, requestId, ...sourceValues(stamp)).changes === 1;
+    refreshRecord(operationId) {
+      return refreshFromRow(db.query<RefreshDocumentRow, [string]>(refreshRecordSQL).get(operationId));
     },
-    failRefresh(stamp, key, requestId, error) {
-      db.query(`UPDATE directory_snapshots SET error = ? WHERE instance_id = ? AND kind = ? AND ref = ? AND request_id = ? AND ${currentSource}`)
-        .run(error, stamp.id, key.kind, key.ref, requestId, ...sourceValues(stamp));
+    currentRefresh(instanceId) {
+      return refreshFromRow(db.query<RefreshDocumentRow, [string]>(currentRefreshSQL).get(instanceId));
+    },
+    claimRefresh(operationId, token, now, until) {
+      return refreshFromRow(execute<RefreshDocumentRow>(claimRefreshStatement(operationId, token, now, until))[0]);
+    },
+    commitRefresh(expected, next, page, directoryError) {
+      return batch<{ outcome: RefreshOutcome }>(commitRefreshPlan(expected, next, page, directoryError))[0]![0]!.outcome;
+    },
+    cancelRefresh(operationId, updatedAt) { batch(cancelRefreshPlan(operationId, updatedAt)); },
+    readyRefreshes(now, limit) {
+      return db.query<{ operation_id: string }, [number, number]>(readyRefreshesSQL).all(now, limit).map(row => row.operation_id);
     },
     close: () => db.close()
-  } satisfies InstallationStore & InstanceStore & LibraryStore & { close(): void };
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & { close(): void };
 }

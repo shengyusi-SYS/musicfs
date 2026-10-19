@@ -7,6 +7,7 @@ import type { LayoutNode, SourceInstance } from '../../contracts/management';
 import type { Api } from '../api';
 import { ApiError } from '../api';
 import { Failure } from '../components/feedback';
+import { pendingRefreshId, RefreshProgress, usePersistentRefresh } from '../components/refresh';
 import { appendNode, canMove, editNode, findNode, moveNode } from './layout-draft';
 
 type Draft = { base: number; nodes: LayoutNode[] | null };
@@ -62,21 +63,27 @@ export default function Library({ api }: { api: Api }) {
 
 function SourcePicker({ api, instances, close, add }: { api: Api; instances: SourceInstance[]; close: () => void; add: (node: LayoutNode) => void }) {
   const [instanceId, setInstanceId] = useState(''); const [sourceId, setSourceId] = useState('');
-  const roots = useQuery({ queryKey: ['roots', instanceId, instances.find(value => value.id === instanceId)?.epoch], queryFn: ({ signal }) => api.roots(instanceId, signal), enabled: !!instanceId });
+  const roots = useQuery({ queryKey: ['roots', instanceId, instances.find(value => value.id === instanceId)?.epoch], queryFn: ({ signal }) => api.roots(instanceId, signal), enabled: !!instanceId, retry: false });
+  const pending = pendingRefreshId(roots.error);
+  const refresh = usePersistentRefresh(api, { instanceId: instanceId || undefined, operationId: pending });
   const root = roots.data?.find(value => value.sourceId === sourceId);
   return <Modal title="添加内容源到草稿" open onCancel={close} okText="添加到草稿" cancelText="取消" okButtonProps={{ disabled: !root }} onOk={() => { if (root) add({ id: crypto.randomUUID(), name: root.name, kind: 'source', instanceId, sourceId }); }}>
     <div className="field-block"><label htmlFor="layout-instance">数据源实例</label><Select<string> id="layout-instance" placeholder="选择实例" value={instanceId || null} onChange={value => { setInstanceId(value); setSourceId(''); }} options={instances.map(value => ({ value: value.id, label: value.name }))} /></div>
-    <div className="field-block"><label htmlFor="layout-source">内容入口</label><Select<string> id="layout-source" placeholder="选择内容源" loading={roots.isFetching} value={sourceId || null} disabled={!instanceId || roots.isError} onChange={value => setSourceId(value)} options={roots.data?.map(value => ({ value: value.sourceId, label: value.name })) ?? []} /></div><Failure error={roots.error} retry={() => void roots.refetch()} />
+    <div className="field-block"><label htmlFor="layout-source">内容入口</label><Select<string> id="layout-source" placeholder="选择内容源" loading={roots.isFetching || refresh.active || refresh.preparing} value={sourceId || null} disabled={!instanceId || roots.isError} onChange={value => setSourceId(value)} options={roots.data?.map(value => ({ value: value.sourceId, label: value.name })) ?? []} /></div>
+    <Failure error={pending ? null : roots.error} retry={() => void roots.refetch()} /><RefreshProgress operation={refresh} reload={() => void roots.refetch()} />
   </Modal>;
 }
 
 function DirectoryBrowser({ api }: { api: Api }) {
   const [path, setPath] = useState('/');
-  const directory = useQuery({ queryKey: ['library', path], queryFn: ({ signal }) => api.library(path, signal) });
+  const directory = useQuery({ queryKey: ['library', path], queryFn: ({ signal }) => api.library(path, signal), retry: false });
+  const pending = pendingRefreshId(directory.error);
+  const refresh = usePersistentRefresh(api, { operationId: pending });
   const parent = path.slice(0, path.lastIndexOf('/')) || '/';
   return <><div className="section-heading"><Typography.Title level={3}>已发布目录</Typography.Title><Button disabled={path === '/'} type="text" icon={<ArrowLeftOutlined />} onClick={() => setPath(parent)}>上一级</Button></div>
     <Breadcrumb items={[{ title: <button className="text-button" onClick={() => setPath('/')}>根目录</button> }, ...(path === '/' ? [] : [{ title: path }])]} />
-    <Failure error={directory.error} retry={() => void directory.refetch()} />{directory.isPending ? <Skeleton active /> : directory.data?.length ? <div className="directory-list">{directory.data.map(entry => <button key={entry.path} className="directory-entry" disabled={entry.kind === 'file'} onClick={() => setPath(entry.path)}>{entry.kind === 'directory' ? <FolderOutlined /> : <FileOutlined />}<span>{entry.name}</span>{entry.kind === 'file' && <Tag>音频文件</Tag>}</button>)}</div> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个目录暂时没有内容" />}
+    <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh} reload={() => void directory.refetch()} />
+    {directory.isPending ? <Skeleton active /> : directory.data?.length ? <div className="directory-list">{directory.data.map(entry => <button key={entry.path} className="directory-entry" disabled={entry.kind === 'file'} onClick={() => setPath(entry.path)}>{entry.kind === 'directory' ? <FolderOutlined /> : <FileOutlined />}<span>{entry.name}</span>{entry.kind === 'file' && <Tag>音频文件</Tag>}</button>)}</div> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个目录暂时没有内容" />}
     <p className="page-footnote">这里显示当前 WebDAV 目录。草稿保存成功后才对客户端生效。</p>
   </>;
 }

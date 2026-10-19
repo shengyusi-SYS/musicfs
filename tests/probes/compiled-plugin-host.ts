@@ -7,6 +7,7 @@ import { createExtensions } from '../../src/core/extensions';
 import { createSources } from '../../src/core/sources';
 import { readPackage } from '../../src/infrastructure/archives';
 import { createDesktopService } from '../../src/hosts/desktop/service';
+import { requestReady } from '../../scripts/helpers/refresh-http';
 
 const directory = process.env.MUSICFS_PROBE_DIRECTORY;
 assert(directory, 'MUSICFS_PROBE_DIRECTORY is required for this developer probe');
@@ -52,8 +53,10 @@ try {
     const listed = await service.app.request('http://probe/api/instances', { headers: { Authorization: 'Bearer fixture-compiled' } });
     assert.equal((await listed.json() as unknown[]).length, 2);
     const path = 'http://probe/dav/' + ['A', '甲已修改', '440 Hz.wav'].map(encodeURIComponent).join('/');
-    const read = await service.app.request(path, { headers: { Authorization: 'Basic ' + Buffer.from('reader:fixture-password').toString('base64'), Range: 'bytes=0-3' } });
+    const read = await requestReady(async (url, init) => service.app.request(url, init), path,
+      { headers: { Authorization: 'Basic ' + Buffer.from('reader:fixture-password').toString('base64'), Range: 'bytes=0-3' } },
+      { Authorization: 'Bearer fixture-compiled' });
     assert.equal(read.status, 206); assert.equal(await read.text(), 'RIFF');
-  } finally { service.close(); }
+  } finally { await service.close(); }
   console.log(JSON.stringify({ phase: archivePath ? 'install' : 'restart', instances: instances.length, labels, header: 'RIFF', tailDigests: digests, managementAndDav: true }));
 } finally { store.close(); }

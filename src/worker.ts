@@ -17,8 +17,15 @@ export default function createWorker(registrations: RegisteredPlugin[]) {
         accountId: env.CF_ACCOUNT_ID, scriptName: env.CF_WORKER_NAME, apiToken: env.CF_API_TOKEN });
       const service = createWorkerService({ db: env.DB, registrations, adminToken: env.ADMIN_TOKEN,
         dav: { username: env.DAV_USERNAME, password: env.DAV_PASSWORD }, assets: env.ASSETS, changes,
-        fixedLength: size => new FixedLengthStream(size) });
+        fixedLength: size => new FixedLengthStream(size), waitUntil: promise => context.waitUntil(promise) });
       return service.app.fetch(request);
+    },
+    async scheduled(_event: unknown, env: WorkerBindings) {
+      const changes = createWorkerChanges({ db: env.DB, registrations, waitUntil: () => {} });
+      const service = createWorkerService({ db: env.DB, registrations, adminToken: env.ADMIN_TOKEN,
+        dav: { username: env.DAV_USERNAME, password: env.DAV_PASSWORD }, changes });
+      // The native scheduler is a slow fallback when no management page is open.
+      await service.library.refreshes.stepNext(AbortSignal.timeout(60_000));
     }
   };
 }

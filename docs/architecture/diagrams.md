@@ -282,42 +282,42 @@ sequenceDiagram
 
 ## 内容刷新
 
-慢操作在事务外进行，布局始终由用户布局操作更新。完整分页和期望代际同时满足，才能切换该目录最近成功快照。实例刷新先更新内容入口，再处理各入口及仍可达的已浏览子目录；新子目录首次打开时读取。以下为已接线的目录发布路径，[验证范围](../verification/p1-instance-refresh.md)不包含无限后台递归或真实云端资源验收。
+当前持久实现由 `library` 拥有操作和完整发布，宿主只负责安排独立的 step。每实例一个活动操作；实例范围先入口、再入口目录及仍可达的已浏览子目录。页面恢复原操作 ID，GET 不推进；桌面后台连续续步，Worker 每次 HTTP 后台或每分钟 scheduled 调用最多一页。详细取舍见 [ADR 0007](../adr/0007-durable-paged-refresh.md)。
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  participant UI as WebUI / 刷新入口
-  participant L as library
-  participant S as sources
-  participant P as 当前插件
-  participant DB as SQLite / D1 Adapter
-  UI->>L: 刷新实例内容 / 指定目录
-  L->>S: 捕获实例和安装上下文
-  S-->>L: 当前代际与受约束调用
-  opt 实例刷新
-    L->>DB: 读取本实例已访问目录引用
-    L->>S: 完整刷新内容入口
-    Note over L,S: 队列初始为各入口；只续读仍可达的已访问子目录，去重并限制目录数
+  participant UI as WebUI / 冷读取
+  participant H as 桌面后台 / 独立 Worker 调用
+  participant L as library.refreshes
+  participant P as sources / 当前插件
+  participant DB as SQLite / D1
+  UI->>L: start 范围 / ensure 缓存缺失
+  L->>DB: 新建或复用有效操作和暂存身份
+  L-->>UI: 202 operationId / 503 Retry-After
+  loop 每次独立 step，最多一页
+    H->>L: step(operationId)
+    L->>DB: 核对代际并领取有期限租约
+    alt 成功取得执行权
+      L->>P: roots/list 当前游标（事务外）
+      P-->>L: 有序条目、增量计数、下一游标
+      alt 仍有下一页
+        L->>DB: 条件追加暂存行，保存游标和计数，释放租约
+      else 当前目录完整
+        L->>DB: 条件追加末页并原子切换发布指针
+        L->>L: 转下一目录或完成，记录局部失败
+      end
+    else 其他调用正在处理或操作已失效
+      L-->>H: 已有进度 / 终态，不重复读取
+    end
+    L-->>H: 当前公开进度
   end
-  loop 队列内的目录
-  loop 读取到分页完成
-    L->>S: 读取目录页与游标
-    S->>P: list 上下文与取消信号
-    P-->>S: 有序条目、本页计数、下一游标或错误
-    S-->>L: 合同结果
+  UI->>L: GET 原操作 ID
+  L-->>UI: 公开进度 / 终态和失败明细
+  opt 取消 / 替换 / 配置或插件变化
+    UI->>L: cancel / start / 来源操作
+    L->>DB: 更新状态或代际；迟到提交条件不再匹配
   end
-  alt 完整成功且上下文仍有效
-    L->>DB: 条件提交完整目录与汇总计数
-    DB-->>L: 新快照或版本冲突
-    L->>L: 累计成功目录数，加入可达的已访问子目录
-  else 来源失败 / 取消 / 代际已变化
-    L->>DB: 记录当前操作结果，不覆盖成功快照
-    L->>L: 累计失败明细；取消或代际变化立即终止
-  end
-  end
-  L-->>UI: 成功目录数和失败明细 / 整次操作错误
-  Note over L,DB: 刷新不写用户布局；旧操作也不能覆盖新操作状态
+  Note over L,DB: 旧完整目录保留至新目录完整成功；刷新不写布局
 ```
 
 ## 音频读取

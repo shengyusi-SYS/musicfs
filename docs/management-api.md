@@ -22,7 +22,11 @@
 | `POST /api/instances/:id/authentication` | start；poll/submit 带 operationId 与 challengeId，submit 另带 input；cancel 只带 operationId。成功返回公开结果，过期操作/挑战返回 409 |
 | `GET /api/instances/:id/roots` | 完整分页后的内容源；使用当前有效快照 |
 | `GET /api/instances/:id/directory-status?directoryRef=...` | 当前有效目录最近成功的 `{completedAt,statistics}`，未读取或代际已失效时为 null；只读快照，不请求来源 |
-| `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例内容；`{directoryRef}` 刷新指定目录；兼容 `{}` 仅刷新内容入口列表 |
+| `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例内容；`{directoryRef}` 刷新指定目录；兼容 `{}` 仅刷新内容入口。返回 202 + RefreshView，替换旧活动操作 |
+| `GET /api/instances/:id/refresh` | 当前/最近一次 RefreshView，无记录时为 null；只查询，不推进 |
+| `GET /api/refreshes/:operationId` | 查询同一操作的公开进度，不存在返回 404；不推进 |
+| `POST /api/refreshes/:operationId/step` | 至多执行一页插件读取并保存检查点，返回 200 + RefreshView；其他请求持租约时只返回已有进度 |
+| `DELETE /api/refreshes/:operationId` | 先持久取消，返回 RefreshView，不存在为 404；迟到页不能覆盖取消 |
 | `GET /api/layout` | `{revision,nodes}`；nodes 为 null 表示按实例默认布局 |
 | `PUT /api/layout` | `{expectedRevision,nodes}`；冲突返回 409，节点合同见 library 类型 |
 | `GET /api/library?path=...` | 导出视图中的有序浅目录；文件元数据在实际 stat/读取时准备 |
@@ -35,7 +39,11 @@ Worker 的 `PluginChange` 包含 `operationId/kind/pluginId/status/createdAt/upd
 
 结构错误与坏 JSON 返回 400；配置/认证语义错误返回 422 及插件字段错误。来源失败保留结构化 `sourceError`，包括需认证、限流或临时错误。配置及认证的公开结果过滤 `nextPrivateState`，管理响应统一 `Cache-Control: no-store`。认证绑定、取消/过期和恢复语义见[验证记录](verification/p1-authentication.md)。真实来源的支持范围查[台账](verification.md)，尚未交付的部署和挂载不返回伪成功。
 
-实例刷新先更新内容入口，再刷新各入口目录和仍可达的已浏览子目录。新子目录首次打开时加载；不遍历已移除的旧引用，不预读全部推荐歌单。结果为 `{refreshedDirectories,failures:[{directoryRef,error:{code,message,sourceFault?}}]}`，目录数不包含内容入口列表自身。每个目录完整分页成功后分别发布；部分失败仍返回 200 和失败明细，保留失败目录最近成功内容，不能只根据 HTTP 状态显示全部成功。根入口读取失败、取消、实例/插件变化或超出目录预算则整次请求失败，已经成功发布的目录不回滚。当前目录预算默认 1000；单目录的分页/条目预算独立保留。指定目录刷新和兼容空请求仍返回完整快照。详见[刷新验证](verification/p1-instance-refresh.md)。
+`RefreshView` 的公开合同见 [`refreshes.ts`](../src/contracts/refreshes.ts)：包含 operationId、instanceId、scope、status、当前目录页数/暂存条目/临时计数、refreshedDirectories、failures、可选 error 和创建/更新时间；不暴露游标、租约或来源私有状态。状态为 queued、running、completed、failed、superseded、cancelled。202 仅表示受理，必须检查终态及失败明细；GET 恢复状态，POST step 推进，界面关闭不删除操作。
+
+实例刷新先更新内容入口，再处理各入口及仍可达的已浏览子目录。新子目录首次打开时加载，不遍历已移除引用或预读全部推荐歌单。成功目录数不含入口列表，每目录完整分页后分别发布；部分目录失败仍可得到 completed，但 failures 非空，保留这些目录的旧内容。根入口失败、取消、来源变化或超出目录预算会停止操作；已经发布的目录不回滚。默认目录预算 1000，单目录默认 1000 页/100,000 条目。详见[刷新范围](verification/p1-instance-refresh.md)与[持久分页](verification/p2-durable-refresh.md)。
+
+正式宿主的 roots、library 或 DAV 冷读取若尚无当前有效快照，会返回 `503 refresh_pending`、`Retry-After: 2` 和 `X-MusicFS-Refresh: <operationId>`。管理 JSON 还包含 operationId；重试复用同一有效活动操作，不反复替换任务。已有成功快照时直接读取它，后台刷新失败不抹空目录。共用页面可根据原操作 ID 恢复并推进；普通 DAV 客户端可以等待后台准备后重试，不获得管理权限。桌面后台持续续步；Worker 每个后台 HTTP/定时调用仅推进一页，见[Worker 指南](worker.md)。
 
 配置声明响应可带插件的可选 `statistics` 标签映射。目录状态只返回当前来源戳下的最近成功时间与计数，不暴露来源戳、私有状态或文件引用。旧快照没有计数时 statistics 为 null；失败刷新继续保留原计数。界面更新配置、安装/移除插件及刷新后使相关查询失效；计数的每页语义见[插件合同](architecture/plugin-interface.md#稳定身份分页与目录)。
 

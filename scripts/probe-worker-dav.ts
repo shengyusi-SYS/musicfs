@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Miniflare, Log, LogLevel } from 'miniflare';
 import { buildSample } from './build-sample';
 import manifest from '../plugins/sample/manifest.json';
+import { completeRefresh } from './helpers/refresh-http';
 
 const archive = await buildSample();
 const revision = new Bun.CryptoHasher('sha256').update(archive).digest('hex');
@@ -22,7 +23,9 @@ const mf = new Miniflare({
 });
 try {
   const db = await mf.getD1Database('DB');
-  for (const migration of ['0001', '0002', '0003']) await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${migration}.sql`).text()).replaceAll('\n', ' '));
+  for (const name of (await readdir('src/infrastructure/persistence/migrations')).filter(name => name.endsWith('.sql')).sort()) {
+    await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${name}`).text()).replace(/^\s*--.*$/gm, '').replaceAll('\n', ' '));
+  }
   await db.prepare("INSERT INTO installations (id, manifest, revision, generation, status) VALUES (?, ?, ?, 1, 'active')")
     .bind(manifest.id, JSON.stringify(manifest), revision).run();
   await db.prepare('INSERT INTO instances (id, plugin_id, name, config, private_state, epoch, state_revision) VALUES (?, ?, ?, ?, ?, 1, 1)')
@@ -46,7 +49,8 @@ try {
   assert(previous);
   const refreshed = await mf.dispatchFetch('http://probe/api/instances/worker-instance/refresh', { method: 'POST',
     headers: { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'instance' }) });
-  assert.equal(refreshed.status, 200); assert.deepEqual(await refreshed.json(), { refreshedDirectories: 1, failures: [] });
+  const operation = await completeRefresh((url, init) => mf.dispatchFetch(url, { ...init, headers: Object.fromEntries(new Headers(init?.headers)) }), refreshed, 'http://probe', { Authorization: 'Bearer fixture-admin' });
+  assert.equal(operation.refreshedDirectories, 1); assert.deepEqual(operation.failures, []);
   const current = await db.prepare("SELECT request_id FROM directory_snapshots WHERE instance_id = ? AND kind = 'directory'").bind('worker-instance').first<{ request_id: string }>();
   assert(current); assert.notEqual(current.request_id, previous.request_id);
   console.log(JSON.stringify({ runtime: 'local workerd', dav: 'shared Fetch adapter', propfind: 207,

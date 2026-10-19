@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Miniflare, Log, LogLevel } from 'miniflare';
 import { Database } from 'bun:sqlite';
 import { buildQq } from './build-qq';
+import { completeRefresh, publishedDirectory, requestReady } from './helpers/refresh-http';
 
 await buildQq(); await mkdir('dist/p0/qq', { recursive: true });
 const build = await Bun.build({ entrypoints: ['tests/probes/worker-qq.ts'], target: 'browser', format: 'esm', outdir: 'dist/p0/qq', naming: 'worker.mjs',
@@ -14,8 +15,11 @@ const directory = await mkdtemp(join(tmpdir(), 'musicfs-worker-qq-'));
 const mf = new Miniflare({ modules: [{ type: 'ESModule', path: resolve('dist/p0/qq/worker.mjs') }], compatibilityDate: '2026-07-30', d1Databases: { DB: 'musicfs-qq-p0' }, d1Persist: directory, log: new Log(LogLevel.ERROR) });
 try {
   const db = await mf.getD1Database('DB');
-  for (const migration of ['0001', '0002', '0003']) await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${migration}.sql`).text()).replaceAll('\n', ' '));
+  for (const name of (await readdir('src/infrastructure/persistence/migrations')).filter(name => name.endsWith('.sql')).sort()) {
+    await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${name}`).text()).replace(/^\s*--.*$/gm, '').replaceAll('\n', ' '));
+  }
   const headers = { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' };
+  const dispatch = (url: string, init?: Pick<RequestInit, 'method' | 'headers'>) => mf.dispatchFetch(url, { ...init, headers: Object.fromEntries(new Headers(init?.headers)) });
   const instanceIds: string[] = [];
   for (const name of ['QQ 甲', 'QQ 乙']) {
     const created = await mf.dispatchFetch('http://probe/api/instances', { method: 'POST', headers, body: JSON.stringify({ pluginId: 'org.musicfs.qq', name, config: {} }) });
@@ -34,27 +38,31 @@ try {
     finally { desktop.close(); }
     assert(row && JSON.parse(row.private_state).token, 'The selected instance must already be authorized');
     await db.prepare('UPDATE instances SET private_state = ? WHERE id = ?').bind(row.private_state, instanceIds[0]!).run();
-    const roots = await mf.dispatchFetch(`http://probe/api/instances/${instanceIds[0]}/roots`, { headers });
+    const roots = await requestReady(dispatch, `http://probe/api/instances/${instanceIds[0]}/roots`, { headers });
     assert.equal(roots.status, 200); assert.equal((await roots.json() as unknown[]).length, 5);
     const daily = await mf.dispatchFetch(`http://probe/api/instances/${instanceIds[0]}/refresh`, { method: 'POST', headers, body: JSON.stringify({ directoryRef: 'daily' }) });
-    assert.equal(daily.status, 200); const snapshot = await daily.json() as { items: unknown[] };
+    await completeRefresh(dispatch, daily, 'http://probe', headers);
+    const snapshot = await publishedDirectory(dispatch, 'http://probe', instanceIds[0]!, 'daily', headers);
     const collections: Record<string, number> = {};
     for (const directoryRef of ['created', 'favorites', 'recommended']) {
       const response = await mf.dispatchFetch(`http://probe/api/instances/${instanceIds[0]}/refresh`, { method: 'POST', headers, body: JSON.stringify({ directoryRef }) });
-      assert.equal(response.status, 200); collections[directoryRef] = (await response.json() as { items: unknown[] }).items.length;
+      await completeRefresh(dispatch, response, 'http://probe', headers);
+      collections[directoryRef] = (await publishedDirectory(dispatch, 'http://probe', instanceIds[0]!, directoryRef, headers)).entries.length;
     }
-    console.log(JSON.stringify({ runtime: 'local workerd', restoredRealSession: true, authenticatedProfile: true, dailyFiles: snapshot.items.length,
+    console.log(JSON.stringify({ runtime: 'local workerd', restoredRealSession: true, authenticatedProfile: true, dailyFiles: snapshot.entries.length,
       collections,
       workerQrLoginTested: false, cloudDeploymentTested: false }));
     const configured = await mf.dispatchFetch(`http://probe/api/instances/${instanceIds[0]}/config`, { method: 'PUT', headers,
       body: JSON.stringify({ config: { audio: { mode: 'multiple', qualities: ['128', 'm4a'], missingQuality: 'hide' } } }) });
     assert.equal(configured.status, 200); await configured.body?.cancel();
     const multiple = await mf.dispatchFetch(`http://probe/api/instances/${instanceIds[0]}/refresh`, { method: 'POST', headers, body: JSON.stringify({ directoryRef: 'daily' }) });
-    assert.equal(multiple.status, 200); const content = await multiple.json() as { items: unknown[]; statistics: Record<string, number> };
-    assert.equal(content.statistics.files, content.items.length); assert(Number.isSafeInteger(content.statistics.tracks));
+    await completeRefresh(dispatch, multiple, 'http://probe', headers);
+    const content = await publishedDirectory(dispatch, 'http://probe', instanceIds[0]!, 'daily', headers);
+    const statistics = content.status?.statistics; assert(statistics);
+    assert.equal(statistics.files, content.entries.length); assert(Number.isSafeInteger(statistics.tracks));
     const status = await mf.dispatchFetch(`http://probe/api/instances/${instanceIds[0]}/directory-status?directoryRef=daily`, { headers });
-    assert.equal(status.status, 200); assert.deepEqual((await status.json() as { statistics: Record<string, number> }).statistics, content.statistics);
-    console.log(JSON.stringify({ runtime: 'local workerd', multipleQualitySnapshot: true, persistedD1Counters: content.statistics }));
+    assert.equal(status.status, 200); assert.deepEqual((await status.json() as { statistics: Record<string, number> }).statistics, statistics);
+    console.log(JSON.stringify({ runtime: 'local workerd', multipleQualitySnapshot: true, persistedD1Counters: statistics }));
   }
   console.log(JSON.stringify({ runtime: 'local workerd', sdk: '@yakult-green-tea/qq-music-api 3.3.3/serverless', packedBundle: true, nodeCompatibility: false, isolatedSecrets: true, standaloneValidation: true, realLoginTested: false }));
 } finally { await mf.dispose(); await rm(directory, { recursive: true, force: true }); }

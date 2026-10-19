@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Miniflare, Log, LogLevel } from 'miniflare';
@@ -17,7 +17,9 @@ const options = { modules: [{ type: 'ESModule' as const, path: resolve('dist/p0/
 let mf: Miniflare | undefined;
 try {
   mf = new Miniflare(options); const db = await mf.getD1Database('DB');
-  for (const migration of ['0001', '0002', '0003']) await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${migration}.sql`).text()).replaceAll('\n', ' '));
+  for (const name of (await readdir('src/infrastructure/persistence/migrations')).filter(name => name.endsWith('.sql')).sort()) {
+    await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${name}`).text()).replace(/^\s*--.*$/gm, '').replaceAll('\n', ' '));
+  }
   const call = (path: string, value?: unknown) => mf!.dispatchFetch('http://probe' + path, { headers: { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' }, ...(value === undefined ? {} : { method: 'POST', body: JSON.stringify(value) }) });
   const create = async (mode: string) => { const response = await call('/api/instances', { pluginId: 'org.musicfs.test.authentication', name: '测试实例', config: { mode } }); assert.equal(response.status, 201); return (await response.json() as { value: { id: string } }).value.id; };
   const auth = async (id: string, action: unknown) => { const response = await call(`/api/instances/${id}/authentication`, action); assert.equal(response.status, 200); return (await response.json() as { value: AuthenticationSession }).value; };

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Miniflare, Log, LogLevel } from 'miniflare';
@@ -20,7 +20,9 @@ let mf: Miniflare | undefined;
 try {
   mf = new Miniflare(options);
   const db = await mf.getD1Database('DB');
-  for (const migration of ['0001', '0002', '0003']) await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${migration}.sql`).text()).replaceAll('\n', ' '));
+  for (const name of (await readdir('src/infrastructure/persistence/migrations')).filter(name => name.endsWith('.sql')).sort()) {
+    await db.exec((await Bun.file(`src/infrastructure/persistence/migrations/${name}`).text()).replace(/^\s*--.*$/gm, '').replaceAll('\n', ' '));
+  }
   const parsed = await mf.dispatchFetch('http://probe/archive', { method: 'POST', body: new Uint8Array(archive) });
   assert.equal(parsed.status, 200);
   assert.deepEqual(await parsed.json(), { digest, id: 'org.musicfs.sample' });

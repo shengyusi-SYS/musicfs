@@ -7,9 +7,10 @@ import type { HostKind, Json, Outcome } from '@musicfs/plugin-api';
 import type { Result, Connection, Status, PluginInstallation, SourceInstance, SourceConfiguration, Layout, ViewEntry, AuthenticationSession } from '../../contracts/management';
 import type { PluginChange } from '../../contracts/plugin-changes';
 import type { MountInput, MountManager } from '../../contracts/mounts';
+import type { RefreshView } from '../../contracts/refreshes';
 import { ExtensionError, type Extensions, type Installation } from '../../core/extensions';
 import { SourceError, type Sources } from '../../core/sources';
-import { LibraryError, type Library } from '../../core/library';
+import { LibraryError, PendingRefreshError, type Library } from '../../core/library';
 
 const name = z.string().trim().min(1).max(120);
 const instanceInput = z.object({ pluginId: z.string().min(1), name, config: z.json() }).strict();
@@ -68,6 +69,10 @@ export function createManagementApi(input: {
     if (error instanceof ExtensionError) return c.json({ error: error.code, message: error.message }, error.code === 'host_not_configured' ? 503 : error.code === 'missing_plugin' ? 404 : error.code === 'revision_conflict' || error.code === 'change_in_progress' ? 409 : 422);
     if (error instanceof Error && error.name === 'MountError' && 'code' in error) return c.json({ error: error.code, message: error.message }, error.code === 'not_found' ? 404 : error.code === 'mount_busy' ? 409 : 422);
     if (error instanceof SourceError) return c.json({ error: error.code, message: error.message }, error.code === 'missing_instance' ? 404 : error.code === 'stale_call' || error.code === 'invalid_auth_action' ? 409 : 502);
+    if (error instanceof PendingRefreshError) {
+      c.header('Retry-After', '2'); c.header('X-MusicFS-Refresh', error.operationId);
+      return c.json({ error: 'refresh_pending', message: error.message, operationId: error.operationId }, 503);
+    }
     if (error instanceof LibraryError) return c.json({ error: error.code, message: error.message, ...(error.sourceFault ? { sourceError: error.sourceFault } : {}) }, error.code === 'not_found' ? 404 : error.code === 'invalid_layout' ? 400 : error.code === 'conflict' ? 409 : 503);
     return c.json({ error: 'internal_error', message: 'Management operation failed' }, 500);
   });
@@ -125,8 +130,23 @@ export function createManagementApi(input: {
   });
   app.post('/api/instances/:id/refresh', async c => {
     const value = refreshInput.parse(await json(c));
-    return c.json('scope' in value ? await library.refreshInstance(c.req.param('id'), c.req.raw.signal)
-      : await library.refresh(c.req.param('id'), value.directoryRef, c.req.raw.signal));
+    const operation = await library.refreshes.start(c.req.param('id'), 'scope' in value ? { kind: 'instance' }
+      : { kind: 'directory', ...(value.directoryRef === undefined ? {} : { directoryRef: value.directoryRef }) });
+    c.header('X-MusicFS-Refresh', operation.operationId);
+    return c.json(operation satisfies RefreshView, 202);
+  });
+  app.get('/api/instances/:id/refresh', async c => c.json(await library.refreshes.current(c.req.param('id'))));
+  app.get('/api/refreshes/:id', async c => {
+    const operation = await library.refreshes.get(c.req.param('id'));
+    return operation ? c.json(operation satisfies RefreshView) : c.json({ error: 'not_found', message: 'Refresh operation was not found' }, 404);
+  });
+  app.post('/api/refreshes/:id/step', async c => {
+    const operation = await library.refreshes.step(c.req.param('id'), c.req.raw.signal);
+    return c.json(operation satisfies RefreshView);
+  });
+  app.delete('/api/refreshes/:id', async c => {
+    const operation = await library.refreshes.cancel(c.req.param('id'));
+    return operation ? c.json(operation satisfies RefreshView) : c.json({ error: 'not_found', message: 'Refresh operation was not found' }, 404);
   });
   app.get('/api/layout', async c => c.json((await library.layout()) satisfies Layout));
   app.put('/api/layout', async c => {

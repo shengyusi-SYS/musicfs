@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createDesktopService } from '../src/hosts/desktop/service';
 import { buildSample } from './build-sample';
+import { requestReady } from './helpers/refresh-http';
 
 const binary = process.env.MUSICFS_RCLONE ?? resolve('dist/tools/rclone-v1.75.2-linux-amd64/rclone');
 if (!await Bun.file(binary).exists()) throw new Error('Provide a verified rclone binary with MUSICFS_RCLONE; see docs/development.md');
@@ -23,6 +24,9 @@ try {
   const instance = await fetch(new URL('/api/instances', server.url), { method: 'POST', headers: { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' },
     body: JSON.stringify({ pluginId: 'org.musicfs.sample', name: '实例 & #', config: { label: '目录 & #' } }) });
   assert.equal(instance.status, 201); await instance.body?.cancel();
+  const prepared = await requestReady((url, init) => fetch(url, init), new URL('/api/library?path=' + encodeURIComponent('/实例 & #/目录 & #'), server.url).href,
+    { headers: { Authorization: 'Bearer fixture-admin' } });
+  assert.equal(prepared.status, 200); await prepared.body?.cancel();
   const obscured = new TextDecoder().decode(await execute(['obscure', '-'], process.env, new TextEncoder().encode('fixture-password\n'))).trim();
   await Bun.write(join(directory, 'rclone.conf'), '');
   const env = { ...process.env, RCLONE_CONFIG_P0_TYPE: 'webdav', RCLONE_CONFIG_P0_URL: new URL('/dav/', server.url).href,
@@ -39,4 +43,4 @@ try {
   const version = new TextDecoder().decode(await execute(['version'])).split('\n')[0];
   console.log(JSON.stringify({ client: version, recursiveListing: true, unicodePaths: true, size: 16044, fullRead: true,
     ranges: 'first/middle/tail/backward', mountTested: false }));
-} finally { await server.stop(true); service.close(); await rm(directory, { recursive: true, force: true }); }
+} finally { await server.stop(true); await service.close(); await rm(directory, { recursive: true, force: true }); }

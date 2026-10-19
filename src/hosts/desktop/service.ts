@@ -11,14 +11,20 @@ import { createManagementApi } from '../../transport/http';
 import { createDav, type ReadCredentials } from '../../transport/dav';
 import { createDesktopPlugins } from './plugins';
 import type { MountManager } from '../../contracts/mounts';
+import { createDesktopRefreshRunner } from './refresh';
 
 export async function createDesktopService(input: { directory: string; adminToken: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager }) {
   await mkdir(input.directory, { recursive: true, mode: 0o700 });
   const store = openSqlite(join(input.directory, 'state.sqlite'));
   const host = createDesktopPlugins(join(input.directory, 'plugins'), store);
   const extensions = createExtensions(store, host.prepare);
-  const sources = createSources(store, host.registry); const library = createLibrary(sources, store);
+  const sources = createSources(store, host.registry); const library = createLibrary(sources, store, undefined, { execution: 'deferred' });
+  const refresh = createDesktopRefreshRunner(library);
   const app = new Hono();
+  app.use('*', async (c, next) => {
+    await next();
+    if (c.res.headers.has('X-MusicFS-Refresh') || c.req.path.startsWith('/api/refreshes/')) refresh.wake();
+  });
   app.route('/', createManagementApi({ host: 'desktop', adminToken: input.adminToken, sources, library, extensions,
     connection: { davPath: '/dav', ...input.dav },
     ...(input.mounts ? { mounts: input.mounts } : {}),
@@ -29,5 +35,6 @@ export async function createDesktopService(input: { directory: string; adminToke
     app.get('/', serveStatic({ root: input.webRoot, path: 'index.html' }));
     app.on(['GET', 'HEAD'], '/assets/*', serveStatic({ root: input.webRoot }));
   }
-  return { app, store, close: async () => { if (input.mounts) await input.mounts.close(); store.close(); } };
+  refresh.wake();
+  return { app, store, close: async () => { if (input.mounts) await input.mounts.close(); await refresh.close(); store.close(); } };
 }

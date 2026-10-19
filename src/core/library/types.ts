@@ -18,10 +18,8 @@ export interface LibraryStore {
   layout(): Stored<Layout>;
   saveLayout(expectedRevision: number, nodes: LayoutNode[] | null): Stored<boolean>;
   snapshot(instanceId: string, key: SnapshotKey): Stored<{ value: Snapshot | null; error: string | null } | undefined>;
+  snapshotHeader(instanceId: string, key: SnapshotKey): Stored<Omit<Snapshot, 'items'> | null>;
   knownDirectoryRefs(instanceId: string): Stored<string[]>;
-  beginRefresh(stamp: SourceStamp, key: SnapshotKey, requestId: string): Stored<boolean>;
-  publishSnapshot(stamp: SourceStamp, key: SnapshotKey, requestId: string, value: Snapshot): Stored<boolean>;
-  failRefresh(stamp: SourceStamp, key: SnapshotKey, requestId: string, error: string): Stored<void>;
 }
 
 export type DirectoryInfo = { kind: 'directory'; path: string; name: string; etag: string; modifiedAt: string };
@@ -39,7 +37,13 @@ export interface FileView {
 
 export class LibraryError extends Error {
   constructor(public readonly code: 'not_found' | 'not_directory' | 'invalid_layout' | 'conflict' | 'stale_call'
-    | 'source_failed' | 'invalid_source' | 'range_unsupported' | 'content_changed', message: string, public readonly sourceFault?: PluginFault) {
+    | 'source_failed' | 'invalid_source' | 'range_unsupported' | 'content_changed' | 'refresh_pending', message: string, public readonly sourceFault?: PluginFault) {
     super(message); this.name = 'LibraryError';
+  }
+}
+
+export class PendingRefreshError extends LibraryError {
+  constructor(public readonly operationId: string) {
+    super('refresh_pending', '目录正在准备，请稍后重试。');
   }
 }

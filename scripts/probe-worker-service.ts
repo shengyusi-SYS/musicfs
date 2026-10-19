@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Miniflare, Log, LogLevel } from 'miniflare';
 import { buildWorker, type WorkerBundle } from './build-worker';
+import { requestReady } from './helpers/refresh-http';
 
 const archive = 'dist/plugins/org.musicfs.sample.zip';
 assert(await Bun.file(archive).exists(), 'Build the sample plugin before this probe; it does not rebuild plugin artifacts');
@@ -24,6 +25,7 @@ function runtime(description: WorkerBundle, brokenModule?: string) {
 const headers = { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' };
 const dav = 'Basic ' + Buffer.from('reader:fixture-password').toString('base64');
 let mf = runtime(bundle);
+const ready = (url: string, init?: RequestInit) => requestReady((path, options) => mf.dispatchFetch(path, { ...options, headers: Object.fromEntries(new Headers(options?.headers)) }), url, init, headers);
 try {
   const db = await mf.getD1Database('DB');
   for (const name of (await readdir('src/infrastructure/persistence/migrations')).filter(name => name.endsWith('.sql')).sort()) {
@@ -49,11 +51,11 @@ try {
     body: JSON.stringify({ pluginId: initial.manifest.id, name: 'Worker 实例', config: { label: '正式目录' } }) });
   assert.equal(created.status, 201); const result = await created.json() as { ok: boolean; value: { id: string } }; assert(result.ok);
   const file = 'http://musicfs/dav/' + ['Worker 实例', '正式目录', '440 Hz.wav'].map(encodeURIComponent).join('/');
-  const listing = await mf.dispatchFetch('http://musicfs/dav/', { method: 'PROPFIND', headers: { Authorization: dav, Depth: '1' } });
+  const listing = await ready('http://musicfs/dav/', { method: 'PROPFIND', headers: { Authorization: dav, Depth: '1' } });
   assert.equal(listing.status, 207); assert((await listing.text()).includes(encodeURIComponent('Worker 实例')));
-  const head = await mf.dispatchFetch(file, { method: 'HEAD', headers: { Authorization: dav } });
+  const head = await ready(file, { method: 'HEAD', headers: { Authorization: dav } });
   assert.equal(head.status, 200); assert.equal(head.headers.get('Content-Length'), '16044');
-  const audio = await mf.dispatchFetch(file, { headers: { Authorization: dav, Range: 'bytes=0-3' } });
+  const audio = await ready(file, { headers: { Authorization: dav, Range: 'bytes=0-3' } });
   assert.equal(audio.status, 206); assert.equal(audio.headers.get('Content-Length'), '4'); assert.equal(await audio.text(), 'RIFF');
   await mf.dispose(); mf = runtime(bundle);
   const retained = await mf.dispatchFetch('http://musicfs/api/instances', { headers });

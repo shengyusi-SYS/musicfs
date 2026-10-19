@@ -2,7 +2,11 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { Json, PluginManifest } from '@musicfs/plugin-api';
 import { ExtensionError, type Installation, type InstallationStore } from '../../core/extensions';
 import type { AuthenticationRecord, Instance, InstanceStore, SourceStamp } from '../../core/sources';
-import type { LayoutNode, LibraryStore, Snapshot } from '../../core/library/types';
+import type { LayoutNode, LibraryStore } from '../../core/library/types';
+import type { RefreshStore } from '../../core/library/refresh-types';
+import { cancelRefreshPlan, claimRefreshStatement, commitRefreshPlan, createdRefresh, createRefreshPlan, currentRefreshSQL,
+  readyRefreshesSQL, refreshFromRow, refreshRecordSQL, snapshotEntriesSQL, snapshotFromRows, snapshotHeaderFromRow, snapshotHeaderSQL,
+  type RefreshDocumentRow, type RefreshOutcome, type SnapshotEntryRow, type SnapshotHeaderRow, type SqlStatement } from './refresh-sql';
 
 type InstallationRow = { manifest: string; revision: string; generation: number; status: 'active' | 'missing' };
 type InstanceRow = { id: string; plugin_id: string; name: string; config: string; epoch: number };
@@ -11,8 +15,9 @@ const instanceFromRow = (row: InstanceRow): Instance => ({
   id: row.id, pluginId: row.plugin_id, name: row.name, config: JSON.parse(row.config) as Json, epoch: row.epoch
 });
 
-/** Every write is one D1 statement with its own current-state predicate. */
+/** Compare-and-writes use guarded statements; page commits run as an atomic D1 batch. */
 export function createD1Store(db: D1Database) {
+  const prepare = (query: SqlStatement) => db.prepare(query.sql).bind(...query.values);
   const installation = async (id: string): Promise<Installation | undefined> => {
     const row = await db.prepare('SELECT manifest, revision, generation, status FROM installations WHERE id = ?').bind(id).first<InstallationRow>();
     return row ? { manifest: JSON.parse(row.manifest) as PluginManifest, revision: row.revision, generation: row.generation, status: row.status } : undefined;
@@ -21,8 +26,6 @@ export function createD1Store(db: D1Database) {
     SELECT 1 FROM installations p WHERE p.id = instances.plugin_id
     AND p.revision = ? AND p.generation = ? AND p.status = 'active')`;
   const bindings = (snapshot: SourceStamp) => [snapshot.id, snapshot.epoch, snapshot.pluginRevision, snapshot.pluginGeneration];
-  const currentSource = `EXISTS (SELECT 1 FROM instances i JOIN installations p ON p.id = i.plugin_id
-    WHERE i.id = ? AND i.epoch = ? AND p.revision = ? AND p.generation = ? AND p.status = 'active')`;
   return {
     installation,
     async installations() {
@@ -96,30 +99,38 @@ export function createD1Store(db: D1Database) {
       return result.meta.changes === 1;
     },
     async snapshot(instanceId, key) {
-      const row = await db.prepare('SELECT document, error FROM directory_snapshots WHERE instance_id = ? AND kind = ? AND ref = ?')
-        .bind(instanceId, key.kind, key.ref).first<{ document: string | null; error: string | null }>();
-      return row ? { value: row.document === null ? null : JSON.parse(row.document) as Snapshot, error: row.error } : undefined;
+      const rows = await db.prepare(snapshotEntriesSQL).bind(instanceId, key.kind, key.ref).all<SnapshotEntryRow>();
+      return snapshotFromRows(rows.results);
+    },
+    async snapshotHeader(instanceId, key) {
+      return snapshotHeaderFromRow(await db.prepare(snapshotHeaderSQL).bind(instanceId, key.kind, key.ref).first<SnapshotHeaderRow>());
     },
     async knownDirectoryRefs(instanceId) {
       const rows = await db.prepare("SELECT ref FROM directory_snapshots WHERE instance_id = ? AND kind = 'directory'")
         .bind(instanceId).all<{ ref: string }>();
       return rows.results.map(row => row.ref);
     },
-    async beginRefresh(stamp, key, requestId) {
-      const result = await db.prepare(`INSERT INTO directory_snapshots (instance_id, kind, ref, request_id) SELECT ?, ?, ?, ? WHERE ${currentSource}
-        ON CONFLICT(instance_id, kind, ref) DO UPDATE SET request_id = excluded.request_id`)
-        .bind(stamp.id, key.kind, key.ref, requestId, ...bindings(stamp)).run();
-      return result.meta.changes === 1;
+    async createRefresh(record, replace) {
+      const results = await db.batch<RefreshDocumentRow>(createRefreshPlan(record, replace).map(prepare));
+      return createdRefresh(results.at(-1)!.results);
     },
-    async publishSnapshot(stamp, key, requestId, value) {
-      const result = await db.prepare(`UPDATE directory_snapshots SET document = ?, error = NULL
-        WHERE instance_id = ? AND kind = ? AND ref = ? AND request_id = ? AND ${currentSource}`)
-        .bind(JSON.stringify(value), stamp.id, key.kind, key.ref, requestId, ...bindings(stamp)).run();
-      return result.meta.changes === 1;
+    async refreshRecord(operationId) {
+      return refreshFromRow(await db.prepare(refreshRecordSQL).bind(operationId).first<RefreshDocumentRow>());
     },
-    async failRefresh(stamp, key, requestId, error) {
-      await db.prepare(`UPDATE directory_snapshots SET error = ? WHERE instance_id = ? AND kind = ? AND ref = ? AND request_id = ? AND ${currentSource}`)
-        .bind(error, stamp.id, key.kind, key.ref, requestId, ...bindings(stamp)).run();
+    async currentRefresh(instanceId) {
+      return refreshFromRow(await db.prepare(currentRefreshSQL).bind(instanceId).first<RefreshDocumentRow>());
+    },
+    async claimRefresh(operationId, token, now, until) {
+      return refreshFromRow(await prepare(claimRefreshStatement(operationId, token, now, until)).first<RefreshDocumentRow>());
+    },
+    async commitRefresh(expected, next, page, directoryError) {
+      const results = await db.batch<{ outcome: RefreshOutcome }>(commitRefreshPlan(expected, next, page, directoryError).map(prepare));
+      return results[0]!.results[0]!.outcome;
+    },
+    async cancelRefresh(operationId, updatedAt) { await db.batch(cancelRefreshPlan(operationId, updatedAt).map(prepare)); },
+    async readyRefreshes(now, limit) {
+      const rows = await db.prepare(readyRefreshesSQL).bind(now, limit).all<{ operation_id: string }>();
+      return rows.results.map(row => row.operation_id);
     }
-  } satisfies InstallationStore & InstanceStore & LibraryStore;
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore;
 }
