@@ -46,6 +46,12 @@ test('click launchers exit while one authenticated background survives; repeated
     expect(JSON.parse(await readFile(join(data, 'runtime.json'), 'utf8')).pid).toBe(runtime.pid);
     expect(await readFile(join(data, 'launcher.log'), 'utf8')).not.toContain(token);
     expect(await readFile(join(data, 'launcher.log'), 'utf8')).not.toContain(credentials.password);
+    const redundant = Bun.spawn([...command, '--background'], { stdout: 'pipe', stderr: 'pipe' });
+    try {
+      const exit = await Promise.race([redundant.exited, Bun.sleep(3_000).then(() => 'still-running' as const)]);
+      expect(exit).toBe(0);
+      expect(JSON.parse(await readFile(join(data, 'runtime.json'), 'utf8')).pid).toBe(runtime.pid);
+    } finally { if (redundant.exitCode === null) { redundant.kill('SIGKILL'); await redundant.exited; } }
   } finally {
     if (origin && token) {
       const stop = await fetch(`${origin}/api/desktop/quit`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
@@ -56,6 +62,57 @@ test('click launchers exit while one authenticated background survives; repeated
     await rm(directory, { recursive: true, force: true });
   }
 }, 25_000);
+
+test('a click immediately after SIGKILL waits for the stale lock and restores one backend with the same credentials and endpoint', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-crash-'));
+  const data = join(directory, 'data'); const resources = join(directory, 'resources');
+  await mkdir(join(resources, 'web'), { recursive: true });
+  await writeFile(join(resources, 'web', 'index.html'), '<!doctype html><title>Desktop crash fixture</title>');
+  const command = [process.execPath, resolve('src/desktop.ts'), '--no-open', '--data', data, '--resources', resources];
+  const original = Bun.spawn([...command, '--background'], { stdout: 'pipe', stderr: 'pipe' });
+  let origin = ''; let token = ''; let recoveredBackend = false;
+  try {
+    const readyBy = Date.now() + 5_000;
+    while (!await Bun.file(join(data, 'runtime.json')).exists() && Date.now() < readyBy) await Bun.sleep(25);
+    const before = JSON.parse(await readFile(join(data, 'runtime.json'), 'utf8')) as { origin: string; pid: number };
+    const credentials = await readFile(join(data, 'credentials.json'), 'utf8');
+    token = (JSON.parse(credentials) as { adminToken: string }).adminToken; origin = before.origin;
+    expect(before.pid).toBe(original.pid);
+    const mounts = await fetch(`${origin}/api/mounts`, { headers: { Authorization: `Bearer ${token}` } });
+    expect(await mounts.json()).toEqual([]);
+    original.kill('SIGKILL'); await original.exited;
+    expect(await access(`${data}.lock`).then(() => true, () => false)).toBe(true);
+    const click = Bun.spawn(command, { stdout: 'pipe', stderr: 'pipe' });
+    const clickedAt = Date.now();
+    const code = await click.exited;
+    if (code !== 0) throw new Error(await new Response(click.stderr).text());
+    const recovered = JSON.parse(await readFile(join(data, 'runtime.json'), 'utf8')) as typeof before;
+    origin = recovered.origin; recoveredBackend = true;
+    expect(recovered.pid).not.toBe(before.pid); expect(recovered.pid).not.toBe(click.pid);
+    expect(recovered.origin).toBe(before.origin);
+    expect(Date.now() - clickedAt).toBeGreaterThan(15_000);
+    expect(Date.now() - clickedAt).toBeLessThan(47_000);
+    expect(await readFile(join(data, 'credentials.json'), 'utf8')).toBe(credentials);
+    const identity = await fetch(`${origin}/__musicfs/identity`, { headers: { Authorization: `Bearer ${token}` } });
+    expect(await identity.json()).toMatchObject({ pid: recovered.pid, origin });
+    const reusedAt = Date.now();
+    expect(await launchDesktop({ command: [process.execPath, resolve('src/desktop.ts')], directory: data, resourcesDirectory: resources, openBrowser: false }))
+      .toEqual({ origin, reused: true });
+    expect(Date.now() - reusedAt).toBeLessThan(2_000);
+    expect(JSON.parse(await readFile(join(data, 'runtime.json'), 'utf8')).pid).toBe(recovered.pid);
+  } finally {
+    if (original.exitCode === null) { original.kill('SIGKILL'); await original.exited; }
+    if (recoveredBackend && origin && token) {
+      const response = await fetch(`${origin}/api/desktop/quit`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
+      if (response) {
+        expect(response.status).toBe(202); await response.body?.cancel();
+        const deadline = Date.now() + 5_000;
+        while (await Bun.file(join(data, 'runtime.json')).exists() && Date.now() < deadline) await Bun.sleep(50);
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 55_000);
 
 test('residual same-instance metadata reuses the old port and an occupied port falls back to a usable management endpoint', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-recovery-'));

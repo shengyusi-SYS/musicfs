@@ -16,6 +16,9 @@ const credentialsSchema = z.object({ instanceId: z.uuid(), adminToken: z.string(
 const runtimeSchema = z.object({ pid: z.number().int().positive(), origin: z.string(), instanceId: z.uuid() }).strict();
 type Credentials = z.infer<typeof credentialsSchema>;
 type Runtime = z.infer<typeof runtimeSchema>;
+const lockStaleMs = 30_000;
+const lockRecoveryMs = lockStaleMs + 2_000;
+const startupTimeoutMs = lockRecoveryMs + 15_000;
 
 export const defaultDesktopDirectory = () => envPaths('MusicFS', { suffix: '' }).data;
 
@@ -34,6 +37,23 @@ async function readExisting(directory: string): Promise<{ runtime: Runtime; cred
     if (identity.instanceId !== runtime.instanceId || identity.pid !== runtime.pid || identity.origin !== runtime.origin) return;
     return { runtime, credentials };
   } catch { return; }
+}
+
+async function acquireBackgroundLock(directory: string): Promise<(() => Promise<void>) | undefined> {
+  const deadline = Date.now() + lockRecoveryMs;
+  for (;;) {
+    // A competing starter leaves as soon as the winner is healthy. An opaque
+    // long lock retry would keep this otherwise unused process alive.
+    if (await readExisting(directory)) return;
+    try { return await lock(directory, { realpath: false, stale: lockStaleMs, update: 10_000, retries: 0 }); }
+    catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ELOCKED')) throw error;
+      if (Date.now() >= deadline) throw new Error('MusicFS 后台锁暂不可用，请稍后重试并查看 launcher.log。');
+    }
+    // proper-lockfile alone owns the lock and its stale decision; the host only
+    // coordinates bounded retries with the authenticated readiness handshake.
+    await Bun.sleep(200);
+  }
 }
 
 /** A click starts the detached backend or opens the verified existing one. */
@@ -56,7 +76,7 @@ export async function launchDesktop(input: {
       await new Promise<void>((accept, reject) => { child.once('spawn', accept); child.once('error', reject); });
       child.unref();
     } finally { closeSync(log); }
-    const deadline = Date.now() + (input.startupTimeoutMs ?? 15_000);
+    const deadline = Date.now() + (input.startupTimeoutMs ?? startupTimeoutMs);
     while (Date.now() < deadline) {
       existing = await readExisting(directory);
       if (existing) break;
@@ -78,9 +98,9 @@ export async function startDesktopBackground(input: { directory?: string; resour
   const directory = resolve(input.directory ?? defaultDesktopDirectory());
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if (process.platform !== 'win32') await chmod(directory, 0o700);
-  let release: () => Promise<void>;
-  try { release = await lock(directory, { realpath: false, stale: 30_000, update: 10_000, retries: 0 }); }
-  catch (error) { if (error instanceof Error && 'code' in error && error.code === 'ELOCKED') return; throw error; }
+  const acquired = await acquireBackgroundLock(directory);
+  if (!acquired) return;
+  const release: () => Promise<void> = acquired;
   let service: Awaited<ReturnType<typeof createDesktopService>> | undefined;
   let server: ReturnType<typeof Bun.serve> | undefined;
   let closing: Promise<void> | undefined;
