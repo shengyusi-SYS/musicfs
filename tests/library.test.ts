@@ -30,6 +30,19 @@ test('complete pagination preserves order and duplicate file occurrences', async
   expect(entries.map(entry => entry.name)).toEqual((await nameEntries([{ id: 'a', name: '重复.wav' }, { id: 'b', name: '重复.wav' }])).map(entry => entry.pathName));
 });
 
+test('listed entries retain resolved targets without rereading parent directories and still reject changed sources', async () => {
+  const { library, store, sources, id } = await setup();
+  const entries = await library.files.list('/实例 & #/来源', signal());
+  const entry = entries[0]!; const snapshot = store.snapshot; let reads = 0;
+  store.snapshot = (...args) => { reads++; return snapshot(...args); };
+  expect(await library.files.stat(entry, signal())).toMatchObject({ kind: 'file', path: filePath, handle: { content: { size: 8 } } });
+  expect(reads).toBe(0);
+  expect(await library.files.stat(JSON.parse(JSON.stringify(entry)), signal())).toMatchObject({ kind: 'file', path: filePath });
+  expect(reads).toBeGreaterThan(0);
+  await sources.configure(id, { changed: true }, signal());
+  await expect(library.files.stat(entry, signal())).rejects.toMatchObject({ code: 'stale_call' });
+});
+
 test('failed refresh retains the complete previous snapshot and leaves layout untouched', async () => {
   const source = plugin(); const { library, store, id } = await setup(source);
   const layout = await library.saveLayout(0, [{ kind: 'group', id: 'group', name: '音乐', children: [{ kind: 'source', id: 'source', name: '我的来源', instanceId: id, sourceId: 'root' }] }]);

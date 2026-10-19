@@ -4,9 +4,18 @@
 
 ## 当前事实
 
-已进入 P0/P1/P2 实现。插件/实例、library 快照/布局、管理 HTTP、共用 Fetch DAV、SQLite/D1 和共用 WebUI 已接线；通用认证、QQ/微信真实扫码和会话恢复已有证据。QQ alpha.5 实现实例单/多音质、隐藏/回退/实际文件合并和批量解析；共用核心保存分页计数，页面按插件标签显示曲目、文件及最近成功时间。真实 QQ 每日 30 首多版本导出 10 个文件；微信喜欢 1 首/0 文件。两种会话均经实际安装 ESM 在本地 workerd/D1 验证多音质与计数；真实 MP3/M4A、正式 DAV/rclone 范围字节通过。当前 **100 项测试、433 次断言**、三组类型检查、**93 模块/273 依赖**边界与页面构建通过。详见[音质/统计](verification/p2-qq-quality.md)、[原始分类与微信](verification/p2-qq-catalog.md)、[实例刷新](verification/p1-instance-refresh.md)和[首轮真实链路](verification/p1-qq-source.md)。网易云、其余真实音质、续期、真实云部署、目标系统/客户端和发行仍未完成。
+已有本地开发 alpha。插件/实例、library 快照/布局、管理 HTTP、共用 Fetch DAV、SQLite/D1 和共用 WebUI 已接线；通用认证、QQ/微信真实扫码和会话恢复已有证据。QQ alpha.5 实现实例单/多音质、隐藏/回退/实际文件合并和批量解析；共用核心保存分页计数，页面按插件标签显示曲目、文件及最近成功时间。真实 QQ 每日 30 首多版本导出 10 个文件；微信喜欢 1 首/0 文件。两种会话均经实际安装 ESM 在本地 workerd/D1 验证多音质与计数；真实 MP3/M4A、正式 DAV/rclone 范围字节通过。当前 **102 项测试、455 次断言**、三组类型检查、**85 模块/257 依赖**边界通过，页面构建也已通过。详见[音质/统计](verification/p2-qq-quality.md)、[原始分类与微信](verification/p2-qq-catalog.md)、[实例刷新](verification/p1-instance-refresh.md)和[首轮真实链路](verification/p1-qq-source.md)。网易云、其余真实音质、续期、真实云部署、目标系统/客户端和发行仍未完成。
 
-下一项可执行工作：探测网易云 SDK 的 Worker 兼容与真实认证路径，补 QQ 会话续期和剩余 metadata 取消，并推进 Worker 模块发布与后台部署。QQ 非空收藏、私有/大集合、FLAC/APE/320k 等真实字节与多目标实际合并仍分别验收；OpenList/普通播放器、四个目标系统和挂载继续独立推进。当前本地 workerd 与受控策略验证不能代替这些义务。
+下一步转向 Worker 正式宿主/后台发布、桌面启动/挂载和网易云三个可并行交付包，具体出口见[实施计划](../outputs/musicfs-implementation-plan.md)。QQ 续期/取消及非空收藏、私有/大集合、其余真实音质继续单独收口，不作为其他交付的串行门槛。OpenList/普通播放器、四个目标系统和挂载仍分别验收。剩余预算和复盘见[工作量评估](../outputs/musicfs-effort-risk-roi-assessment.md)；本地 workerd 与受控策略验证不能替代这些义务。
+
+## 2026-10-20 整体复盘后的限定验证
+
+- 保留三个核心领域及现有状态/字节合同，没有整体重写或新增平台框架。已建立基线提交 `bfee998`；原淘汰路线、依赖和历史估算可从该提交恢复。
+- DAV 子条目按请求属性读取真实元数据；名称、日期、类型标记及 propname 不再逐曲 stat。`stat` 复用 `list` 返回对象的内部目标，序列化对象仍按路径解析，来源代际变更仍明确拒绝。文件名仅冲突时散列。实现见 [library](../src/core/library/index.ts)、[命名](../src/core/library/names.ts)及 [DAV XML](../src/transport/dav/xml.ts)，流程见[图表](architecture/diagrams.md#当前目录属性读取)。
+- 两项必要回归经正式 library/DAV 入口验证：轻量 PROPFIND 的插件 stat 增量为 **0**；请求真实文件属性时 stat 增量为 **1** 且得到 **16,044** 字节 WAV 描述；已列条目的 stat 额外目录快照读取为 **0**。JSON 化条目回退和配置变更失效也通过，没有通过改全局 Fetch/crypto 模拟结果。
+- 从当前工程删除五份 Nephele/Node 桥接淘汰诊断和三个专用开发依赖，锁文件同步；fflate 保留用于 ZIP 独立编码互操作。历史证据仍见 [ADR 0004](adr/0004-shared-fetch-readonly-dav.md)。没有删除产品 DAV 或已确认需求。
+- `bun run check`：102 pass、0 fail、455 次断言，三组类型检查及 85 模块/257 依赖边界通过。`bun run probe:worker:dav`：实际本地 workerd/D1 的 PROPFIND 207、HEAD 16,044、完整/首中尾/超大后缀字节和实例刷新通过。`bun run build:web` 在本轮基线通过，现有约 558 kB Schema 分块警告仍在；本轮无页面行为变更，不重复所有真实账号探针。
+- 限定：父项仍先 stat；allprop/大小/媒体类型/etag 仍需要真实描述。普通缓存缺失读取与主动刷新尚未分开合并；完整多目录刷新仍在一次 HTTP 调用内。免费 Worker 的 CPU/外部请求/D1 预算和云出口没有因此被验收。网易云仅完成 [SDK 候选调查](../outputs/research-netease-worker-sdk.md)，尚无正式插件实现。
 
 ## 记录规则
 

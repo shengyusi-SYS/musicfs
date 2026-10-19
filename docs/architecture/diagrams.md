@@ -27,6 +27,31 @@ flowchart LR
   E --> Store
 ```
 
+## 当前目录属性读取
+
+这次局部减法复用原有 `list/stat/open`。已列条目只在当前调用者持有该对象时保留私有目标，不新增持久路径索引；allprop 和文件实际元数据仍可能产生上游请求，免费 Worker 资源表现待测。
+
+```mermaid
+sequenceDiagram
+  participant C as DAV 客户端
+  participant D as DAV 属性映射
+  participant L as library
+  participant P as 来源插件
+  C->>D: PROPFIND Depth 1
+  D->>L: stat 父项、list 子项
+  L-->>D: 名称/类型/日期，内部关联已解析目标
+  alt propname 或仅名称/类型标记/日期
+    D-->>C: 直接生成子项属性，无逐曲 stat
+  else allprop 或实际 etag/大小/媒体类型
+    D->>L: stat 已列条目，复用目标
+    L->>L: 检查来源代际
+    L->>P: 取得真实文件描述
+    P-->>L: 真实文件描述
+    L-->>D: 实际属性
+    D-->>C: 属性与逐项结果
+  end
+```
+
 ## 当前交互认证
 
 对应本地 SQLite/D1 与共用页面的已实现流程；通用步骤由测试插件验证，QQ 已另行验证真实手机扫码。开始、终态的代际变化与普通状态 CAS 分开处理，取消不会等待旧轮询完成才写入。

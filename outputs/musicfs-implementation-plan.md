@@ -4,17 +4,31 @@
 
 持续执行范围及全部完成条件见 [Codex 主线目标](../docs/codex-goal.md)，实际实现、验证与外部条件缺口统一维护于[验收台账](../docs/verification.md)。目标覆盖 P0—P5 全部交付，各阶段结束后继续下一项未完成义务。
 
-实现设计依据：[领域与模块设计](../docs/architecture/README.md)、[插件 Interface 草案](../docs/architecture/plugin-interface.md)、[图表](../docs/architecture/diagrams.md)。依赖接管范围见 [依赖选择](musicfs-simplification-and-dependencies.md)与[新增证据](research-architecture-dependencies.md)。本轮已形成该设计基线，下一步将其落实到源码、导入图检查和最小插件 PoC。
+实现设计依据：[领域与模块设计](../docs/architecture/README.md)、[插件 Interface 草案](../docs/architecture/plugin-interface.md)、[图表](../docs/architecture/diagrams.md)。依赖接管范围见 [依赖选择](musicfs-simplification-and-dependencies.md)与[新增证据](research-architecture-dependencies.md)。基础实现与独立最小插件已经落地；接下来按实际缺口推进正式宿主和双来源交付。
 
 主线是交付一套可安装数据源插件的只读音乐文件服务：用户用 WebUI 安装插件、配置和认证实例、组织目录，通过 WebDAV 播放，并在桌面一键挂载。网易云与 QQ 是完整可用的示例插件；桌面和 Worker 独立运行，来源规则与音质设置留在插件内。
 
 ## 当前状态
 
-需求 Q1—Q11 已对齐，已进入 P0/P1/P2 实现。插件/实例、library 快照/布局、管理 HTTP、共用 Fetch DAV、SQLite/D1、共用 WebUI 与交互认证已接线。QQ alpha.5 补齐实例单/多音质、隐藏/回退/合并、原生批量与通用计数；真实 MP3/M4A、正式 DAV/rclone 范围及双会话 workerd/D1 计数见[音质记录](../docs/verification/p2-qq-quality.md)。100 项测试、433 次断言、三组类型检查、93 模块/273 依赖边界及页面构建通过。手机/微信扫码、非空喜欢/自建、102 首推荐歌单、实例刷新仍见[分类记录](../docs/verification/p2-qq-catalog.md)和[刷新记录](../docs/verification/p1-instance-refresh.md)。没有真实云部署。Git 已初始化但没有项目提交，当前文件仍未跟踪。
+需求 Q1—Q11 已对齐，已有本地开发 alpha：插件/实例、library 快照/布局、管理 HTTP、共用 Fetch DAV、SQLite/D1、共用 WebUI 与交互认证已接线。QQ alpha.5 的实例音质、批量解析、通用计数及真实 MP3/M4A 见[音质记录](../docs/verification/p2-qq-quality.md)；扫码、非空喜欢/自建与完整歌单见[分类记录](../docs/verification/p2-qq-catalog.md)。当前检查数据只维护于[台账](../docs/verification.md)。没有真实云部署、桌面启动器或挂载产品。已建立可回退基线提交 `bfee998`。
 
 2026-10-20 基线为 Linux x86_64、Bun 1.4.3、Node v24.19.0，依赖锁定。官方 rclone Linux v1.75.2 已校验并放在开发 dist/tools，未做系统安装；环境无 `/dev/fuse`，不能证明挂载。QQ 测试账号已协助扫码；Cloudflare 测试部署、网易云账号与 Windows/macOS 测试环境仍需在对应步骤核实。
 
-当前继续 P0/P1/P2：QQ 的实例音质与 tracks/files 展示已有正式路径；SDK 原生解析复用固定作者导出，规则保持在插件，见 [ADR 0005](../docs/adr/0005-pinned-qq-sdk-read-adapter.md)。下一步优先探测网易云 SDK 的 Worker 兼容与认证风险，补 QQ 会话续期和剩余 metadata 取消，并推进 Worker 模块发布/后台部署。非空收藏、私有/大集合、其他真实音质和多目标实际合并继续取得账号证据。保持全部目标：网易云、真实云端、OpenList/普通播放器、四个桌面目标、挂载和发行仍需独立验证。
+2026-10-20 整体复盘决定：保留三个核心领域与共用协议/UI；局部减少 DAV 无用元数据探测、重复目录命名和淘汰试验依赖。不再把 QQ 稀有账号/全部格式样本作为全局串行门槛。已知字节/随机读取仅在相关代码变化时复测；来源样本欠缺单独保留验收义务。完整原因和剩余工作量见[复盘与估算](musicfs-effort-risk-roi-assessment.md)。
+
+## 接下来的三个交付包
+
+在当前减法与必要回归提交后，按下面的实际出口推进；前三包可由明确文件所有权的子代理并行，主代理负责合同、锁文件及集成。云部署凭据或目标机器不足时先交付本地可执行程序和精确操作入口，再请求协作，等待时继续其他包。
+
+| 优先线 | 下一可审阅出口 | 实施重点 |
+|---|---|---|
+| Worker 正式宿主 | 共用页面/API/DAV 的实际入口与部署模板，预构建模块组装后可在本地 workerd 运行；随后在真实普通免费账号执行发布旅程 | 复用当前 D1/注册表和 Cloudflare 官方 SDK，分别测量云出口、CPU、上游请求和 D1 调用；补后台安装/更新/移除与失败恢复 |
+| 桌面产品化 | 从打包程序点击启动并打开页面、复用后台、管理随包 rclone 的本地/远程挂载；生成四目标产物 | 宿主拥有进程/路径/挂载，WebUI 复用通用管理合同；现有开发启动和 Linux 编译探针继续复用 |
+| 网易云示例 | 固定 SDK 必要模块与原样加密组成可安装包，Bun/workerd 先跑真实扫码、会话恢复、一份集合和范围读取 | 依据[SDK 调查](research-netease-worker-sdk.md)优先实测 4.32.0；请求/Cookie/取消留在插件，再补完整分类与音质 |
+
+QQ 会话续期、剩余 facade 取消和必要生命周期作为收口包跟进；沿用 [ADR 0005](../docs/adr/0005-pinned-qq-sdk-read-adapter.md)的固定 SDK 适配，不再扩成平台无关 SDK 框架。普通缓存缺失读取的重复刷新、SQLite/D1 相同条件语句漂移，在相应用例修改时集中解决。免费 Worker 的完整刷新若实测超限，再实现有边界的分步继续与完整发布，不能用提高本地 budget 或盲目加并发替代。
+
+提交按完整行为组织：已验证基线、局部减法、一个宿主用例、一个来源切片；相关文档随行为提交。一次完整检查通过后，除非有新变更或失败，不重复所有探针。保持全部目标：真实云端、OpenList/普通播放器、四目标运行/挂载及完整发行仍分别验收。
 
 ## 交付顺序
 

@@ -27,13 +27,13 @@ function davElement(doc: Document, name: string, text?: string): Element {
 function href(entry: ViewEntry) {
   return '/dav' + entry.path.split('/').map(encodeURIComponent).join('/') + (entry.kind === 'directory' && entry.path !== '/' ? '/' : '');
 }
-const supported = (entry: Description) => ['displayname', 'resourcetype', 'creationdate', 'getlastmodified', 'getetag',
+const supported = (entry: ViewEntry) => ['displayname', 'resourcetype', 'creationdate', 'getlastmodified', 'getetag',
   ...(entry.kind === 'file' ? ['getcontentlength', 'getcontenttype'] : [])];
-function value(doc: Document, parent: Element, property: string, entry: Description) {
+function value(doc: Document, parent: Element, property: string, entry: ViewEntry | Description) {
   if (property === 'resourcetype') { if (entry.kind === 'directory') parent.appendChild(davElement(doc, 'collection')); return; }
   const texts: Record<string, string> = { displayname: entry.name || 'MusicFS', creationdate: entry.modifiedAt,
-    getlastmodified: new Date(entry.modifiedAt).toUTCString(), getetag: `"${entry.etag}"`,
-    ...(entry.kind === 'file' ? { getcontentlength: String(entry.handle.content.size), getcontenttype: entry.handle.content.mediaType } : {}) };
+    getlastmodified: new Date(entry.modifiedAt).toUTCString(), ...('etag' in entry ? { getetag: `"${entry.etag}"` } : {}),
+    ...('handle' in entry ? { getcontentlength: String(entry.handle.content.size), getcontenttype: entry.handle.content.mediaType } : {}) };
   parent.appendChild(doc.createTextNode(texts[property] ?? ''));
 }
 export async function propfindResponse(
@@ -44,8 +44,11 @@ export async function propfindResponse(
   const root = doc.documentElement!;
   async function add(entry: ViewEntry, known?: Description) {
     const response = davElement(doc, 'response'); response.appendChild(davElement(doc, 'href', href(entry))); root.appendChild(response);
-    let description: Description;
-    try { description = known ?? await stat(entry); }
+    let description: ViewEntry | Description = known ?? entry;
+    const needsMetadata = request.mode === 'allprop' || request.mode === 'prop' && request.properties.some(property =>
+      property.namespace === DAV && (property.name === 'getetag'
+        || entry.kind === 'file' && ['getcontentlength', 'getcontenttype'].includes(property.name)));
+    try { if (!known && needsMetadata) description = await stat(entry); }
     catch (error) { response.appendChild(davElement(doc, 'status', `HTTP/1.1 ${status(error)} Resource unavailable`)); return; }
     const available = supported(description);
     const wanted = request.mode === 'prop' ? request.properties : [

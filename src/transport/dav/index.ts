@@ -54,7 +54,7 @@ export function createDav(view: FileView, credentials: ReadCredentials, options:
       if (depth !== '0' && depth !== '1') throw new HTTPException(400, { message: 'Depth must be 0 or 1' });
       const request = parsePropfind(await c.req.text());
       const entries = description.kind === 'directory' && depth === '1' ? await view.list(path, signal) : [];
-      const xml = await propfindResponse(description, entries, request, (entry) => view.stat(entry.path, signal), davStatus);
+      const xml = await propfindResponse(description, entries, request, (entry) => view.stat(entry, signal), davStatus);
       return new Response(xml, { status: 207, headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'private, no-cache' } });
     }
     if (description.kind !== 'file') return new Response(null, { status: 204 });

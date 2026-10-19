@@ -25,6 +25,7 @@
 | [插件合同](architecture/plugin-interface.md) | 插件作者与核心共同遵守的数据、调用和错误合同草案 | 公共版本已发布或冻结 |
 | [架构与流程图](architecture/diagrams.md) | 结构、关系、关键时序；每张图注明范围 | 真实部署连接或验收结果 |
 | [实施计划](../outputs/musicfs-implementation-plan.md) | 执行顺序、首条可用链路、阶段完成条件 | 工期承诺 |
+| [剩余工作量与整体复盘](../outputs/musicfs-effort-risk-roi-assessment.md) | 当前剩余预算、近期问题、局部减法及推进约束 | 精确日历时间或未执行的云端验收 |
 | [依赖选择](../outputs/musicfs-simplification-and-dependencies.md) | 优先依赖、责任分工和采用条件 | 依赖已安装或双宿主可运行 |
 
 ## 决策与澄清
@@ -45,6 +46,7 @@
 | Worker 插件安装 | [免费路线候选与证据边界](../outputs/research-worker-free-plugin-loading.md) |
 | Bun 宿主与发行 | [Bun 评估](../outputs/musicfs-bun-desktop-evaluation.md)、[编译资源与持久化](../outputs/research-bun-executable-packaging.md) |
 | 网易云及通用平台调查 | [平台 API](../outputs/platform-api-integration-research.md) |
+| 网易云 SDK 接入 | [固定版本必要模块、原样加密与双宿主实测候选](../outputs/research-netease-worker-sdk.md) |
 | QQ 示例插件 | [QQ API](../outputs/qq-api-integration-research.md) |
 | WebUI 依赖 | [前端与宿主复用](../outputs/research-webui-dependency-reuse.md) |
 | OpenList | [接入调查](../outputs/openlist-music-drivers-followup.md) |
@@ -55,7 +57,7 @@
 
 - [相似项目](../outputs/cloud-music-filesystem-research.md)、[直接可复用项目](../outputs/research-direct-projects.md)：借鉴线索，旧固定平台假设已被插件需求替代。
 - [WebUI 方向变更](../outputs/musicfs-webui-design-evaluation.md)：CLI 转向 WebUI 的历史依据。
-- [工作量与 ROI](../outputs/musicfs-effort-risk-roi-assessment.md)：原固定平台范围估算，未计插件化增量，待 P0 后更新。
+- 原固定平台范围的工作量估算已由当前[剩余工作量与复盘](../outputs/musicfs-effort-risk-roi-assessment.md)替代，历史正文保存在基线提交 `bfee998`。
 
 ## 文档与图表维护
 

@@ -19,5 +19,5 @@
     "noEmit": true
   },
   "include": ["src", "packages", "plugins", "scripts", "tests"],
-  "exclude": ["tests/probes/worker-*.ts", "tests/probes/http-bridge.ts", "src/web"]
+  "exclude": ["tests/probes/worker-*.ts", "src/web"]
 }

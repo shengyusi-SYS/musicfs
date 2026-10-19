@@ -3,12 +3,12 @@ import { createDav } from '../src/transport/dav';
 import { libraryFixture } from './helpers/library-fixture';
 import sample from '../plugins/sample';
 
-let server: Bun.Server<undefined>; let fixture: Awaited<ReturnType<typeof libraryFixture>>; let origin: string;
+let server: Bun.Server<undefined>; let fixture: Awaited<ReturnType<typeof libraryFixture>>; let origin: string; let metadataCalls = 0;
 const authorization = 'Basic ' + Buffer.from('reader:fixture-password').toString('base64');
 const file = '/dav/' + ['实例 & #', '目录 & #', '440 Hz.wav'].map(encodeURIComponent).join('/');
 const request = (path: string, init: RequestInit = {}) => fetch(origin + path, { ...init, headers: { Authorization: authorization, ...init.headers } });
 beforeAll(async () => {
-  fixture = await libraryFixture(sample, { label: '目录 & #' });
+  fixture = await libraryFixture({ ...sample, stat: (ctx, file) => { metadataCalls++; return sample.stat(ctx, file); } }, { label: '目录 & #' });
   const app = createDav(fixture.library.files, { username: 'reader', password: 'fixture-password' });
   server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: app.fetch });
   origin = server.url.origin;
@@ -30,6 +30,25 @@ describe('shared Fetch read-only DAV over the MusicFS library', () => {
     expect(response.status).toBe(207);
     const xml = await response.text();
     expect(xml).toContain('目录 &amp; #'); expect(xml).toContain(encodeURIComponent('目录 & #')); expect(xml).toContain('404');
+  });
+  test('PROPFIND names and property names avoid audio metadata probes; content properties return real metadata', async () => {
+    const directory = file.slice(0, file.lastIndexOf('/') + 1);
+    for (const selection of ['<D:propname/>', '<D:prop><D:displayname/><D:resourcetype/><D:creationdate/><D:getlastmodified/><D:missing/></D:prop>']) {
+      const before = metadataCalls;
+      const response = await request(directory, { method: 'PROPFIND', headers: { Depth: '1', 'Content-Type': 'application/xml' },
+        body: `<D:propfind xmlns:D="DAV:">${selection}</D:propfind>` });
+      expect(response.status).toBe(207); const xml = await response.text();
+      expect(xml).toContain(encodeURIComponent('440 Hz.wav')); expect(metadataCalls).toBe(before);
+      if (selection === '<D:propname/>') { expect(xml).toContain('<D:getcontentlength/>'); expect(xml).not.toContain('16044'); }
+      else expect(xml).toContain('404 Not Found');
+    }
+    for (const body of ['', '<D:propfind xmlns:D="DAV:"><D:prop><D:getcontentlength/><D:getcontenttype/><D:getetag/></D:prop></D:propfind>']) {
+      const before = metadataCalls;
+      const response = await request(directory, { method: 'PROPFIND', headers: { Depth: '1', 'Content-Type': 'application/xml' }, body });
+      expect(response.status).toBe(207); const xml = await response.text();
+      expect(xml).toContain('<D:getcontentlength>16044</D:getcontentlength>'); expect(xml).toContain('audio/wav');
+      expect(metadataCalls).toBe(before + 1);
+    }
   });
   test('HEAD and full GET report and return the real 16044-byte WAV', async () => {
     const head = await request(file, { method: 'HEAD' }); expect(head.status).toBe(200); expect(head.headers.get('Content-Length')).toBe('16044');

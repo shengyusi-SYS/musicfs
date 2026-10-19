@@ -4,6 +4,6 @@
     "lib": ["ES2023"],
     "types": ["@cloudflare/workers-types", "node"]
   },
-  "include": ["tests/probes/worker-*.ts", "tests/probes/http-bridge.ts", "tests/probes/artifacts.d.ts"],
+  "include": ["tests/probes/worker-*.ts", "tests/probes/artifacts.d.ts"],
   "exclude": []
 }

@@ -1,6 +1,6 @@
 # MusicFS 开发与验证
 
-当前是 P0 插件、目录及协议实现，尚无面向用户的完整应用。主线和验收见[目标](codex-goal.md)与[台账](verification.md)；下面的程序和命令用于开发验证，不是产品要求用户操作的 CLI。
+当前已有本地开发 alpha：插件、实例、目录、DAV、共用页面及 QQ 实例音质链路；完整双宿主应用仍在开发。主线和验收见[目标](codex-goal.md)与[台账](verification.md)；下面的程序和命令用于开发验证，不是产品要求用户操作的 CLI。
 
 ## 环境与入口
 
@@ -33,7 +33,7 @@ bun install --frozen-lockfile --ignore-scripts
 
 最小插件包输出到 `dist/plugins/org.musicfs.sample.zip`，QQ 开发预览输出到 `dist/plugins/org.musicfs.qq.zip`；编译探针与 Worker 探针输出到 `dist/p0/`。这些目录不进入版本控制。插件生成的校验代码在构建时产生；其 `.d.mts` 类型声明随源码保存。
 
-各正式探针正常结束时清理临时数据库及安装文件。默认仅使用本地测试状态，不要求 Cloudflare 账号或音乐账号；QQ 探针的可选真实会话模式例外，见下文。Worker 探针固定兼容日期和显式模块清单，不执行线上部署，也不证明免费配额适用。`check` 中的 HTTP 测试也需回环端口；`probe-nephele-dav` 和 `probe-http-bridge` 仅是未采用方案的诊断，不属于通过门槛。
+各正式探针正常结束时清理临时数据库及安装文件。默认仅使用本地测试状态，不要求 Cloudflare 账号或音乐账号；QQ 探针的可选真实会话模式例外，见下文。Worker 探针固定兼容日期和显式模块清单，不执行线上部署，也不证明免费配额适用。`check` 中的 HTTP 测试也需回环端口；淘汰的 Nephele/Node 桥接诊断已归档到基线提交 `bfee998`，参见 [ADR 0004](adr/0004-shared-fetch-readonly-dav.md)。
 
 ## 可选真实来源复测
 

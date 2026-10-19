@@ -93,6 +93,7 @@ type Target =
   | { kind: 'directory'; stamp: SourceStamp; ref: string }
   | { kind: 'file'; stamp: SourceStamp; ref: string };
 type Child = { id: string; name: string; target: Target; modifiedAt: string };
+type Resolved = { target: Target; name: string; path: string; modifiedAt: string };
 
 export function createLibrary(sources: Sources, store: LibraryStore, budgets: { pages: number; entries: number; directories?: number } = { pages: 1000, entries: 100_000 }) {
   async function refresh(stamp: SourceStamp, key: SnapshotKey, signal: AbortSignal): Promise<Snapshot> {
@@ -212,7 +213,7 @@ export function createLibrary(sources: Sources, store: LibraryStore, budgets: { 
     const layout = await store.layout();
     return layout.nodes === null ? { kind: 'instances' } : { kind: 'layout', nodes: layout.nodes, revision: layout.revision };
   }
-  async function resolve(path: string, signal: AbortSignal) {
+  async function resolve(path: string, signal: AbortSignal): Promise<Resolved> {
     const segments = path.split('/').filter(Boolean);
     if (segments.some(part => part === '.' || part === '..' || /[\\\x00]/.test(part))) throw new LibraryError('not_found', 'Invalid export path');
     let target = await root(); let name = ''; let canonical = ''; let modifiedAt = epochDate;
@@ -224,17 +225,27 @@ export function createLibrary(sources: Sources, store: LibraryStore, budgets: { 
     }
     return { target, name, path: canonical || '/', modifiedAt };
   }
+  // A listed entry keeps its resolved target only while its caller retains that object.
+  // Serialized or externally created entries still resolve through the ordinary path boundary.
+  const listedEntries = new WeakMap<ViewEntry, Resolved>();
   const files: FileView = {
     async list(path, signal): Promise<ViewEntry[]> {
       const resolved = await resolve(path, signal);
-      return (await nameEntries(await children(resolved.target, signal))).map(entry => ({
-        kind: entry.target.kind === 'file' ? 'file' : 'directory', name: entry.pathName,
-        path: `${resolved.path === '/' ? '' : resolved.path}/${entry.pathName}`, modifiedAt: entry.modifiedAt
-      }));
+      return (await nameEntries(await children(resolved.target, signal))).map(entry => {
+        const view: ViewEntry = { kind: entry.target.kind === 'file' ? 'file' : 'directory', name: entry.pathName,
+          path: `${resolved.path === '/' ? '' : resolved.path}/${entry.pathName}`, modifiedAt: entry.modifiedAt };
+        listedEntries.set(view, { target: entry.target, name: view.name, path: view.path, modifiedAt: view.modifiedAt });
+        return view;
+      });
     },
-    async stat(path, signal): Promise<Description> {
-      const resolved = await resolve(path, signal);
+    async stat(entry, signal): Promise<Description> {
+      signal.throwIfAborted();
+      const resolved = typeof entry === 'string' ? await resolve(entry, signal)
+        : listedEntries.get(entry) ?? await resolve(entry.path, signal);
       const { target, ...base } = resolved;
+      if ((target.kind === 'file' || target.kind === 'directory') && !await sources.current(target.stamp)) {
+        throw new LibraryError('stale_call', 'Source changed before metadata request');
+      }
       if (target.kind !== 'file') return { ...base, kind: 'directory', etag: await digest([base.path, target]) };
       const content = unwrap(await sources.stat(target.stamp.id, target.ref, signal)); assertInfo(content);
       if (!await sources.current(target.stamp)) throw new LibraryError('stale_call', 'Source changed during metadata request');

@@ -33,7 +33,7 @@
 
 存储和宿主 Interface 定义在使用它的 Module 内，实现从基础设施一侧依赖这些 Interface，由入口注入。只对已有真实差异建立 seam：SQLite/D1、桌面/Worker 安装执行、外部平台请求。使用普通工厂和参数装配，不引入通用 DI 容器、全应用事件总线或分布式调度框架。
 
-禁止的依赖包括：公开合同 → 核心/宿主/React；示例插件 → 核心私有模块；核心 → 平台 SDK、Hono、Nephele 或 React；Worker 入口间接导入桌面挂载/本机数据库；前端导入后台实现。XML/HTTP 对象仅留在协议层，Cloudflare SDK 仅留在 Worker 发布 Adapter。未采用的 Nephele/Node 流只在开发探针中，产品 DAV 保持 Fetch 原生。
+禁止的依赖包括：公开合同 → 核心/宿主/React；示例插件 → 核心私有模块；核心 → 平台 SDK、Hono、Nephele 或 React；Worker 入口间接导入桌面挂载/本机数据库；前端导入后台实现。XML/HTTP 对象仅留在协议层，Cloudflare SDK 仅留在 Worker 发布 Adapter。淘汰的 Nephele/Node 桥接探针与专用依赖已归档到 Git 基线，产品 DAV 保持 Fetch 原生。
 
 ## 模块组织
 
@@ -50,7 +50,7 @@ src/
     dav/                     # 共用只读 Fetch DAV，复用 XML/Range 库
   infrastructure/
     persistence/             # Bun SQLite / D1，少量明确数据操作
-    archives/                # zip.js / fflate PoC 后选一，包合同归 extensions
+    archives/                # zip.js 解包，包合同归 extensions
   hosts/
     desktop/                 # 插件加载、静态资源、应用目录与 mounts
     worker/                  # 模块注册、SDK 发布、绑定和静态资源
@@ -69,7 +69,7 @@ tests/                       # 最小插件、协议样本、接口/集成与真
 
 插件 Interface 详见 [合同草案](plugin-interface.md)。它提供可浏览内容入口、分页目录、实际音频描述和读取，并独立声明配置与认证能力；不规定统一的歌曲模型或全局音质枚举。
 
-`library` 向 DAV 提供 `list/stat/open`，路径解析后得到属于某实例、目录快照及实际文件的引用。`open` 接收期望内容身份和范围，返回同一份实际音频的元数据与原生 Web Stream；协议层不再自己解析来源 URL。慢请求在存储事务外执行，只在发布结果时做条件提交。
+`library` 向 DAV 提供 `list/stat/open`，路径解析后得到属于某实例、目录快照及实际文件的引用。`stat` 可接收路径或本次 `list` 返回的条目；library 用内部 WeakMap 复用条目已解析的目标，避免逐文件重读和命名整个父目录。条目序列化后回退普通路径解析；私有目标不进入 JSON，描述前仍检查来源代际。名称仅在实际冲突时计算稳定散列，不引入跨请求路径缓存。`open` 接收期望内容身份和范围，返回同一份实际音频的元数据与原生 Web Stream；协议层不再自己解析来源 URL。慢请求在存储事务外执行，只在发布结果时做条件提交。
 
 `sources` 统一捕获实例上下文，检查安装状态，传入配置、私有状态快照和取消信号，调用插件，再条件接受返回的状态变化。插件通过公开结果提出新私有状态，不获得裸 SQLite/D1 句柄。平台库 Cookie 全局变量、直接落盘及全局会话刷新必须在插件内部适配，不允许核心为某个平台补专用分支。
 
@@ -125,7 +125,7 @@ tests/                       # 最小插件、协议样本、接口/集成与真
 
 插件负责来源定位、必要请求头、临时 URL 续期和范围取流。核心检验内容身份、总长度和实际返回范围，使用 Web Streams 的背压与取消，不缓冲完整歌曲。上游返回完整文件时不得伪装部分响应；DAV 库必须能接收该事实或返回明确结果。
 
-Nephele 的固定版本 PoC 已执行：Bun 基础读取可用，本地 Worker 的 Node 桥接完整取流失败。按原备选收敛为一套共用 Fetch 只读 DAV，复用 xmldom 和 range-parser，不复制完整 DAV/文件系统。标准属性、HTTP 输入和错误映射留在 Adapter；Worker 使用官方 FixedLengthStream，Bun 可采用合法 chunked framing。具体方法范围、候选证据及取舍见 [ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)。来源插件不导入任何 DAV 框架。
+Nephele 的固定版本 PoC 已执行：Bun 基础读取可用，本地 Worker 的 Node 桥接完整取流失败。按原备选收敛为一套共用 Fetch 只读 DAV，复用 xmldom 和 range-parser，不复制完整 DAV/文件系统。标准属性、HTTP 输入和错误映射留在 Adapter；PROPFIND 的子项只在实际请求 etag、大小、类型或 allprop 时调用真实描述，名称/类型标记/日期和 propname 直接使用目录视图。父项仍先 stat，allprop 仍需真实音频元数据，本次不声称已解决所有大目录云端预算。Worker 使用官方 FixedLengthStream，Bun 可采用合法 chunked framing。具体方法范围、候选证据及取舍见 [ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)。来源插件不导入任何 DAV 框架。
 
 ## 第三方机制与自有领域代码
 
@@ -135,7 +135,7 @@ Nephele 的固定版本 PoC 已执行：Bun 基础读取可用，本地 Worker �
 | 页面、树和表单 | React、Vite、Ant Design、RJSF AntD | 来源声明、布局语义、保存和认证步骤 |
 | 请求状态 | TanStack Query | 失效关系、取消与生命周期 |
 | 验证 | Zod；插件 Schema 用 Ajv 及生成代码 | 领域允许值、实例语义与错误映射 |
-| 插件归档与版本 | zip.js 与 fflate 同批 PoC 选一；npm semver | 库未覆盖的包检查、内容合同、兼容与安装切换 |
+| 插件归档与版本 | zip.js；npm semver；fflate 仅用于独立编码互操作测试 | 库未覆盖的包检查、内容合同、兼容与安装切换 |
 | Worker 发布 | Cloudflare 官方 SDK | 发布计划、绑定保留、结果核对、失败恢复 |
 | 并发、短期缓存 | p-limit、lru-cache 按实际需要 | 实例预算、缓存键和失效条件 |
 | 数据与系统能力 | bun:sqlite、D1、open、env-paths、Bun.spawn、rclone | SQL 事务与提交、生命周期、就绪及正常卸载 |

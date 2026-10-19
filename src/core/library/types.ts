@@ -33,7 +33,7 @@ export type ViewEntry = Pick<Description, 'kind' | 'path' | 'name' | 'modifiedAt
 /** The DAV adapter consumes this Interface and knows no source/platform semantics. */
 export interface FileView {
   list(path: string, signal: AbortSignal): Promise<ViewEntry[]>;
-  stat(path: string, signal: AbortSignal): Promise<Description>;
+  stat(entry: string | ViewEntry, signal: AbortSignal): Promise<Description>;
   open(file: FileDescription, range: ByteRange | undefined, signal: AbortSignal): Promise<ReadResult>;
 }
 

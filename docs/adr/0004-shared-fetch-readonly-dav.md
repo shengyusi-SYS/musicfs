@@ -8,7 +8,7 @@
 
 在 Miniflare 4.20260730.0 / workerd 1.20260730.1、compatibility date 2026-07-30 中，补齐显式模块、VFS 中原包 package.json 和 import.meta.url 后，Node 桥接能返回 PROPFIND 和 HEAD，但完整 GET 正文为零字节。重复运行结果相同。进一步的最小反例中，`response.end('RIFF')` 可用，Node/Web Readable `.pipe(response)` 无响应；在 pipe 前直接 `flushHeaders()` 可返回正文，但 pipe 事件和完整 Nephele 路径的流适配仍返回零字节。
 
-这些事实限定于本轮锁定的运行器和构建方式，不证明所有 Node 服务端或真实 Cloudflare 都不可用。它们足以说明当前共同产品路径尚不能靠已验证的公开接线采用 Nephele，继续增加时序兼容层和分发资源规则会扩大维护面。原始候选保留在 `tests/probes/nephele-dav.ts`、`tests/probes/worker-nephele.ts`、`scripts/probe-nephele-dav.ts` 与最小 `http-bridge` 探针，均为技术调查，不进入产品请求路径。
+这些事实限定于本轮锁定的运行器和构建方式，不证明所有 Node 服务端或真实 Cloudflare 都不可用。它们足以说明当前共同产品路径尚不能靠已验证的公开接线采用 Nephele，继续增加时序兼容层和分发资源规则会扩大维护面。原始候选与最小 `http-bridge` 探针归档于基线提交 `bfee998`，例如 `git show bfee998:tests/probes/nephele-dav.ts`；该提交的锁文件可复现当时依赖。2026-10-20 复盘后从当前工程删除这五份淘汰探针，避免继续维护第二套 DAV 适配。
 
 ## 决定
 
@@ -23,7 +23,7 @@
 - Worker 通过官方 `FixedLengthStream` 给音频流绑定真实长度；Bun 可以用合法 chunked framing。存在 Content-Length 时必须与实际字节相符，HEAD 始终提供可靠总长度。
 - DAV Basic 凭据与管理 Bearer token 分开；协议层不返回来源私有状态。修改方法拒绝，不扩展锁表、上传和死属性存储。
 
-Nephele 及只读插件留作开发依赖以复现候选失败；其类型和 Node 流均不进入 `src/transport/dav` 或核心。后续只有新证据能明显减少整体维护成本时再比较成熟服务端，不为两宿主维护两套协议。
+Nephele、其只读插件及专用 Express 类型依赖随历史探针退出当前依赖树；`fflate` 仍用于独立 ZIP 编码的互操作测试，产品安装器仅使用 zip.js。后续只有新证据能明显减少整体维护成本时再比较成熟服务端，不为两宿主维护两套协议。
 
 ## 影响与验收
 
