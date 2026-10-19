@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "label": { "type": "string", "title": "目录名称", "minLength": 1, "maxLength": 80, "default": "QQ 音乐" },
+    "channel": { "type": "string", "title": "授权方式", "default": "qq", "oneOf": [
+      { "const": "qq", "title": "手机 QQ 扫码" }, { "const": "wechat", "title": "微信扫码" }
+    ] },
+    "audio": {
+      "type": "object", "title": "音频版本", "additionalProperties": false,
+      "description": "按当前账号可取得的完整音频导出。FLAC 与 APE 是同级无损格式；回退时均依次尝试 320k MP3、128k MP3、M4A，不以试听替代。",
+      "default": { "mode": "single", "qualities": ["128"], "missingQuality": "hide" },
+      "required": ["mode", "qualities", "missingQuality"],
+      "properties": {
+        "mode": { "type": "string", "title": "导出模式", "default": "single", "oneOf": [
+          { "const": "single", "title": "单版本" }, { "const": "multiple", "title": "多版本" }
+        ] },
+        "qualities": { "type": "array", "title": "目标音质", "minItems": 1, "maxItems": 5, "uniqueItems": true, "default": ["128"], "items": { "type": "string", "oneOf": [
+          { "const": "flac", "title": "FLAC 无损" }, { "const": "ape", "title": "APE 无损" },
+          { "const": "320", "title": "MP3 320k" }, { "const": "128", "title": "MP3 128k" }, { "const": "m4a", "title": "M4A 普通" }
+        ] } },
+        "missingQuality": { "type": "string", "title": "目标音质缺失", "default": "hide", "oneOf": [
+          { "const": "hide", "title": "隐藏缺失版本" }, { "const": "fallback", "title": "自动回退到较低音质" }
+        ] }
+      },
+      "allOf": [{ "if": { "properties": { "mode": { "const": "single" } } }, "then": { "properties": { "qualities": { "type": "array", "maxItems": 1 } } } }]
+    }
+  }
+}

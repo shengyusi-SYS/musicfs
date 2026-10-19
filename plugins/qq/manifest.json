@@ -1,0 +1,11 @@
+{
+  "formatVersion": 1,
+  "id": "org.musicfs.qq",
+  "name": "QQ 音乐（开发预览）",
+  "version": "0.1.0-alpha.5",
+  "apiRange": ">=0.1.2 <0.2.0",
+  "hosts": { "desktop": "index.mjs", "worker": "index.mjs" },
+  "configVersion": 1,
+  "stateVersion": 1,
+  "files": ["index.mjs", "config.schema.json", "LICENSE.txt", "THIRD_PARTY_LICENSE.txt", "THIRD_PARTY_ATTRIBUTION.md"]
+}

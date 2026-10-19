@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.musicfs/
+.wrangler/
+coverage/
+*.tsbuildinfo
+plugins/sample/generated-config.mjs
+plugins/qq/generated-config.mjs
+plugins/qq/generated-upstream.mjs
+.env
+.env.*
+!.env.example

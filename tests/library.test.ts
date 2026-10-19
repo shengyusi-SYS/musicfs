@@ -1,0 +1,152 @@
+import { afterEach, expect, test } from 'bun:test';
+import type { Entry, Outcome, Page, SourcePlugin } from '@musicfs/plugin-api';
+import { libraryFixture } from './helpers/library-fixture';
+import { nameEntries } from '../src/core/library/names';
+
+const cleanups: (() => void)[] = [];
+afterEach(() => { for (const fn of cleanups.splice(0)) fn(); });
+const signal = () => new AbortController().signal;
+function plugin(overrides: Partial<SourcePlugin> = {}): SourcePlugin {
+  return {
+    configuration: { schema: { type: 'object' } }, validateConfig: async (_ctx, candidate) => ({ ok: true, value: candidate }),
+    roots: async () => ({ ok: true, value: { items: [{ sourceId: 'root', name: '来源', directoryRef: 'root' }] } }),
+    list: async () => ({ ok: true, value: { items: [{ kind: 'file', entryId: 'one', name: '音频.wav', fileRef: 'audio' }] } }),
+    stat: async () => ({ ok: true, value: { contentId: 'fixed', size: 8, mediaType: 'audio/wav' } }),
+    open: async (_ctx, _file, request) => ({ ok: true, value: { content: { contentId: 'fixed', size: 8, mediaType: 'audio/wav' },
+      servedRange: request.range ?? null, body: new Blob([request.range ? 'CD' : 'ABCDEFGH']).stream() } }),
+    ...overrides
+  };
+}
+async function setup(source = plugin()) { const result = await libraryFixture(source); cleanups.push(result.close); return result; }
+const filePath = '/实例 & #/来源/音频.wav';
+
+test('complete pagination preserves order and duplicate file occurrences', async () => {
+  const { library } = await setup(plugin({ list: async (_ctx, _ref, cursor) => ({ ok: true, value: cursor === undefined
+    ? { items: [], nextCursor: 'empty-is-not-end' }
+    : cursor === 'empty-is-not-end' ? { items: [{ kind: 'file', entryId: 'a', name: '重复.wav', fileRef: 'same' }], nextCursor: 'last' }
+    : { items: [{ kind: 'file', entryId: 'b', name: '重复.wav', fileRef: 'same' }] } }) }));
+  const entries = await library.files.list('/实例 & #/来源', signal());
+  expect(entries).toHaveLength(2); expect(new Set(entries.map(entry => entry.name)).size).toBe(2);
+  expect(entries.map(entry => entry.name)).toEqual((await nameEntries([{ id: 'a', name: '重复.wav' }, { id: 'b', name: '重复.wav' }])).map(entry => entry.pathName));
+});
+
+test('failed refresh retains the complete previous snapshot and leaves layout untouched', async () => {
+  const source = plugin(); const { library, store, id } = await setup(source);
+  const layout = await library.saveLayout(0, [{ kind: 'group', id: 'group', name: '音乐', children: [{ kind: 'source', id: 'source', name: '我的来源', instanceId: id, sourceId: 'root' }] }]);
+  expect((await library.files.list('/音乐/我的来源', signal()))).toHaveLength(1);
+  const previous = store.snapshot(id, { kind: 'directory', ref: 'root' });
+  source.list = async () => ({ ok: false, error: { kind: 'temporary', message: 'Fixture network failed' } });
+  await expect(library.refresh(id, 'root', signal())).rejects.toThrow('Fixture network failed');
+  expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.value).toEqual(previous?.value);
+  expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.error).toBe('temporary');
+  expect(await library.layout()).toEqual(layout);
+  expect(await library.files.list('/音乐/我的来源', signal())).toHaveLength(1);
+});
+
+test('cyclic cursors and invalid references cannot publish a partial snapshot', async () => {
+  const { library, store, id } = await setup(plugin({ list: async () => ({ ok: true, value: { items: [], nextCursor: 'same' } }) }));
+  await expect(library.refresh(id, 'root', signal())).rejects.toThrow('cyclic');
+  expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.value).toBeNull();
+  const bad = await setup(plugin({ list: async () => ({ ok: true, value: { items: [{ kind: 'file', entryId: 'broken', name: 'broken.wav', fileRef: 42 as unknown as string }] } }) }));
+  await expect(bad.library.refresh(bad.id, 'root', signal())).rejects.toMatchObject({ code: 'invalid_source' });
+  expect(bad.store.snapshot(bad.id, { kind: 'directory', ref: 'root' })?.value).toBeNull();
+});
+
+test('a superseded refresh cannot replace a newer successful directory', async () => {
+  const pending = Promise.withResolvers<Outcome<Page<Entry>>>(); const started = Promise.withResolvers<void>(); let calls = 0;
+  const { library, store, id } = await setup(plugin({ list: async () => {
+    if (++calls === 1) { started.resolve(); return pending.promise; }
+    return { ok: true, value: { items: [{ kind: 'file', entryId: 'new', name: 'new.wav', fileRef: 'new' }] } };
+  } }));
+  const old = library.refresh(id, 'root', signal()); await started.promise;
+  const current = await library.refresh(id, 'root', signal());
+  pending.resolve({ ok: true, value: { items: [] } });
+  await expect(old).rejects.toMatchObject({ code: 'stale_call' });
+  expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.value).toEqual(current);
+});
+
+test('configuration changes invalidate in-flight refresh publication', async () => {
+  const pending = Promise.withResolvers<Outcome<Page<Entry>>>(); const started = Promise.withResolvers<void>();
+  const { library, sources, store, id } = await setup(plugin({ list: async () => { started.resolve(); return pending.promise; } }));
+  const old = library.refresh(id, 'root', signal()); await started.promise;
+  await sources.configure(id, { changed: true }, signal()); pending.resolve({ ok: true, value: { items: [] } });
+  await expect(old).rejects.toMatchObject({ code: 'stale_call' });
+  expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.value).toBeNull();
+});
+
+test('portable duplicate names remain deterministic after reorder and fit UTF-8 limits', async () => {
+  const input = [{ id: 'a', name: 'CON' }, { id: 'b', name: 'CON' }, { id: 'c', name: '汉'.repeat(200) + '.flac' }];
+  const first = await nameEntries(input); const second = await nameEntries([...input].reverse());
+  for (const item of first) {
+    expect(new TextEncoder().encode(item.pathName).byteLength).toBeLessThanOrEqual(255);
+    expect(second.find(entry => entry.id === item.id)?.pathName).toBe(item.pathName);
+    expect(item.pathName).not.toBe('CON');
+  }
+  expect(first.find(entry => entry.id === 'c')?.pathName.endsWith('.flac')).toBe(true);
+});
+
+test('layout uses revision checks and supports missing-plugin references', async () => {
+  const { library } = await setup();
+  await library.saveLayout(0, [{ kind: 'source', id: 'missing', name: '保留', instanceId: 'missing-instance', sourceId: 'missing-source' }]);
+  await expect(library.saveLayout(0, [])).rejects.toMatchObject({ code: 'conflict' });
+  expect(await library.files.list('/', signal())).toMatchObject([{ name: '保留' }]);
+  await expect(library.saveLayout(1, [{ kind: 'group', id: 'dup', name: 'a', children: [{ kind: 'group', id: 'dup', name: 'b', children: [] }] }])).rejects.toMatchObject({ code: 'invalid_layout' });
+});
+
+test('range bytes are exact and an upstream full response is cancelled and rejected', async () => {
+  const source = plugin(); const { library } = await setup(source);
+  const file = await library.files.stat(filePath, signal()); if (file.kind !== 'file') throw new Error('Missing fixture');
+  const result = await library.files.open(file, { start: 2, end: 3 }, signal());
+  expect(await new Response(result.body).text()).toBe('CD');
+  let cancelled = false;
+  source.open = async () => ({ ok: true, value: { content: file.handle.content, servedRange: null, body: new ReadableStream({ cancel() { cancelled = true; } }) } });
+  await expect(library.files.open(file, { start: 2, end: 3 }, signal())).rejects.toMatchObject({ code: 'range_unsupported' });
+  expect(cancelled).toBe(true);
+});
+test('a changed representation is cancelled rather than returned under old metadata', async () => {
+  const source = plugin(); const { library } = await setup(source);
+  const file = await library.files.stat(filePath, signal()); if (file.kind !== 'file') throw new Error('Missing fixture');
+  let cancelled = false;
+  source.open = async () => ({ ok: true, value: { content: { ...file.handle.content, contentId: 'different-bytes' }, servedRange: null,
+    body: new ReadableStream({ cancel() { cancelled = true; } }) } });
+  await expect(library.files.open(file, undefined, signal())).rejects.toMatchObject({ code: 'content_changed' }); expect(cancelled).toBe(true);
+});
+
+for (const bytes of ['SHORT', 'TOO-LONG-BYTES']) test(`incorrect audio length (${bytes.length}) fails through the returned stream`, async () => {
+  const source = plugin({ open: async () => ({ ok: true, value: { content: { contentId: 'fixed', size: 8, mediaType: 'audio/wav' }, servedRange: null, body: new Blob([bytes]).stream() } }) });
+  const { library } = await setup(source);
+  const file = await library.files.stat(filePath, signal()); if (file.kind !== 'file') throw new Error('Missing fixture');
+  const result = await library.files.open(file, undefined, signal());
+  await expect(new Response(result.body).arrayBuffer()).rejects.toThrow();
+});
+
+test('library persists complete page counters, reads diagnostics without a source request and invalidates them on configuration changes', async () => {
+  let calls = 0;
+  const source = plugin({ statistics: { records: '项目', files: '文件' }, list: async (_ctx, _ref, cursor) => {
+    calls++;
+    return { ok: true, value: { items: [], statistics: { records: cursor ? 2 : 3, files: cursor ? 1 : 0 }, ...(cursor ? {} : { nextCursor: 'last' }) } };
+  } });
+  const { library, store, sources, id } = await setup(source);
+  expect(await library.directoryStatus(id, 'root')).toBeNull(); expect(calls).toBe(0);
+  await library.refresh(id, 'root', signal());
+  const status = await library.directoryStatus(id, 'root');
+  expect(status?.statistics).toEqual({ records: 5, files: 1 }); expect(calls).toBe(2);
+  expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.value?.statistics).toEqual(status?.statistics ?? undefined);
+  await sources.configure(id, { revision: 2 }, signal()); expect(await library.directoryStatus(id, 'root')).toBeNull();
+});
+
+test('invalid, inconsistent and overflowing counters cannot replace the last successful statistics', async () => {
+  const source = plugin({ list: async () => ({ ok: true, value: { items: [], statistics: { records: 4 } } }) });
+  const { library, id } = await setup(source); await library.refresh(id, 'root', signal());
+  const before = await library.directoryStatus(id, 'root');
+  for (const invalid of [-1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    source.list = async () => ({ ok: true, value: { items: [], statistics: { records: invalid } } });
+    await expect(library.refresh(id, 'root', signal())).rejects.toMatchObject({ code: 'invalid_source' });
+    expect(await library.directoryStatus(id, 'root')).toEqual(before);
+  }
+  source.list = async (_ctx, _ref, cursor) => ({ ok: true, value: cursor ? { items: [] } : { items: [], statistics: { records: 1 }, nextCursor: 'last' } });
+  await expect(library.refresh(id, 'root', signal())).rejects.toMatchObject({ code: 'invalid_source' });
+  source.list = async (_ctx, _ref, cursor) => ({ ok: true, value: { items: [], statistics: { records: Number.MAX_SAFE_INTEGER }, ...(cursor ? {} : { nextCursor: 'last' }) } });
+  await expect(library.refresh(id, 'root', signal())).rejects.toMatchObject({ code: 'invalid_source' });
+  expect(await library.directoryStatus(id, 'root')).toEqual(before);
+});
