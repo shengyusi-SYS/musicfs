@@ -41,14 +41,14 @@ bun test tests/desktop-launcher.test.ts tests/desktop-mounts.test.ts
 
 ## 发行构建当前状态
 
-主线已用 `bun run build:desktop -- --all` 最终构建四个目标。本次纳入持久分页刷新、第五版迁移与最终页面重试/恢复修正；Linux最新二进制已重验冷准备/FUSE/忙卸载及退出。每个目录包含程序、共用页面、校验后的对应 rclone、三个插件ZIP、依赖锁与许可；macOS为`.app`。`release.json` 保持 `targetRuntimeVerified: false`，表示完整原生验收尚未全部收口。
+主线已用 `bun run build:desktop -- --all` 最终构建四个目标。本次纳入持久分页刷新、第五版迁移、API0.1.3批量描述及异常退出锁等待修正；Linux最新二进制已重验冷准备/FUSE/忙卸载及退出。每个目录包含程序、共用页面、校验后的对应 rclone、三个插件ZIP、依赖锁与许可；macOS为`.app`。`release.json` 保持 `targetRuntimeVerified: false`，表示完整原生验收尚未全部收口。
 
 | 目标 | 最终程序字节数 | SHA-256 | 原生结果 |
 |---|---:|---|---|
-| Linux x64 | 91,297,760 | `175409dc5c5c32ec55ef81d5d998ee720ed7dc27da2fbba95102483c6b80b41e` | 正式程序、页面、外置插件、重复启动、FUSE本地/独立远程DAV及正常退出已有证据 |
-| Windows x64 | 96,881,664 | `5b626bf13a3e7fa03b380b8271182b15f00c60170345ae6070a29eb31448e9ed` | 交叉编译，原生运行/挂载待验 |
-| macOS Intel | 79,207,920 | `74282317eae3400afcf6aa581852f6b2b6630c91c0ea60caca180583bc00f0bb` | 交叉编译，原生运行/挂载待验 |
-| macOS Apple Silicon | 71,357,810 | `8fb9d048a89c4881cdcc5b8ce6eb81a2135a00db7b59b21214d544c1c9a255eb` | 交叉编译，原生运行/挂载待验 |
+| Linux x64 | 91,297,760 | `614d1a0a4b9810a25a105c21476fdfaba84309537360f14d699dee0da9ea1df8` | 正式程序、页面、外置插件、重复启动、FUSE本地/独立远程DAV及正常退出已有证据 |
+| Windows x64 | 96,883,712 | `72bb911999d4e52740d01212c32c6b9ebe44eeb6b2688f2a118a991f5ac91235` | 交叉编译，原生运行/挂载待验 |
+| macOS Intel | 79,207,920 | `3a6f3a6b7881040ce3634ca6bb7978c90633e59eca98a79e9cb0ef59b8b09173` | 交叉编译，原生运行/挂载待验 |
+| macOS Apple Silicon | 71,357,810 | `071dff9b310cf557cd77cadcfe526d35176e5aae06d0cfda5d3559b416685c70` | 交叉编译，原生运行/挂载待验 |
 
 ## 从发行物执行的真实Linux旅程
 

@@ -43,6 +43,98 @@ test('listed entries retain resolved targets without rereading parent directorie
   await expect(library.files.stat(entry, signal())).rejects.toMatchObject({ code: 'stale_call' });
 });
 
+test('prepared metadata batches use two source checks regardless of file count while single stat remains live', async () => {
+  let count = 1; let metadataCalls = 0;
+  const source = plugin({ list: async () => ({ ok: true, value: { items: Array.from({ length: count }, (_, index) => ({
+    kind: 'file' as const, entryId: `entry-${index}`, name: `${index}.wav`, fileRef: `file-${index}`,
+    info: { contentId: `prepared-${index}`, size: index + 10, mediaType: 'audio/wav' }
+  })) } }), stat: async () => { metadataCalls++; return { ok: true, value: { contentId: 'live', size: 8, mediaType: 'audio/wav' } }; } });
+  const { library, store, id } = await setup(source);
+  const current = store.current; const snapshot = store.snapshot; let checks = 0; let reads = 0;
+  store.current = stamp => { checks++; return current(stamp); };
+  store.snapshot = (...args) => { reads++; return snapshot(...args); };
+  for (count of [1, 96]) {
+    await library.refresh(id, 'root', signal());
+    const entries = await library.files.list('/实例 & #/来源', signal()); checks = 0; reads = 0;
+    const values = await library.files.statMany(entries, signal());
+    expect(values.size).toBe(count); expect(checks).toBe(2); expect(reads).toBe(0); expect(metadataCalls).toBe(0);
+    for (let index = 0; index < count; index++) expect(values.get(entries[index]!)).toMatchObject({ kind: 'file',
+      handle: { content: { contentId: `prepared-${index}`, size: index + 10, mediaType: 'audio/wav' } } });
+  }
+  const [entry] = await library.files.list('/实例 & #/来源', signal());
+  expect(await library.files.stat(entry!, signal())).toMatchObject({ handle: { content: { contentId: 'live', size: 8 } } });
+  expect(metadataCalls).toBe(1);
+});
+
+test('a source change during batch description rejects every entry from that source', async () => {
+  let metadataCalls = 0;
+  const source = plugin({ list: async () => ({ ok: true, value: { items: ['one', 'two'].map(entryId => ({ kind: 'file' as const,
+    entryId, name: `${entryId}.wav`, fileRef: entryId, info: { contentId: entryId, size: 8, mediaType: 'audio/wav' } })) } }),
+  stat: async () => { metadataCalls++; return { ok: true, value: { contentId: 'live', size: 8, mediaType: 'audio/wav' } }; } });
+  const { library, sources, id } = await setup(source);
+  const entries = await library.files.list('/实例 & #/来源', signal());
+  const current = sources.current; let checks = 0;
+  sources.current = async stamp => {
+    const valid = await current(stamp);
+    if (++checks === 1) await sources.configure(id, { changed: true }, signal());
+    return valid;
+  };
+  const values = await library.files.statMany(entries, signal());
+  expect(checks).toBe(2); expect(metadataCalls).toBe(0);
+  for (const entry of entries) expect(values.get(entry)).toMatchObject({ code: 'stale_call' });
+  const stale = await library.files.statMany(entries, signal());
+  for (const entry of entries) expect(stale.get(entry)).toMatchObject({ code: 'stale_call' });
+  await expect(library.files.stat(entries[0]!, signal())).rejects.toMatchObject({ code: 'stale_call' });
+});
+
+test('prepared and live metadata use the same validator despite object property order', async () => {
+  const { library } = await setup(plugin({ list: async () => ({ ok: true, value: { items: [{ kind: 'file', entryId: 'one', name: '音频.wav',
+    fileRef: 'audio', info: { mediaType: 'audio/wav', size: 8, contentId: 'fixed' } }] } }) }));
+  const entries = await library.files.list('/实例 & #/来源', signal()); const entry = entries[0]!;
+  const described = (await library.files.statMany(entries, signal())).get(entry)!;
+  if (described instanceof Error) throw described;
+  expect(described.etag).toBe((await library.files.stat(entry, signal())).etag);
+});
+
+test('batch source checks also cover changes while another source is still being described', async () => {
+  let changeFirst = async () => {};
+  const source = plugin({ list: async ctx => ({ ok: true, value: { items: [{ kind: 'file', entryId: 'one', name: '音频.wav', fileRef: 'audio',
+    ...((ctx.config as { legacy?: boolean }).legacy ? {} : { info: { contentId: 'fixed', size: 8, mediaType: 'audio/wav' } }) }] } }),
+  stat: async () => { await changeFirst(); return { ok: true, value: { contentId: 'fixed', size: 8, mediaType: 'audio/wav' } }; } });
+  const { library, sources, id } = await setup(source);
+  const other = await sources.create('org.musicfs.sample', '另一个实例', { legacy: true }, signal());
+  if (!other.ok) throw new Error('Cannot create second metadata fixture');
+  const firstEntries = await library.files.list('/实例 & #/来源', signal());
+  const otherEntries = await library.files.list('/另一个实例/来源', signal());
+  changeFirst = async () => { await sources.configure(id, { changed: true }, signal()); };
+  const values = await library.files.statMany([...firstEntries, ...otherEntries], signal());
+  expect(values.get(firstEntries[0]!)).toMatchObject({ code: 'stale_call' });
+  expect(values.get(otherEntries[0]!)).toMatchObject({ kind: 'file', handle: { content: { size: 8 } } });
+});
+
+test('metadata batches preserve live per-file stat for plugins without prepared info', async () => {
+  const calls: string[] = [];
+  const { library } = await setup(plugin({ list: async () => ({ ok: true, value: { items: ['one', 'two'].map(entryId => ({
+    kind: 'file' as const, entryId, name: `${entryId}.wav`, fileRef: entryId
+  })) } }), stat: async (_ctx, file) => { calls.push(file); return { ok: true, value: { contentId: file, size: 8, mediaType: 'audio/wav' } }; } }));
+  const entries = await library.files.list('/实例 & #/来源', signal());
+  const values = await library.files.statMany(entries, signal());
+  expect(calls).toEqual(['one', 'two']);
+  for (const entry of entries) expect(values.get(entry)).toMatchObject({ kind: 'file', handle: { content: { size: 8, mediaType: 'audio/wav' } } });
+});
+
+test('invalid prepared info on a later page cannot replace the complete previous snapshot', async () => {
+  const source = plugin(); const { library, store, id } = await setup(source);
+  const previous = await library.refresh(id, 'root', signal());
+  const content = { contentId: 'prepared', size: 8, mediaType: 'audio/wav' };
+  for (const invalid of [{ ...content, contentId: '' }, { ...content, size: -1 }, { ...content, mediaType: 'not-a-media-type' }]) {
+    source.list = async (_ctx, _ref, cursor) => ({ ok: true, value: cursor === undefined ? { items: [{ kind: 'file', entryId: 'first',
+      name: 'first.wav', fileRef: 'first', info: content }], nextCursor: 'last' } : { items: [{ kind: 'file', entryId: 'bad', name: 'bad.wav', fileRef: 'bad', info: invalid }] } });
+    await expect(library.refresh(id, 'root', signal())).rejects.toMatchObject({ code: 'invalid_source' });
+    expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.value).toEqual(previous);
+  }
+});
+
 test('failed refresh retains the complete previous snapshot and leaves layout untouched', async () => {
   const source = plugin(); const { library, store, id } = await setup(source);
   const layout = await library.saveLayout(0, [{ kind: 'group', id: 'group', name: '音乐', children: [{ kind: 'source', id: 'source', name: '我的来源', instanceId: id, sourceId: 'root' }] }]);

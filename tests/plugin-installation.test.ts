@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ZipWriter, Uint8ArrayWriter, TextReader } from '@zip.js/zip.js/index-native.js';
 import { zipSync, unzipSync } from 'fflate';
+import { inc } from 'semver';
 import { createExtensions, parseManifest } from '../src/core/extensions';
 import { createSources } from '../src/core/sources';
 import { readPackage } from '../src/infrastructure/archives';
@@ -68,7 +69,7 @@ describe('prebuilt plugin packages and desktop instances', () => {
     const current = db.installation(manifest.id);
     const files = new Map(prepared.files);
     files.set('index.mjs', new TextEncoder().encode('export default {}'));
-    const candidate = { ...prepared, manifest: { ...prepared.manifest, version: '0.1.1' }, digest: 'f'.repeat(64), files };
+    const candidate = { ...prepared, manifest: { ...prepared.manifest, version: inc(manifest.version, 'patch')! }, digest: 'f'.repeat(64), files };
     await expect(extensions.install(candidate)).rejects.toMatchObject({ code: 'invalid_package' });
     expect(db.installation(manifest.id)).toEqual(current);
     expect((await sources.create(manifest.id, 'still works', { label: '旧版本' }, signal())).ok).toBe(true);

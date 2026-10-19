@@ -55,7 +55,7 @@ export async function resolveMedia(client: NeteaseClient, ids: string[], selecte
   }
   return result;
 }
-const info = (ref: MediaReference): FileInfo => ({ contentId: JSON.stringify([ref.id, ref.level, ref.type, ref.md5.toLowerCase(), ref.size]), size: ref.size, mediaType: mime[ref.type] });
+export const info = (ref: MediaReference): FileInfo => ({ contentId: JSON.stringify([ref.id, ref.level, ref.type, ref.md5.toLowerCase(), ref.size]), size: ref.size, mediaType: mime[ref.type] });
 
 /** Resolve unique songs once per requested level; catalogue occurrences stay separate. */
 export async function resolveVariants(client: NeteaseClient, input: string[]): Promise<Map<string, Resolution>> {

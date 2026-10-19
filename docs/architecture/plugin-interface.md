@@ -6,7 +6,7 @@
 
 ## 包与版本
 
-当前宿主合同版本为 **0.1.2**；使用 0.1.1 通用二维码图片字段的插件声明相应最低版本，依赖 0.1.2 目录计数与显示标签的插件声明 `apiRange >=0.1.2 <0.2.0`。旧宿主由兼容检查拒绝安装；未声明统计的旧插件继续使用相同目录/文件合同。
+当前宿主合同版本为 **0.1.3**；新增文件条目的可选完整 `info`。依赖它提供大目录批量文件属性的插件声明 `apiRange >=0.1.3 <0.2.0`，旧宿主按兼容检查拒绝安装。0.1.1 的通用二维码图片、0.1.2 的目录计数与显示标签仍有效；未提供 info 的旧插件保持原 stat 行为，不自动获得大目录的请求预算保证。
 
 首轮验证 ZIP 插件包，采用现成归档库解析。包内有一份 manifest、预构建 ESM 入口及依赖模块、JSON 配置 Schema、UI 提示和必要只读资产/许可；模块和资产路径在 manifest 中明确列出，不运行安装脚本或在线安装 npm 依赖。
 
@@ -58,7 +58,7 @@ type Context = {
 
 type Entry =
   | { kind: 'directory'; entryId: string; name: string; directoryRef: Ref }
-  | { kind: 'file'; entryId: string; name: string; fileRef: Ref };
+  | { kind: 'file'; entryId: string; name: string; fileRef: Ref; info?: FileInfo };
 
 type Root = { sourceId: string; name: string; directoryRef: Ref };
 type FileInfo = {
@@ -102,6 +102,10 @@ interface SourcePlugin {
 `roots` 提供可被用户放入布局的内容源，`list` 提供该来源目录中的有序子项。插件自行决定分类、音质选择和隐藏；统计可作为额外数据报告，核心不把文件数当曲目数。来源只提供普通音频文件夹时，也不需要伪造歌单或推荐入口。
 
 0.1.2 的 `SourcePlugin.statistics?: Record<string,string>` 声明计数的显示标签；没有统计概念的插件可以省略。最多 100 项，键长 1—64、标签长 1—80；声明不携带 UI 代码或核心音质枚举。`Page.statistics` 是**本页增量**的非负安全整数计数，不是累计总数或平均值；同一分页序列各页使用相同键集。核心检查、相加并在完整成功快照中保存，失败、溢出或不一致不覆盖旧目录/计数。管理界面按插件标签显示已保存计数及最近成功时间；不从文件数推断曲目或权限。旧快照无统计时保持未知，不补零。QQ 的实际应用与验证见[音质/统计记录](../verification/p2-qq-quality.md)。
+
+0.1.3 的文件 `Entry.info` 是该 fileRef 对应实际字节的完整 `{contentId,size,mediaType}`，与 stat 使用相同语义；不是 size_* 提示、试听大小、短 URL 或将来才能兑现的描述。来源未知时省略整个字段，不填零或虚构内容版本。核心校验后随有序目录页持久化，完整目录成功才发布，失败不覆盖旧内容。新版示例插件均在本页准备好信息：网易云复用原生精确 MD5/大小，QQ 用有界小页和真实 Range 响应确认；需要多少来源工作由插件决定。
+
+DAV 从已发布信息批量描述条目，来源有效性按同一来源戳在批量前后检查；单条 stat、HEAD 和 open 的实际版本检查仍保留。旧插件缺少 info 时可沿原 stat 回退，不能把该兼容路径当作大目录免费 Worker 已通过。条目信息不强制所有来源具备账号、歌曲或音质概念。
 
 ## 描述、打开与范围读取
 

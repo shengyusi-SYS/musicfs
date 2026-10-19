@@ -1,7 +1,7 @@
 import type { Context, Json, Outcome, PluginFault } from '@musicfs/plugin-api';
 import type { handleRequest } from '@yakult-green-tea/qq-music-api/serverless';
 import { z } from 'zod';
-import { createSealedSessionResolver, createSessionMusicuClient, QqApiError, type AuthSession, type MusicuDescriptor } from './generated-upstream.mjs';
+import { createSealedSessionResolver, createSessionMusicuClient, recommendPlaylistsResult, QqApiError, type AuthSession, type MusicuDescriptor } from './generated-upstream.mjs';
 
 export type QqHandler = typeof handleRequest;
 const pending = z.object({ id: z.string(), key: z.string(), channel: z.enum(['qq', 'wechat']), expiresAt: z.string(), qrImage: z.string(), confirmed: z.boolean() }).strict();
@@ -12,10 +12,24 @@ export class QqFailure extends Error {
   constructor(readonly fault: PluginFault) { super(fault.message); }
 }
 export function fail(kind: PluginFault['kind'], message: string): never { throw new QqFailure({ kind, message }); }
+export class QqRequestBudgetFailure extends QqFailure {
+  constructor() { super({ kind: 'temporary', message: '本页 QQ 请求较多，暂未完成准备，请稍后重试。' }); }
+}
+/** One catalogue invocation owns its counter; SDK and CDN calls share this seam. */
+export function catalogueContext(ctx: Context): Context {
+  let requests = 0;
+  return { ...ctx, fetch: (async (input, init) => {
+    ctx.signal.throwIfAborted();
+    if (requests >= 45) throw new QqRequestBudgetFailure();
+    requests++;
+    return ctx.fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([ctx.signal, init.signal]) : ctx.signal });
+  }) as typeof fetch };
+}
 
 export class QqClient {
   state: QqState;
   changed = false;
+  private sessionPromise?: Promise<AuthSession>;
   constructor(readonly ctx: Context, private readonly handler: QqHandler) {
     if (ctx.privateState === null) {
       this.state = { version: 1, secret: Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join(''), token: null, accountName: null, pending: null };
@@ -31,6 +45,13 @@ export class QqClient {
     this.update({ ...this.state, token: null, accountName: null });
     return fail('needs_auth', 'QQ 授权已失效，请重新扫码。');
   }
+  private session(): Promise<AuthSession> {
+    this.requireSession();
+    return this.sessionPromise ??= (async () => {
+      const resolver = createSealedSessionResolver({ secrets: { current: this.state.secret } });
+      return await resolver.resolve(this.state.token!) ?? this.needsAuthentication();
+    })();
+  }
   /** Pinned SDK transport with caller cancellation; descriptors stay private to this plugin. */
   async rpc(describe: (session: AuthSession) => MusicuDescriptor): Promise<Record<string, unknown>> {
     return (await this.rpcBatch(session => [describe(session)]))[0]!;
@@ -38,9 +59,7 @@ export class QqClient {
   async rpcBatch(describe: (session: AuthSession) => MusicuDescriptor[]): Promise<Record<string, unknown>[]> {
     this.requireSession(); this.ctx.signal.throwIfAborted();
     try {
-      const resolver = createSealedSessionResolver({ secrets: { current: this.state.secret } });
-      const session = await resolver.resolve(this.state.token!);
-      if (!session) return this.needsAuthentication();
+      const session = await this.session();
       const transport = createSessionMusicuClient(session, { fetcher: this.ctx.fetch, maxRetries: 0 });
       const results = await transport.executeBatch(describe(session), { signal: this.ctx.signal });
       const data = results.map(result => { if (!result.ok) throw result.error; return object(result.data); });
@@ -63,6 +82,13 @@ export class QqClient {
     for (const [name, value] of Object.entries(params)) url.searchParams.set(name, value);
     const response = await this.handler(new Request(url, { method, signal: this.ctx.signal,
       headers: this.state.token ? { 'x-qq-session': this.state.token } : {} }), { QQ_SESSION_SECRET: this.state.secret });
+    return this.readResponse(response);
+  }
+  async recommendations(): Promise<Record<string, unknown>> {
+    const result = await recommendPlaylistsResult(await this.session(), 25, { fetcher: this.ctx.fetch, maxRetries: 0 });
+    return this.readResponse(new Response(JSON.stringify(result.body), { status: result.status, headers: result.headers }));
+  }
+  private async readResponse(response: Response): Promise<Record<string, unknown>> {
     this.ctx.signal.throwIfAborted();
     if (!response.ok) {
       if (response.status === 422) {

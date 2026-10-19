@@ -22,6 +22,7 @@ async function fixture(account = '123') {
   let started!: () => void; const start = new Promise<void>(resolve => { started = resolve; });
   let cancelled = false; let recommendedCalls = 0;
   const fetcher = (async (_input, init) => {
+    if (!init?.body) return new Response(new Uint8Array([1]), { status: 206, headers: { 'Content-Range': 'bytes 0-0/123', 'Content-Length': '1', ETag: '"fixture-file"' } });
     const rpc = JSON.parse(String(init?.body)); const request = rpc.req_0; nativeCalls.push({ method: request.method, param: request.param, cookie: new Headers(init?.headers).get('cookie') });
     started();
     if (block) return new Promise<Response>((_resolve, reject) => { init!.signal!.addEventListener('abort', () => { cancelled = true; reject(init!.signal!.reason); }, { once: true }); });
@@ -30,7 +31,8 @@ async function fixture(account = '123') {
       const filenames = request.param.filename as string[];
       return json({ code: 0, req_0: { code, data: { sip: [], midurlinfo: filenames.map((filename, index) => ({ filename, songmid: request.param.songmid[index], purl: filename + '?vkey=private' })) } } });
     }
-    if (request.method === 'GetPlaylistByUin') data = created;
+    if (request.method === 'GetRecommendFeed') { recommendedCalls++; data = { List: [{ Playlist: { basic: { tid: 100, title: '推荐歌单' } } }], HasMore: true }; }
+    else if (request.method === 'GetPlaylistByUin') data = created;
     else if (request.method === 'CgiGetPlaylistFavInfo') {
       const offset = Number(request.param.offset); const items = favoriteMoreEmpty ? [] : favorites.slice(offset, offset + 2);
       data = { v_list: items, total: favorites.length, hasmore: favoriteMoreEmpty || offset + items.length < favorites.length ? 1 : 0 };
@@ -76,7 +78,7 @@ test('QQ uses the authenticated owner endpoint for private own playlists and the
   const favorite = directory(value(await f.plugin.list(f.ctx, 'favorites')).items[0]);
   const first = value(await f.plugin.list(f.ctx, own)); const last = value(await f.plugin.list(f.ctx, own, first.nextCursor));
   expect([...first.items, ...last.items].map(item => item.name.slice(0, 4))).toEqual(['0001', '0002', '0003']); expect(last.nextCursor).toBeUndefined();
-  const ownCall = f.nativeCalls.find(call => call.method === 'CgiGetDiss'); expect(ownCall?.param).toMatchObject({ disstid: 7, dirid: 1, enc_host_uin: 'encrypted-123', song_begin: 0, song_num: 100 });
+  const ownCall = f.nativeCalls.find(call => call.method === 'CgiGetDiss'); expect(ownCall?.param).toMatchObject({ disstid: 7, dirid: 1, enc_host_uin: 'encrypted-123', song_begin: 0, song_num: 6 });
   await f.plugin.list(f.ctx, favorite); expect(f.nativeCalls.findLast(call => call.method === 'uniform_get_Dissinfo')).toMatchObject({ method: 'uniform_get_Dissinfo', param: { disstid: 7, enc_host_uin: '', song_begin: 0 } });
   expect(JSON.stringify(first)).not.toContain('vkey=');
 });

@@ -17,6 +17,8 @@ export async function buildQq() {
     ['credentialMusicId', 'services/auth/androidDevice.js'],
     ['QqApiError', 'protocol/errors.js'],
     ['StreamCdnSelector', 'services/auth/streamCdnSelector.js'],
+    ['DAILY_SONGS', 'services/recommend/dailySongs.js'],
+    ['recommendPlaylistsResult', 'services/recommend/recommendPlaylists.js'],
     ['apeFileFailureOf', 'protocol/qualityFile.js'],
     ['MUSIC_FILE_TYPES', 'services/auth/playback.js']
   ] as const;

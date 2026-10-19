@@ -22,7 +22,8 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun run probe:worker:netease` | 实际网易云 ESM 在 Bun/workerd 请求真实二维码；可显式选取已授权实例验证 D1 会话恢复和每日目录；需要网络 |
 | `bun run build:worker` | 组装正式 Worker core/薄入口/独立 registry、WebUI、模板及迁移；可附已有插件 ZIP 路径 |
 | `bun run probe:worker:service` | 实际正式入口在本地 workerd 的页面/API/DAV、D1重启、未配置发布凭据及坏插件启动拒绝 |
-| `bun scripts/probe-worker-refresh.ts` | 正式 Worker service 的 42 页独立 HTTP 推进、D1重启续接和每步查询数量；使用本地来源样本，不证明云端免费 CPU |
+| `bun scripts/probe-worker-refresh.ts` | 正式 Worker service 的 42 页独立 HTTP 推进、D1重启续接、每步查询数量及4,158文件allprop无逐项来源读取；使用本地来源样本，不证明云端免费 CPU |
+| `bun scripts/probe-dav-resources.ts` | 已准备描述的纯XML耗时/CPU/内存增量，1/100/4,657文件；不是云端CPU或峰值内存验收 |
 | `bun run build:desktop -- --all` | 构建四个桌面目标，含共用页面、校验后的 rclone 和三个插件 ZIP；具体参数见[桌面说明](desktop.md) |
 | `bun scripts/probe-desktop-product.ts --mount` | 在原生Linux运行实际发行物、外置sample、后台复用及真实FUSE全文/偏移/忙卸载/退出；不用源码服务代替发行物 |
 | `bun run build:web` | 构建共用 React/Vite 页面至 dist/web |

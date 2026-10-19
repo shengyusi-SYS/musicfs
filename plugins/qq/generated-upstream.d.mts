@@ -8,5 +8,7 @@ export { QqApiError } from './node_modules/@yakult-green-tea/qq-music-api/dist/s
 export { StreamCdnSelector } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/auth/streamCdnSelector.js';
 export { apeFileFailureOf } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/protocol/qualityFile.js';
 export { MUSIC_FILE_TYPES } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/auth/playback.js';
+export { DAILY_SONGS } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/recommend/dailySongs.js';
+export { recommendPlaylistsResult } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/recommend/recommendPlaylists.js';
 export type { AuthSession } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/auth/qrTypes.js';
 export type { MusicuDescriptor } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/protocol/musicu.js';

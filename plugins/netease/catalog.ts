@@ -2,7 +2,7 @@ import type { Entry, Page, Root } from '@musicfs/plugin-api';
 import { z } from 'zod';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
-import { resolveVariants } from './media';
+import { info, resolveVariants } from './media';
 import { labels } from './configuration';
 
 const rootsList = [ ['liked', '喜欢的歌曲'], ['daily', '每日推荐歌曲'], ['created', '自建歌单'], ['favorites', '收藏歌单'], ['recommended', '每日推荐歌单'] ] as const;
@@ -53,7 +53,7 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
     const position = offset + index + 1;
     for (const variant of resolution.variants) {
       const media = variant.reference;
-      items.push({ kind: 'file', entryId: `${position}:${songId}:${media.level}`, name: `${String(position).padStart(4, '0')}. ${label(song.name)} - ${artist} [${labels[media.level]}].${media.type}`, fileRef: JSON.stringify(media) });
+      items.push({ kind: 'file', entryId: `${position}:${songId}:${media.level}`, name: `${String(position).padStart(4, '0')}. ${label(song.name)} - ${artist} [${labels[media.level]}].${media.type}`, fileRef: JSON.stringify(media), info: info(media) });
     }
   }
   statistics.files = items.length; return { items, statistics };

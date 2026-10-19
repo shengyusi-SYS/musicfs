@@ -36,7 +36,8 @@ try {
   const call = async (path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST', drainBackground = false) => {
     const before = upstreamRequests;
     const response = await mf!.dispatchFetch('http://probe' + path, { method,
-      headers: { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json',
+      headers: { Authorization: method === 'PROPFIND' ? 'Basic ' + btoa('reader:fixture-password') : 'Bearer fixture-admin', 'Content-Type': 'application/json',
+        ...(method === 'PROPFIND' ? { Depth: '1' } : {}),
         ...(drainBackground ? { 'X-Probe-WaitUntil': 'drain' } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     const count = (header: string) => {
@@ -126,12 +127,20 @@ try {
   assert.equal(rows.results.length, 4158);
   rows.results.forEach((row, index) => {
     const number = String(index + 1).padStart(4, '0'); assert.equal(row.ordinal, index);
-    assert.deepEqual(JSON.parse(row.document), { kind: 'file', entryId: `track-${number}`, name: `Track ${number}.mp3`, fileRef: `track-${number}` });
+    assert.deepEqual(JSON.parse(row.document), { kind: 'file', entryId: `track-${number}`, name: `Track ${number}.mp3`, fileRef: `track-${number}`,
+      info: { contentId: 'fixture-complete-mp3-v1', size: 16044, mediaType: 'audio/mpeg' } });
   });
   const listing = await json<{ name: string }[]>(await call(listingPath));
   assert.deepEqual(listing.map(item => item.name), rows.results.map(row => (JSON.parse(row.document) as { name: string }).name));
   const completed = await json<RefreshView>(await call(resource)); assert.equal(completed.status, 'completed');
   assert.equal(measurements.at(-1)!.pages, 0); assert.equal(measurements.at(-1)!.subrequests, 0);
+  const properties = await call('/dav/Paged%20instance/Large/', undefined, 'PROPFIND');
+  assert.equal(properties.status, 207); assert.equal(properties.headers.get('X-Probe-plugin-stats'), '0');
+  const largeListing = measurements.at(-1)!;
+  assert.equal(largeListing.subrequests, 0); assert.equal(largeListing.pages, 0);
+  const xml = await properties.text();
+  assert.equal((xml.match(/<D:response>/g) ?? []).length, 4159);
+  assert.equal((xml.match(/<D:getcontentlength>16044<\/D:getcontentlength>/g) ?? []).length, 4158);
 
   // Keep at least one further page pending: an accidental step-200 background read would be observable.
   const backgroundInstance = await json<{ ok: boolean; value: { id: string } }>(await call('/api/instances', {
@@ -162,6 +171,7 @@ try {
     realExternalRequests: largeRequests, maxExternalRequestsPerStep: Math.max(...steps.map(item => item.subrequests)),
     statusGetDoesNotAdvance: true, d1RestartAfterPages: 21, oldSnapshotUntilFinalStep: true, atomicPointerSwitch: true,
     persistedOrderVerified: 4158, waitUntilStartPages: 1, waitUntilStepPages: 1, stepSchedulesNoSecondPage: true,
+    allpropFiles: 4158, allpropD1Statements: largeListing.sql, allpropSourceStats: 0, allpropExternalRequests: 0,
     cloudDeploymentTested: false, cloudCpuTested: false, freeQuotaTested: false }));
 } finally {
   await mf?.dispose(); await upstream.stop(true); await rm(directory, { recursive: true, force: true });

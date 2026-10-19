@@ -31,7 +31,7 @@ const plugin: SourcePlugin = {
   },
   async roots(ctx) { return { ok: true, value: { items: [{ sourceId: 'audio', name: label(ctx), directoryRef: '/' }] } }; },
   async list(_ctx, directory) {
-    return directory === '/' ? { ok: true, value: { items: [{ kind: 'file', entryId: 'tone-occurrence', name: '440 Hz.wav', fileRef: 'tone' }] } } : missing();
+    return directory === '/' ? { ok: true, value: { items: [{ kind: 'file', entryId: 'tone-occurrence', name: '440 Hz.wav', fileRef: 'tone', info: content }] } } : missing();
   },
   async stat(_ctx, file) { return file === 'tone' ? { ok: true, value: content } : missing(); },
   async open(ctx, file, request) {

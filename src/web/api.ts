@@ -57,8 +57,6 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     deleteInstance: (id: string) => request<void>(`/instances/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     roots: (id: string, signal: AbortSignal) => request<ContentSources>(`/instances/${encodeURIComponent(id)}/roots`, { signal }),
     directoryStatus: (id: string, ref: string, signal: AbortSignal) => request<DirectoryStatus | null>(`/instances/${encodeURIComponent(id)}/directory-status?directoryRef=${encodeURIComponent(ref)}`, { signal }),
-    refresh: (id: string) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', { scope: 'instance' })),
-    refreshDirectory: (id: string, directoryRef?: string) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', directoryRef === undefined ? {} : { directoryRef })),
     startRefresh: (id: string, scope: RefreshScope) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', scope.kind === 'instance' ? { scope: 'instance' }
       : scope.directoryRef === undefined ? {} : { directoryRef: scope.directoryRef })),
     currentRefresh: (id: string, signal: AbortSignal) => request<RefreshView | null>(`/instances/${encodeURIComponent(id)}/refresh`, { signal }),

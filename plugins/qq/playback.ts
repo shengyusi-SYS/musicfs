@@ -1,14 +1,12 @@
 import { z } from 'zod';
-import { fail, object, type QqClient } from './client';
+import type { FileInfo } from '@musicfs/plugin-api';
+import { fail, object, QqRequestBudgetFailure, type QqClient } from './client';
 import { audioPolicy, lowerQualities, qualities, type Quality } from './configuration';
 import { apeFileFailureOf, credentialMusicId, MUSIC_FILE_TYPES, StreamCdnSelector } from './generated-upstream.mjs';
+import { describe } from './file-info';
 
 export type Track = { mid: string; file: { media_mid: string; [key: string]: unknown } };
 export const trackKey = (track: Track) => `${track.mid}:${track.file.media_mid}`;
-export const formats = {
-  flac: { label: 'FLAC', mediaType: 'audio/flac' }, ape: { label: 'APE', mediaType: 'audio/x-ape' },
-  '320': { label: '320k', mediaType: 'audio/mpeg' }, '128': { label: '128k', mediaType: 'audio/mpeg' }, m4a: { label: 'M4A', mediaType: 'audio/mp4' }
-} as const;
 const fileSchema = z.object({ version: z.literal(1), mid: z.string().regex(/^[A-Za-z0-9]+$/), mediaId: z.string().regex(/^[A-Za-z0-9]+$/),
   quality: z.enum(qualities), filename: z.string().regex(/^[A-Za-z0-9]+\.(mp3|m4a|flac|ape)$/) }).strict()
   .refine(value => value.filename.startsWith(MUSIC_FILE_TYPES[value.quality].prefix) && value.filename.endsWith(MUSIC_FILE_TYPES[value.quality].extension));
@@ -18,7 +16,7 @@ export function decodeFile(file: string): MediaReference {
 }
 type Candidate = { track: Track; quality: Quality };
 type Location = { quality: Quality; filename: string; purl: string; sip: string[] };
-type Variant = { quality: Quality; fileRef: string; targets: Quality[] };
+type Variant = { quality: Quality; fileRef: string; targets: Quality[]; info: FileInfo };
 type Resolution = { variants: Variant[]; missingVersions: number; fallbackVersions: number; deduplicatedVersions: number };
 const candidateKey = ({ track, quality }: Candidate) => `${trackKey(track)}:${quality}`;
 const filenameOf = ({ track, quality }: Candidate) => `${MUSIC_FILE_TYPES[quality].prefix}${track.mid}${track.file.media_mid}${MUSIC_FILE_TYPES[quality].extension}`;
@@ -112,6 +110,7 @@ export async function resolveVariants(client: QqClient, tracks: Track[]): Promis
     }
   }
   const resolved = new Map<string, Resolution>();
+  const prepared = new Map<string, FileInfo>();
   for (const [key, track] of unique) {
     const variants = new Map<string, Variant>(); let missingVersions = 0; let fallbackVersions = 0; let deduplicatedVersions = 0;
     for (const slot of slots.filter(slot => trackKey(slot.track) === key)) {
@@ -119,8 +118,11 @@ export async function resolveVariants(client: QqClient, tracks: Track[]): Promis
       if (slot.found.quality !== slot.target) fallbackVersions++;
       const previous = variants.get(slot.found.filename);
       if (previous) { previous.targets.push(slot.target); deduplicatedVersions++; continue; }
-      variants.set(slot.found.filename, { quality: slot.found.quality, targets: [slot.target], fileRef: JSON.stringify(fileSchema.parse({ version: 1,
-        mid: track.mid, mediaId: track.file.media_mid, quality: slot.found.quality, filename: slot.found.filename })) });
+      const reference = fileSchema.parse({ version: 1, mid: track.mid, mediaId: track.file.media_mid,
+        quality: slot.found.quality, filename: slot.found.filename });
+      let info = prepared.get(reference.filename);
+      if (!info) { info = (await selectLocation(client, slot.found)).info; prepared.set(reference.filename, info); }
+      variants.set(reference.filename, { quality: reference.quality, targets: [slot.target], fileRef: JSON.stringify(reference), info });
     }
     resolved.set(key, { variants: [...variants.values()], missingVersions, fallbackVersions, deduplicatedVersions });
   }
@@ -128,24 +130,38 @@ export async function resolveVariants(client: QqClient, tracks: Track[]): Promis
 }
 
 /** Resolve only the referenced actual version. Reads must never fall back to different bytes. */
-export async function locateFile(client: QqClient, ref: MediaReference): Promise<URL> {
+export async function locateFile(client: QqClient, ref: MediaReference): Promise<{ url: URL; info: FileInfo }> {
   const input: Candidate = { track: { mid: ref.mid, file: { media_mid: ref.mediaId } }, quality: ref.quality };
   const found = (await locations(client, [input])).get(candidateKey(input));
   if (!found) fail('unavailable', '此 QQ 音频当前不可读取。');
   if (found.filename !== ref.filename || found.quality !== ref.quality) fail('content_changed', 'QQ 音频文件已变化，请刷新目录。');
+  return selectLocation(client, found);
+}
+
+/** Reuse the list's native location and the winning SDK probe's exact metadata. */
+async function selectLocation(client: QqClient, found: Location): Promise<{ url: URL; info: FileInfo }> {
   // A selector belongs to this invocation; its cached promise never crosses instances or requests.
   let ignoredRange = false;
+  let invalidMetadata = false;
+  const descriptions = new Map<string, FileInfo>();
   const selector = new StreamCdnSelector(async url => {
     let response: Response | undefined; const started = Date.now();
     try {
-      response = await client.ctx.fetch(url, { headers: { Range: 'bytes=0-0', 'Accept-Encoding': 'identity' },
+      response = await client.ctx.fetch(url, { redirect: 'manual', headers: { Range: 'bytes=0-0', 'Accept-Encoding': 'identity' },
         signal: AbortSignal.any([client.ctx.signal, AbortSignal.timeout(5000)]) });
       if (response.status === 200) ignoredRange = true;
       if (response.status !== 206 || !/^bytes 0-0\/\d+$/.test(response.headers.get('content-range') ?? '') || !response.body) return null;
+      const info = describe(response, found, true);
+      if (!info || response.headers.get('content-length') !== '1') { invalidMetadata = true; return null; }
       const reader = response.body.getReader();
-      try { const piece = await reader.read(); return piece.value?.byteLength === 1 ? { bytes: 1, elapsedMs: Math.max(1, Date.now() - started) } : null; }
+      try {
+        const piece = await reader.read();
+        if (piece.value?.byteLength !== 1) return null;
+        descriptions.set(url, info);
+        return { bytes: 1, elapsedMs: Math.max(1, Date.now() - started) };
+      }
       finally { await reader.cancel(); }
-    } catch { client.ctx.signal.throwIfAborted(); return null; }
+    } catch (error) { client.ctx.signal.throwIfAborted(); if (error instanceof QqRequestBudgetFailure) throw error; return null; }
     finally { if (response?.body && !response.body.locked) await response.body.cancel().catch(() => {}); }
   });
   let base = await selector.select(found.sip.length ? found.sip.slice(0, 4) : ['http://sjy6.stream.qqmusic.qq.com/'], found.purl);
@@ -156,6 +172,9 @@ export async function locateFile(client: QqClient, ref: MediaReference): Promise
     base = await selector.select([...dispatch.sip.slice(0, 4), 'http://dl.stream.qqmusic.qq.com/'], found.purl);
   }
   client.ctx.signal.throwIfAborted();
-  if (!base) fail(ignoredRange ? 'not_supported' : 'temporary', ignoredRange ? 'QQ 音频地址没有按请求返回范围。' : 'QQ 音频地址暂时无法连接，请稍后重试。');
-  return new URL(found.purl, base);
+  if (!base) fail(ignoredRange || invalidMetadata ? 'not_supported' : 'temporary', ignoredRange ? 'QQ 音频地址没有按请求返回范围。'
+    : invalidMetadata ? 'QQ 音频未提供可核对的完整文件信息。' : 'QQ 音频地址暂时无法连接，请稍后重试。');
+  const url = new URL(found.purl, base); const info = descriptions.get(url.href);
+  if (!info) fail(invalidMetadata ? 'not_supported' : 'temporary', 'QQ 音频的完整文件信息暂时无法确认。');
+  return { url, info };
 }

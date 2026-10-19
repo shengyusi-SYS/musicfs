@@ -1,19 +1,26 @@
 import type { Entry, Page, Root } from '@musicfs/plugin-api';
 import { z } from 'zod';
 import { fail, object, QqFailure, type QqClient } from './client';
-import { formats, resolveVariants, trackKey } from './playback';
-import { MUSIC_FILE_TYPES } from './generated-upstream.mjs';
+import { resolveVariants, trackKey } from './playback';
+import { formats } from './file-info';
+import { DAILY_SONGS, MUSIC_FILE_TYPES } from './generated-upstream.mjs';
+import { audioPolicy } from './configuration';
 import { readCollection, type CollectionKind } from './collections';
 import { parsePlaylistRef, playlistRef, positiveId, type PlaylistReference } from './playlist-reference';
 
 const song = z.object({ mid: z.string().regex(/^[A-Za-z0-9]+$/), title: z.string(),
   singer: z.array(z.object({ name: z.string() })), file: z.object({ media_mid: z.string().regex(/^[A-Za-z0-9]+$/) }).passthrough() });
-const pageCursor = z.object({ directory: z.string(), offset: z.number().int().nonnegative().max(100_000), total: z.number().int().nonnegative() }).strict();
+const pageCursor = z.object({ directory: z.string(), offset: z.number().int().nonnegative().max(100_000), total: z.number().int().nonnegative(),
+  instanceId: z.string().optional(), revision: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict();
 type Cursor = z.infer<typeof pageCursor>;
 
-function cursorOf(directory: string, cursor?: string): Cursor | undefined {
+function cursorOf(client: QqClient, directory: string, cursor?: string): Cursor | undefined {
   if (cursor === undefined) return;
-  try { const position = pageCursor.parse(JSON.parse(cursor)); if (position.directory === directory) return position; }
+  try {
+    const position = pageCursor.parse(JSON.parse(cursor));
+    if (position.directory === directory && (position.instanceId === undefined || position.instanceId === client.ctx.instanceId)
+      && (directory !== 'daily' || position.instanceId !== undefined && position.revision !== undefined)) return position;
+  }
   catch { /* All invalid or cross-directory cursors share the same public fault. */ }
   return fail('not_found', 'QQ 分页位置无效。');
 }
@@ -59,7 +66,7 @@ async function collections(client: QqClient, kind: CollectionKind, position?: Cu
 async function recommendations(client: QqClient, cursor?: string): Promise<Page<Entry>> {
   if (cursor !== undefined) fail('not_found', '推荐歌单是有限快照，没有续读分页。');
   let result: Record<string, unknown>;
-  try { result = await client.call('/recommend/playlists', { limit: '25' }); }
+  try { result = await client.recommendations(); }
   catch (error) { if (error instanceof QqFailure && error.fault.kind === 'not_found') return { items: [] }; throw error; }
   const data = z.array(z.object({ tid: positiveId, title: z.string().min(1) })).safeParse(result.playlists);
   if (!data.success) fail('temporary', 'QQ 返回了无法识别的推荐歌单。');
@@ -67,16 +74,17 @@ async function recommendations(client: QqClient, cursor?: string): Promise<Page<
     directoryRef: playlistRef({ kind: 'playlist', role: 'recommended', tid: item.tid }) })) };
 }
 
-async function playlistSongs(client: QqClient, playlist: PlaylistReference, offset: number): Promise<Record<string, unknown>> {
+async function playlistSongs(client: QqClient, playlist: PlaylistReference | null, offset: number, count: number): Promise<Record<string, unknown>> {
   const raw = await client.rpc(session => {
-    if (playlist.role === 'created') {
-      if (!playlist.dirId || typeof session.credential.encryptUin !== 'string') fail('not_found', 'QQ 自建歌单引用缺少目录身份。');
+    if (playlist === null || playlist.role === 'created') {
+      if (playlist && !playlist.dirId) fail('not_found', 'QQ 自建歌单引用缺少目录身份。');
+      if (typeof session.credential.encryptUin !== 'string' || !session.credential.encryptUin) fail('needs_auth', 'QQ 会话缺少读取歌单所需的账号信息，请重新扫码。');
       return { module: 'music.srfDissInfo.DissInfo', method: 'CgiGetDiss', operation: 'session.authenticated-read', readOnly: true,
-        param: { disstid: Number(playlist.tid), dirid: playlist.dirId, tag: true, song_begin: offset, song_num: 100,
+        param: { disstid: playlist ? Number(playlist.tid) : 0, dirid: playlist ? playlist.dirId : 201, tag: true, song_begin: offset, song_num: count,
           userinfo: true, orderlist: true, enc_host_uin: session.credential.encryptUin } };
     }
     return { module: 'music.srfDissInfo.aiDissInfo', method: 'uniform_get_Dissinfo', operation: 'playlist.authenticated-detail', readOnly: true,
-      param: { disstid: Number(playlist.tid), userinfo: 1, tag: 1, orderlist: 1, song_begin: offset, song_num: 100, onlysonglist: 0, enc_host_uin: '' } };
+      param: { disstid: Number(playlist.tid), userinfo: 1, tag: 1, orderlist: 1, song_begin: offset, song_num: count, onlysonglist: 0, enc_host_uin: '' } };
   });
   const total = raw.total_song_num; const songs = raw.songlist;
   if (typeof total !== 'number' || !Number.isSafeInteger(total) || total < 0 || !Array.isArray(songs)) fail('temporary', 'QQ 歌单曲目总数或列表无效。');
@@ -86,27 +94,28 @@ async function playlistSongs(client: QqClient, playlist: PlaylistReference, offs
 
 export async function list(client: QqClient, directory: string, cursor?: string): Promise<Page<Entry>> {
   client.requireSession();
-  const position = cursorOf(directory, cursor);
+  const position = cursorOf(client, directory, cursor);
   if (directory === 'created' || directory === 'favorites') return collections(client, directory, position);
   if (directory === 'recommended') return recommendations(client, cursor);
   const playlist = directory === 'liked' || directory === 'daily' ? null : parsePlaylistRef(directory);
-  if (directory === 'daily' && position) fail('not_found', '每日推荐是有限集合，没有续读分页。');
   const offset = position?.offset ?? 0;
-  let result: Record<string, unknown>;
-  try { result = playlist ? await playlistSongs(client, playlist, offset)
-    : await client.call(directory === 'liked' ? '/user/liked-songs' : '/user/daily-songs', { offset: String(offset), limit: '100' }); }
-  catch (error) {
-    if (directory === 'daily' && error instanceof QqFailure && error.fault.kind === 'not_found') return { items: [], statistics: { tracks: 0, files: 0 } };
-    throw error;
-  }
+  const count = Math.max(1, Math.floor(6 / audioPolicy(client.ctx.config).qualities.length));
+  const result = directory === 'daily' ? await client.rpc(() => DAILY_SONGS) : await playlistSongs(client, playlist, offset, count);
   const parsed = z.array(song).safeParse(result.songs);
   if (!parsed.success) fail('temporary', 'QQ 歌曲资料格式暂时无法识别。');
-  const songs = parsed.data;
-  const total = directory === 'daily' ? songs.length : result.total;
+  const received = parsed.data;
+  const total = directory === 'daily' ? received.length : result.total;
   if (typeof total !== 'number' || !Number.isSafeInteger(total) || total < 0) fail('temporary', 'QQ 返回了不一致的歌曲总数。');
   if (position && position.total !== total) fail('content_changed', 'QQ 集合在分页期间发生变化，请重新刷新。');
-  if (offset + songs.length > total || directory !== 'daily' && typeof result.more !== 'boolean') fail('temporary', 'QQ 返回了不一致的歌曲分页。');
-  const more = directory !== 'daily' && (result.more === true || offset + songs.length < total);
+  let revision: string | undefined;
+  if (directory === 'daily') {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(received.map(trackKey))));
+    revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    if (position && position.revision !== revision) fail('content_changed', 'QQ 每日推荐在分页期间发生变化，请重新刷新。');
+  }
+  if (offset > total || directory !== 'daily' && (offset + received.length > total || typeof result.more !== 'boolean')) fail('temporary', 'QQ 返回了不一致的歌曲分页。');
+  const songs = (directory === 'daily' ? received.slice(offset) : received).slice(0, count);
+  const more = offset + songs.length < total;
   if (more && !songs.length) fail('temporary', 'QQ 分页提前结束，尚未取得完整集合。');
   const resolved = await resolveVariants(client, songs);
   const statistics = { tracks: songs.length, files: 0, hiddenTracks: 0, missingVersions: 0, fallbackVersions: 0, deduplicatedVersions: 0 };
@@ -117,9 +126,9 @@ export async function list(client: QqClient, directory: string, cursor?: string)
     statistics.deduplicatedVersions += resolution.deduplicatedVersions;
     const occurrence = offset + index;
     return resolution.variants.map(variant => ({ kind: 'file' as const, entryId: `${occurrence}:${item.mid}:${variant.quality}`,
-      name: `${String(occurrence + 1).padStart(4, '0')} - ${item.title} - ${item.singer.map(artist => artist.name).join('、')} [${formats[variant.quality].label}]${MUSIC_FILE_TYPES[variant.quality].extension}`, fileRef: variant.fileRef }));
+      name: `${String(occurrence + 1).padStart(4, '0')} - ${item.title} - ${item.singer.map(artist => artist.name).join('、')} [${formats[variant.quality].label}]${MUSIC_FILE_TYPES[variant.quality].extension}`, fileRef: variant.fileRef, info: variant.info }));
   });
   statistics.files = items.length;
   return { items, statistics,
-    ...(more ? { nextCursor: JSON.stringify({ directory, offset: offset + songs.length, total }) } : {}) };
+    ...(more ? { nextCursor: JSON.stringify({ directory, instanceId: client.ctx.instanceId, offset: offset + songs.length, total, ...(revision ? { revision } : {}) }) } : {}) };
 }

@@ -48,7 +48,9 @@ export interface Configuration {
 
 export type Entry =
   | { kind: 'directory'; entryId: string; name: string; directoryRef: string }
-  | { kind: 'file'; entryId: string; name: string; fileRef: string };
+  | { kind: 'file'; entryId: string; name: string; fileRef: string;
+      /** Complete metadata for these exact bytes, never a size hint or a temporary locator. */
+      info?: FileInfo };
 export type Root = { sourceId: string; name: string; directoryRef: string };
 export type FileInfo = { contentId: string; size: number; mediaType: string };
 export type ReadRequest = { expectedContentId: string; range?: ByteRange };

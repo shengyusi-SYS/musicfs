@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Entry, Page, Root } from '@musicfs/plugin-api';
 import { SourceError, type Sources, type SourceStamp } from '../sources';
 import { LibraryError, type LibraryStore, type SnapshotKey } from './types';
+import { assertInfo } from './file-info';
 import type { RefreshFailure, RefreshPage, RefreshRecord, RefreshScope, RefreshStore, RefreshTask, RefreshView, Refreshes } from './refresh-types';
 
 const active = (status: RefreshRecord['status']) => status === 'queued' || status === 'running';
@@ -75,6 +76,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
         if (!('sourceId' in item) || typeof item.directoryRef !== 'string') throw new LibraryError('invalid_source', 'Source returned an invalid content source');
       } else if (!('entryId' in item) || !(item.kind === 'file' && typeof item.fileRef === 'string'
         || item.kind === 'directory' && typeof item.directoryRef === 'string')) throw new LibraryError('invalid_source', 'Source returned an invalid directory entry');
+      if ('kind' in item && item.kind === 'file' && item.info !== undefined) assertInfo(item.info);
     }
     current.pages++; current.entries += page.items.length;
     if (current.entries > budgets.entries) throw new LibraryError('invalid_source', 'Source entry budget exceeded');

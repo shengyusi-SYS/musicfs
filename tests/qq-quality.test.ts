@@ -12,13 +12,16 @@ async function fixture() {
   let songs = [song('a'), song('b'), song('a')]; const available = new Set(['M800amediaa.mp3']);
   let malformed = false; let code = 0; let status = 200; let preview = false; let actualFilename: string | undefined;
   let apeDetail: unknown = { file: { size_ape: 0 } };
+  const mediaCalls: string[] = [];
   const calls: { method: string; filenames: string[]; cookie: string | null }[] = [];
-  const fetcher = (async (_input, init) => {
+  const fetcher = (async (input, init) => {
+    if (!init?.body) { mediaCalls.push(String(input)); return new Response(new Uint8Array([1]), { status: 206, headers: { 'Content-Range': 'bytes 0-0/123', 'Content-Length': '1', ETag: '"fixture-file"' } }); }
     const request = JSON.parse(String(init?.body)); const response: Record<string, unknown> = { code: 0 };
     for (const [key, raw] of Object.entries(request)) {
       if (!key.startsWith('req_')) continue;
       const rpc = raw as { method: string; param: { filename?: string[]; songmid?: string[] } };
       const filenames = rpc.param.filename ?? []; calls.push({ method: rpc.method, filenames, cookie: new Headers(init?.headers).get('cookie') });
+      if (rpc.method === 'uniform_get_Dissinfo') { response[key] = { code: 0, data: { songlist: songs } }; continue; }
       if (rpc.method === 'get_song_detail_yqq') { response[key] = { code, data: { track_info: apeDetail } }; continue; }
       response[key] = { code, data: malformed ? {} : { sip: [], midurlinfo: filenames.map((filename, index) => ({ filename, songmid: rpc.param.songmid![index],
         purl: available.has(filename) ? `${preview ? 'RS02preview.mp3' : actualFilename ?? filename}?vkey=private` : '', result: available.has(filename) ? 0 : 104003 })) } };
@@ -27,7 +30,7 @@ async function fixture() {
   }) as typeof fetch;
   const plugin = createQqPlugin(async request => new URL(request.url).pathname === '/user/daily-songs' ? json({ songs }) : json({}, 404));
   const ctx: Context = { instanceId: 'quality-fixture', config: audio(['flac', '320'], 'fallback'), privateState: await qqSession(), signal: new AbortController().signal, fetch: fetcher };
-  return { plugin, ctx, calls, available, setSongs(next: ReturnType<typeof song>[]) { songs = next; }, setMalformed() { malformed = true; }, setCode(next: number) { code = next; }, setStatus(next: number) { status = next; }, setPreview() { preview = true; },
+  return { plugin, ctx, calls, mediaCalls, available, setSongs(next: ReturnType<typeof song>[]) { songs = next; }, setMalformed() { malformed = true; }, setCode(next: number) { code = next; }, setStatus(next: number) { status = next; }, setPreview() { preview = true; },
     setApeDetail(value: unknown) { apeDetail = value; }, setActual(filename: string) { actualFilename = filename; } };
 }
 
@@ -52,6 +55,8 @@ test('QQ fallback labels actual files, merges identical variants and retains rep
   expect(files(result.items).map(item => item.quality)).toEqual(['320', '320']);
   expect(result.statistics).toMatchObject({ tracks: 3, files: 2, hiddenTracks: 1, fallbackVersions: 2, deduplicatedVersions: 2 });
   const filenames = f.calls.flatMap(call => call.filenames); expect(filenames.filter(name => name === 'M800amediaa.mp3')).toHaveLength(1);
+  expect(f.mediaCalls).toHaveLength(1); // One actual version prepared once for both targets and repeated positions.
+  expect(result.items.every(item => item.kind === 'file' && item.info?.size === 123)).toBe(true);
   expect(JSON.stringify(result)).not.toContain('vkey');
 });
 
@@ -71,13 +76,13 @@ test('QQ excludes preview files and fails transient/auth/rate-limit errors witho
     const g = await fixture();
     if (mode === 'malformed') g.setMalformed(); else if (mode === 'auth') g.setCode(104400); else g.setStatus(mode === 'limited' ? 429 : 503);
     expect(await g.plugin.list(g.ctx, 'daily')).toMatchObject({ ok: false, error: { kind: mode === 'auth' ? 'needs_auth' : mode === 'limited' ? 'rate_limited' : 'temporary' } });
-    expect(g.calls).toHaveLength(2); // Both initially selected qualities share one SDK batch; no fallback batch ran.
+    expect(g.calls.filter(call => call.method === 'UrlGetVkey').length).toBeLessThanOrEqual(2); // No fallback batch ran; collection errors may fail first.
   }
 });
 
 test('QQ verifies APE existence through SDK rules and keeps unknown file metadata distinct from a missing version', async () => {
   const f = await fixture(); f.ctx.config = audio(['ape']); f.setSongs([song('a', 0)]); f.available.add('A000amediaa.ape');
-  expect(value(await f.plugin.list(f.ctx, 'daily')).items).toEqual([]); expect(f.calls).toEqual([]);
+  expect(value(await f.plugin.list(f.ctx, 'daily')).items).toEqual([]); expect(f.calls.filter(call => call.method === 'UrlGetVkey')).toEqual([]);
   f.setSongs([song('a', 100)]);
   expect(files(value(await f.plugin.list(f.ctx, 'daily')).items)[0]?.quality).toBe('ape');
   f.setSongs([song('a', null)]); f.setApeDetail(null);
@@ -102,8 +107,10 @@ test('QQ accepts the observed canonical media-only filename while retaining the 
 
 test('QQ batches distinct media identities and never lets one instance quality setting affect another', async () => {
   const f = await fixture(); f.setSongs(Array.from({ length: 105 }, (_, index) => song('s' + index))); f.ctx.config = audio(['128']);
-  const result = value(await f.plugin.list(f.ctx, 'daily'));
-  expect(result.statistics?.tracks).toBe(105); expect(f.calls.map(call => call.filenames.length)).toEqual([50, 50, 5]);
+  let cursor: string | undefined; let tracks = 0; let pages = 0;
+  do { const result = value(await f.plugin.list(f.ctx, 'daily', cursor)); tracks += result.statistics!.tracks!; pages++; expect(result.statistics!.tracks!).toBeLessThanOrEqual(6); cursor = result.nextCursor; } while (cursor);
+  expect(tracks).toBe(105); expect(pages).toBe(18);
+  expect(f.calls.filter(call => call.method === 'UrlGetVkey').every(call => call.filenames.length <= 6)).toBe(true);
   expect(f.calls.flatMap(call => call.filenames)).toContain('M500s104medias104.mp3');
   const g = await fixture(); g.setSongs([song('a')]); g.ctx.config = audio(['320']);
   expect(files(value(await g.plugin.list(g.ctx, 'daily')).items)[0]?.quality).toBe('320');

@@ -77,26 +77,62 @@ flowchart LR
 
 ## 当前目录属性读取
 
-这次局部减法复用原有 `list/stat/open`。已列条目只在当前调用者持有该对象时保留私有目标，不新增持久路径索引；allprop 和文件实际元数据仍可能产生上游请求，免费 Worker 资源表现待测。
+文件条目可随分页提供完整可信的 `Entry.info`；library 校验后暂存，目录完整成功才连同条目发布。已列对象私下关联解析目标及已发布 info，不新增持久路径索引。DAV 需要元数据时才懒调用一次 `statMany`，按不同来源代际在批量前后核对；提供 info 的条目直接描述，旧插件缺 info 时保留实时 stat。该调用次数优化不代表真实免费 Worker 的 CPU 或总体额度已验收。
 
 ```mermaid
 sequenceDiagram
   participant C as DAV 客户端
   participant D as DAV 属性映射
   participant L as library
+  participant S as sources
   participant P as 来源插件
+  participant DB as SQLite / D1
+  opt 目录刷新：每个独立 step 最多一页
+    L->>S: list 当前游标
+    S->>P: 当前实例的分页调用
+    P-->>S: 有序 Entry，可含完整 info
+    S-->>L: 分页结果
+    L->>L: 校验提供的 info 与页面合同
+    alt 仍有下一页
+      L->>DB: 条件追加暂存行与检查点
+    else 当前目录末页成功
+      L->>DB: 原子追加末页并切换完整快照发布指针
+    end
+  end
   C->>D: PROPFIND Depth 1
   D->>L: stat 父项、list 子项
-  L-->>D: 名称/类型/日期，内部关联已解析目标
+  L->>DB: 读取已发布快照
+  L-->>D: 名称/类型/日期，内部关联目标与 info
   alt propname 或仅名称/类型标记/日期
-    D-->>C: 直接生成子项属性，无逐曲 stat
+    D-->>C: 直接生成子项属性，不调用 statMany
   else allprop 或实际 etag/大小/媒体类型
-    D->>L: stat 已列条目，复用目标
-    L->>L: 检查来源代际
-    L->>P: 取得真实文件描述
-    P-->>L: 真实文件描述
-    L-->>D: 实际属性
+    D->>L: 懒调用一次 statMany（已列对象）
+    L->>S: 按不同来源戳做批量前检查
+    S->>DB: 核对实例与安装代际
+    S-->>L: 来源有效性
+    L->>L: 使用快照 info 生成文件描述与 ETag
+    loop 仅旧插件缺 info 的文件
+      L->>S: 实时 stat
+      S->>P: 获取当前文件描述
+      P-->>S: 内容身份、大小和类型
+      S-->>L: 受实例约束的结果
+    end
+    L->>S: 整批完成后按不同来源戳再核对
+    S->>DB: 核对实例与安装代际
+    S-->>L: 来源有效性
+    L->>L: 变化的来源整组标记 Error
+    L-->>D: 每项 Description 或 Error
     D-->>C: 属性与逐项结果
+  end
+  opt 单文件 HEAD / GET
+    C->>D: HEAD / GET 文件
+    D->>L: stat 路径
+    L->>S: 实时 stat，不使用批量快照捷径
+    S->>P: 获取当前文件描述
+    P-->>S: 内容身份、大小和类型
+    S-->>L: 当前文件描述
+    L-->>D: 实时描述
+    Note over D,L: HEAD 返回描述；GET 继续 open 与字节核验
   end
 ```
 
@@ -237,7 +273,7 @@ erDiagram
   LAYOUT_NODE o|--o{ LAYOUT_NODE : parent_of
 ```
 
-`DIRECTORY_ENTRY` 也可以是目录，因此图中的实际音频关系仅适用于文件条目。快照可以记录未就绪的元数据，但未知大小不表示无权限。历史快照只用于完整提交与恢复内部过程，不是用户历史版本产品。
+`DIRECTORY_ENTRY` 也可以是目录，因此图中的实际音频关系仅适用于文件条目。文件条目的 `info` 可为兼容旧插件而省略；提供时必须完整且对应确切字节，不能将未知大小写成 0。缺省保留实时 stat，不另建核心元数据准备阶段。历史快照只用于完整提交与恢复内部过程，不是用户历史版本产品。
 
 ## 插件变更
 

@@ -3,6 +3,7 @@ import type { ByteRange, FileInfo, Outcome, ReadResult } from '@musicfs/plugin-a
 import type { Sources, SourceStamp } from '../sources';
 import { nameEntries } from './names';
 import { createRefreshes } from './refresh';
+import { assertInfo } from './file-info';
 import type { RefreshScope, RefreshStore, RefreshView } from './refresh-types';
 import { LibraryError, PendingRefreshError, type Description, type FileDescription, type FileView, type LayoutNode,
   type DirectoryStatus, type InstanceRefresh, type LibraryStore, type Snapshot, type SnapshotKey, type ViewEntry } from './types';
@@ -48,12 +49,6 @@ function unwrap<T>(outcome: Outcome<T>): T {
   if (!outcome.ok) throw new LibraryError('source_failed', outcome.error.message, outcome.error);
   return outcome.value;
 }
-function assertInfo(info: FileInfo) {
-  if (!info || !info.contentId || !Number.isSafeInteger(info.size) || info.size < 0
-    || typeof info.mediaType !== 'string' || !/^[\w!#$&^.+-]+\/[\w!#$&^.+-]+$/.test(info.mediaType)) {
-    throw new LibraryError('invalid_source', 'Source returned invalid file metadata');
-  }
-}
 async function digest(value: unknown): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
   return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -94,9 +89,10 @@ type Target =
   | { kind: 'instance'; instanceId: string }
   | { kind: 'source'; instanceId: string; sourceId: string }
   | { kind: 'directory'; stamp: SourceStamp; ref: string }
-  | { kind: 'file'; stamp: SourceStamp; ref: string };
+  | { kind: 'file'; stamp: SourceStamp; ref: string; info?: FileInfo };
 type Child = { id: string; name: string; target: Target; modifiedAt: string };
 type Resolved = { target: Target; name: string; path: string; modifiedAt: string };
+type MetadataGroup = { stamp: SourceStamp; entries: [ViewEntry, Resolved][] };
 
 export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore,
   budgets: { pages: number; entries: number; directories?: number } = { pages: 1000, entries: 100_000 },
@@ -178,7 +174,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     if (value.kind !== 'directory') throw new LibraryError('invalid_source', 'Invalid directory snapshot');
     return value.items.map(entry => ({ id: entry.entryId, name: entry.name, modifiedAt: value.completedAt,
       target: entry.kind === 'directory' ? { kind: 'directory', stamp: target.stamp, ref: entry.directoryRef }
-        : { kind: 'file', stamp: target.stamp, ref: entry.fileRef } }));
+        : { kind: 'file', stamp: target.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }) } }));
   }
   async function root(): Promise<Target> {
     const layout = await store.layout();
@@ -199,6 +195,14 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   // A listed entry keeps its resolved target only while its caller retains that object.
   // Serialized or externally created entries still resolve through the ordinary path boundary.
   const listedEntries = new WeakMap<ViewEntry, Resolved>();
+  async function describe(resolved: Resolved, content?: FileInfo): Promise<Description> {
+    const { target, ...base } = resolved;
+    if (target.kind !== 'file') return { ...base, kind: 'directory', etag: await digest([base.path, target]) };
+    if (!content) throw new LibraryError('invalid_source', 'Source returned no file metadata');
+    return { ...base, kind: 'file', etag: await digest([target.stamp.id, target.ref, content.contentId, content.size, content.mediaType]),
+      handle: { stamp: target.stamp, fileRef: target.ref, content } };
+  }
+  const metadataError = (error: unknown) => error instanceof Error ? error : new Error('File metadata is unavailable');
   const files: FileView = {
     async list(path, signal): Promise<ViewEntry[]> {
       const resolved = await resolve(path, signal);
@@ -213,14 +217,64 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       signal.throwIfAborted();
       const resolved = typeof entry === 'string' ? await resolve(entry, signal)
         : listedEntries.get(entry) ?? await resolve(entry.path, signal);
-      const { target, ...base } = resolved;
+      const { target } = resolved;
       if ((target.kind === 'file' || target.kind === 'directory') && !await sources.current(target.stamp)) {
         throw new LibraryError('stale_call', 'Source changed before metadata request');
       }
-      if (target.kind !== 'file') return { ...base, kind: 'directory', etag: await digest([base.path, target]) };
+      if (target.kind !== 'file') return describe(resolved);
       const content = unwrap(await sources.stat(target.stamp.id, target.ref, signal)); assertInfo(content);
       if (!await sources.current(target.stamp)) throw new LibraryError('stale_call', 'Source changed during metadata request');
-      return { ...base, kind: 'file', etag: await digest([target.stamp.id, target.ref, content]), handle: { stamp: target.stamp, fileRef: target.ref, content } };
+      return describe(resolved, content);
+    },
+    async statMany(entries, signal) {
+      signal.throwIfAborted();
+      const results = new Map<ViewEntry, Description | Error>();
+      const groups = new Map<string, MetadataGroup>();
+      for (const entry of entries) {
+        try {
+          const resolved = listedEntries.get(entry) ?? await resolve(entry.path, signal);
+          const { target } = resolved;
+          if (target.kind !== 'file' && target.kind !== 'directory') { results.set(entry, await describe(resolved)); continue; }
+          const stamp = target.stamp;
+          const key = JSON.stringify([stamp.id, stamp.pluginId, stamp.epoch, stamp.pluginRevision, stamp.pluginGeneration]);
+          const group = groups.get(key) ?? { stamp, entries: [] };
+          group.entries.push([entry, resolved]); groups.set(key, group);
+        } catch (error) { signal.throwIfAborted(); results.set(entry, metadataError(error)); }
+      }
+      const ready: MetadataGroup[] = [];
+      for (const group of groups.values()) {
+        try {
+          if (!await sources.current(group.stamp)) throw new LibraryError('stale_call', 'Source changed before metadata request');
+          ready.push(group);
+        } catch (error) {
+          signal.throwIfAborted();
+          for (const [entry] of group.entries) results.set(entry, metadataError(error));
+        }
+      }
+      for (const group of ready) for (const [entry, resolved] of group.entries) {
+        signal.throwIfAborted();
+        try {
+          let content: FileInfo | undefined;
+          if (resolved.target.kind === 'file') {
+            content = resolved.target.info;
+            if (content === undefined) {
+              // Old plugins have no prepared metadata; preserve their original per-file invocation semantics.
+              content = unwrap(await sources.stat(resolved.target.stamp.id, resolved.target.ref, signal)); assertInfo(content);
+            }
+          }
+          results.set(entry, await describe(resolved, content));
+        } catch (error) { signal.throwIfAborted(); results.set(entry, metadataError(error)); }
+      }
+      // Hashing and legacy calls are asynchronous: check every source after the entire batch completes.
+      for (const group of ready) {
+        try {
+          if (!await sources.current(group.stamp)) throw new LibraryError('stale_call', 'Source changed during metadata request');
+        } catch (error) {
+          signal.throwIfAborted();
+          for (const [entry] of group.entries) results.set(entry, metadataError(error));
+        }
+      }
+      signal.throwIfAborted(); return results;
     },
     async open(file: FileDescription, range: ByteRange | undefined, signal: AbortSignal): Promise<ReadResult> {
       const { stamp, fileRef, content } = file.handle;

@@ -26,7 +26,9 @@ async function fixture() {
     if (init?.body) {
       const body = JSON.parse(String(init.body)); const response: Record<string, unknown> = { code: 0 };
       for (const [key, raw] of Object.entries(body)) if (key.startsWith('req_')) {
-        const rpc = raw as { method: string; param: { filename: string[]; songmid: string[] } };
+        const rpc = raw as { method: string; param: { filename: string[]; songmid: string[]; song_begin: number } };
+        if (rpc.method === 'uniform_get_Dissinfo') { response[key] = { code: 0, data: { songlist: emptyDaily ? [] : daily } }; continue; }
+        if (rpc.method === 'CgiGetDiss') { const offset = rpc.param.song_begin; response[key] = { code: 0, data: { songlist: emptyMore ? [] : likes.slice(offset, offset + 2), total_song_num: likes.length, hasmore: 1 } }; continue; }
         if (rpc.method === 'GetCdnDispatch') { response[key] = { code: 0, data: { sip: ['https://stream.qqmusic.qq.com/'] } }; continue; }
         response[key] = { code: 0, data: badPlayback ? {} : { sip: ['https://stream.qqmusic.qq.com/'],
           midurlinfo: rpc.param.filename.map((filename, index) => ({ filename, songmid: rpc.param.songmid[index],
@@ -57,6 +59,7 @@ test('QQ preserves repeated song occurrences and complete liked pagination while
   const files = [...first.items, ...second.items]; expect(new Set(files.map(item => item.entryId)).size).toBe(2);
   expect(files.map(item => item.name.slice(0, 4))).toEqual(['0001', '0003']);
   expect(files.map(item => item.kind === 'file' && item.fileRef)[0]).toBe(files.map(item => item.kind === 'file' && item.fileRef)[1]);
+  expect(files.every(file => file.kind === 'file' && file.info?.size === 6)).toBe(true);
   expect(JSON.stringify(files)).not.toContain('private-vkey'); expect(JSON.stringify(files)).not.toContain('cdn.example');
 });
 
@@ -71,7 +74,7 @@ test('QQ rejects truncated or changed paged collections, malformed songs and unk
 test('QQ daily recommendation is finite and an explicitly empty feed is a successful empty directory', async () => {
   const f = await fixture(); const daily = value(await f.plugin.list(f.ctx, 'daily'));
   expect(daily.items).toHaveLength(2); expect(daily.statistics).toMatchObject({ tracks: 3, files: 2 }); expect(daily.nextCursor).toBeUndefined();
-  f.setEmptyDaily(); expect(value(await f.plugin.list(f.ctx, 'daily'))).toEqual({ items: [], statistics: { tracks: 0, files: 0 } });
+  f.setEmptyDaily(); expect(value(await f.plugin.list(f.ctx, 'daily'))).toMatchObject({ items: [], statistics: { tracks: 0, files: 0 } });
 });
 
 test('QQ stat probes one byte; audio open preserves upstream range and cancellation without exposing media URLs', async () => {

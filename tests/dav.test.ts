@@ -3,12 +3,14 @@ import { createDav } from '../src/transport/dav';
 import { libraryFixture } from './helpers/library-fixture';
 import sample from '../plugins/sample';
 
-let server: Bun.Server<undefined>; let fixture: Awaited<ReturnType<typeof libraryFixture>>; let origin: string; let metadataCalls = 0;
+let server: Bun.Server<undefined>; let fixture: Awaited<ReturnType<typeof libraryFixture>>; let origin: string; let metadataCalls = 0; let batches = 0;
 const authorization = 'Basic ' + Buffer.from('reader:fixture-password').toString('base64');
 const file = '/dav/' + ['实例 & #', '目录 & #', '440 Hz.wav'].map(encodeURIComponent).join('/');
 const request = (path: string, init: RequestInit = {}) => fetch(origin + path, { ...init, headers: { Authorization: authorization, ...init.headers } });
 beforeAll(async () => {
   fixture = await libraryFixture({ ...sample, stat: (ctx, file) => { metadataCalls++; return sample.stat(ctx, file); } }, { label: '目录 & #' });
+  const statMany = fixture.library.files.statMany;
+  fixture.library.files.statMany = (...args) => { batches++; return statMany(...args); };
   const app = createDav(fixture.library.files, { username: 'reader', password: 'fixture-password' });
   server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: app.fetch });
   origin = server.url.origin;
@@ -34,20 +36,40 @@ describe('shared Fetch read-only DAV over the MusicFS library', () => {
   test('PROPFIND names and property names avoid audio metadata probes; content properties return real metadata', async () => {
     const directory = file.slice(0, file.lastIndexOf('/') + 1);
     for (const selection of ['<D:propname/>', '<D:prop><D:displayname/><D:resourcetype/><D:creationdate/><D:getlastmodified/><D:missing/></D:prop>']) {
-      const before = metadataCalls;
+      const before = metadataCalls; const previousBatches = batches;
       const response = await request(directory, { method: 'PROPFIND', headers: { Depth: '1', 'Content-Type': 'application/xml' },
         body: `<D:propfind xmlns:D="DAV:">${selection}</D:propfind>` });
       expect(response.status).toBe(207); const xml = await response.text();
-      expect(xml).toContain(encodeURIComponent('440 Hz.wav')); expect(metadataCalls).toBe(before);
+      expect(xml).toContain(encodeURIComponent('440 Hz.wav')); expect(metadataCalls).toBe(before); expect(batches).toBe(previousBatches);
       if (selection === '<D:propname/>') { expect(xml).toContain('<D:getcontentlength/>'); expect(xml).not.toContain('16044'); }
       else expect(xml).toContain('404 Not Found');
     }
     for (const body of ['', '<D:propfind xmlns:D="DAV:"><D:prop><D:getcontentlength/><D:getcontenttype/><D:getetag/></D:prop></D:propfind>']) {
-      const before = metadataCalls;
+      const before = metadataCalls; const previousBatches = batches;
       const response = await request(directory, { method: 'PROPFIND', headers: { Depth: '1', 'Content-Type': 'application/xml' }, body });
       expect(response.status).toBe(207); const xml = await response.text();
       expect(xml).toContain('<D:getcontentlength>16044</D:getcontentlength>'); expect(xml).toContain('audio/wav');
-      expect(metadataCalls).toBe(before + 1);
+      expect(metadataCalls).toBe(before); expect(batches).toBe(previousBatches + 1);
+    }
+  });
+  test('allprop lazily requests one batch for many prepared files and preserves legacy stat fallback', async () => {
+    for (const prepared of [true, false]) {
+      let probes = 0; let batchCalls = 0;
+      const entries = Array.from({ length: 12 }, (_, index) => ({ kind: 'file' as const, entryId: `tone-${index}`, name: `${index}.wav`, fileRef: 'tone',
+        ...(prepared ? { info: { contentId: `prepared-${index}`, size: index + 100, mediaType: 'audio/wav' } } : {}) }));
+      const local = await libraryFixture({ ...sample, list: async () => ({ ok: true, value: { items: entries } }),
+        stat: (ctx, ref) => { probes++; return sample.stat(ctx, ref); } }, { label: '目录 & #' });
+      try {
+        const statMany = local.library.files.statMany;
+        local.library.files.statMany = (...args) => { batchCalls++; return statMany(...args); };
+        const app = createDav(local.library.files, { username: 'reader', password: 'fixture-password' });
+        const response = await app.request('http://fixture' + file.slice(0, file.lastIndexOf('/') + 1), {
+          method: 'PROPFIND', headers: { Authorization: authorization, Depth: '1' }
+        });
+        expect(response.status).toBe(207); const xml = await response.text();
+        expect(batchCalls).toBe(1); expect(probes).toBe(prepared ? 0 : entries.length);
+        expect(xml).toContain(`<D:getcontentlength>${prepared ? 111 : 16044}</D:getcontentlength>`);
+      } finally { local.close(); }
     }
   });
   test('HEAD and full GET report and return the real 16044-byte WAV', async () => {

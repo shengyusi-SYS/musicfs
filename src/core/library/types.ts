@@ -32,6 +32,8 @@ export type ViewEntry = Pick<Description, 'kind' | 'path' | 'name' | 'modifiedAt
 export interface FileView {
   list(path: string, signal: AbortSignal): Promise<ViewEntry[]>;
   stat(entry: string | ViewEntry, signal: AbortSignal): Promise<Description>;
+  /** Listed entries with complete info avoid per-file source calls. Legacy entries retain the original stat cost. */
+  statMany(entries: readonly ViewEntry[], signal: AbortSignal): Promise<ReadonlyMap<ViewEntry, Description | Error>>;
   open(file: FileDescription, range: ByteRange | undefined, signal: AbortSignal): Promise<ReadResult>;
 }
 

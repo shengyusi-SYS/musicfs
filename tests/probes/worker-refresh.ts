@@ -3,7 +3,8 @@ import type { Entry, SourcePlugin } from '@musicfs/plugin-api';
 import { createWorkerService } from '../../src/hosts/worker/service';
 
 type Bindings = { DB: D1Database; PAGE_URL: string };
-type Measurements = { statements: number; pages: number; roots: number; subrequests: number };
+type Measurements = { statements: number; pages: number; roots: number; subrequests: number; stats: number };
+const info = { contentId: 'fixture-complete-mp3-v1', size: 16044, mediaType: 'audio/mpeg' };
 
 // This fixture exists only in the probe bundle, never in the product registry.
 function plugin(pageUrl: string, measured: Measurements): SourcePlugin {
@@ -37,11 +38,11 @@ function plugin(pageUrl: string, measured: Measurements): SourcePlugin {
       return { ok: true, value: { items, statistics: { tracks: count, files: count },
         ...(offset + count < 4158 ? { nextCursor: `fixture-page:${offset + count}` } : {}) } };
     },
-    stat: async () => ({ ok: false, error: { kind: 'not_supported', message: 'Byte reads are outside this refresh probe' } }),
+    stat: async () => { measured.stats++; return { ok: true, value: info }; },
     open: async () => ({ ok: false, error: { kind: 'not_supported', message: 'Byte reads are outside this refresh probe' } })
   };
 }
-function file(id: string, name: string): Entry { return { kind: 'file', entryId: id, name, fileRef: id }; }
+function file(id: string, name: string): Entry { return { kind: 'file', entryId: id, name, fileRef: id, info }; }
 
 /** Count prepared statements individually, including every member of a D1 batch. */
 function counted(db: D1Database, measured: Measurements): D1Database {
@@ -56,7 +57,7 @@ function counted(db: D1Database, measured: Measurements): D1Database {
 
 export default {
   async fetch(request: Request, env: Bindings): Promise<Response> {
-    const measured: Measurements = { statements: 0, pages: 0, roots: 0, subrequests: 0 };
+    const measured: Measurements = { statements: 0, pages: 0, roots: 0, subrequests: 0, stats: 0 };
     const background: Promise<unknown>[] = [];
     const unsupported = async (): Promise<never> => { throw new Error('Plugin publication is outside this refresh probe'); };
     const service = createWorkerService({ db: counted(env.DB, measured), adminToken: 'fixture-admin',
@@ -75,6 +76,7 @@ export default {
     response.headers.set('X-Probe-plugin-roots', String(measured.roots));
     response.headers.set('X-Probe-subrequests', String(measured.subrequests));
     response.headers.set('X-Probe-background-tasks', String(background.length));
+    response.headers.set('X-Probe-plugin-stats', String(measured.stats));
     return response;
   }
 };

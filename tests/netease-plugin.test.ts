@@ -127,6 +127,7 @@ test('NetEase stat and open verify actual total bytes, re-resolve URLs and propa
   const f = fixture(); await authorize(f); const listed = value(await plugin.list(f.ctx, 'daily')); const file = listed.items[0]!;
   if (file.kind !== 'file') throw new Error('Expected a file');
   const description = value(await plugin.stat(f.ctx, file.fileRef)); expect(description.size).toBe(16); expect(f.cancelledBody()).toBe(true);
+  expect(file.info).toEqual(description);
   const opened = value(await plugin.open(f.ctx, file.fileRef, { expectedContentId: description.contentId, range: { start: 4, end: 8 } }));
   const reader = opened.body.getReader(); expect((await reader.read()).value).toEqual(bytes.slice(4, 9)); await reader.cancel();
   expect(opened.servedRange).toEqual({ start: 4, end: 8 });
