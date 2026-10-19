@@ -7,7 +7,9 @@ import { labels } from './configuration';
 
 const rootsList = [ ['liked', '喜欢的歌曲'], ['daily', '每日推荐歌曲'], ['created', '自建歌单'], ['favorites', '收藏歌单'], ['recommended', '每日推荐歌单'] ] as const;
 const playlistRef = z.object({ kind: z.literal('playlist'), id: z.string().regex(/^[1-9]\d*$/) }).strict();
-const cursorSchema = z.object({ directory: z.string(), offset: z.number().int().nonnegative().safe(), revision: z.string().optional() }).strict();
+const cursorSchema = z.object({ directory: z.string(), offset: z.number().int().nonnegative().safe(), revision: z.string().optional(),
+  likedPlaylistId: z.string().regex(/^[1-9]\d*$/).optional(), instanceId: z.string().min(1).optional() }).strict()
+  .refine(value => (value.likedPlaylistId === undefined) === (value.instanceId === undefined));
 const emptyStatistics = () => ({ tracks: 0, files: 0, hiddenTracks: 0, missingVersions: 0, fallbackVersions: 0, deduplicatedVersions: 0 });
 function id(value: unknown): string {
   if (typeof value === 'number' && !Number.isSafeInteger(value)) fail('temporary', '网易云返回了无法精确识别的内容编号。');
@@ -58,6 +60,7 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
 }
 export async function list(client: NeteaseClient, directory: string, value?: string): Promise<Page<Entry>> {
   client.requireSession(); const page = cursor(directory, value);
+  if (page.likedPlaylistId && (directory !== 'liked' || page.instanceId !== client.ctx.instanceId)) fail('invalid_config', '网易云喜欢目录游标不属于当前实例。');
   if (directory === 'created' || directory === 'favorites') {
     const result = await playlists(client, page.offset);
     const items = result.items.filter(item => item.specialType !== 5).filter(item => {
@@ -85,14 +88,17 @@ export async function list(client: NeteaseClient, directory: string, value?: str
   }
   let playlistId: string;
   if (directory === 'liked') {
-    let offset = 0; let found: string | undefined;
-    for (;;) {
-      const result = await playlists(client, offset);
-      const liked = result.items.find(item => item.specialType === 5 && id(item.userId ?? object(item.creator).userId) === client.state.accountId);
-      if (liked) { found = id(liked.id); break; }
-      if (!result.more) break;
-      offset += result.items.length;
-      if (offset > 100_000) fail('not_supported', '网易云歌单集合超过当前处理上限。');
+    let found = page.likedPlaylistId;
+    if (!found) {
+      let offset = 0;
+      for (;;) {
+        const result = await playlists(client, offset);
+        const liked = result.items.find(item => item.specialType === 5 && id(item.userId ?? object(item.creator).userId) === client.state.accountId);
+        if (liked) { found = id(liked.id); break; }
+        if (!result.more) break;
+        offset += result.items.length;
+        if (offset > 100_000) fail('not_supported', '网易云歌单集合超过当前处理上限。');
+      }
     }
     if (!found) return { items: [], statistics: emptyStatistics() };
     playlistId = found;
@@ -113,5 +119,6 @@ export async function list(client: NeteaseClient, directory: string, value?: str
   const byId = new Map(details.songs.map(song => [id(object(song).id), song]));
   const ordered = selected.map(songId => { const item = byId.get(songId); if (!item) fail('temporary', '网易云歌曲详情分页不完整。'); return item; });
   const content = await songPage(client, ordered, page.offset);
-  return { ...content, ...(page.offset + selected.length < ids.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + selected.length, revision }) } : {}) };
+  return { ...content, ...(page.offset + selected.length < ids.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + selected.length, revision,
+    ...(directory === 'liked' ? { likedPlaylistId: playlistId, instanceId: client.ctx.instanceId } : {}) }) } : {}) };
 }

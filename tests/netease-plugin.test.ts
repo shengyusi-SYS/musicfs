@@ -10,6 +10,7 @@ function fixture() {
   const calls: { path: string; cookie: string; signal: AbortSignal | null }[] = [];
   let statusUnavailable = false; let brokenVersion = false; let preview = true; let cancelledBody = false;
   let playlistIds = [1, 2, 1]; let wrongTrackCount = false; let missingPlayback = false;
+  let likedPlaylistId = 8; const playlistCalls: string[] = [];
   let playbackRows = (rows: Record<string, unknown>[], _level: string) => rows;
   const playbackCalls: { ids: number[]; level: string }[] = [];
   const fakeFetch: typeof fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -34,10 +35,14 @@ function fixture() {
     ]);
     if (path === '/api/w/nuser/account/get') return statusUnavailable ? json({}, [], 502) : json({ code: 200, profile: { userId: 42, nickname: '测试账号' } });
     if (path === '/api/user/playlist') return json({ code: 200, more: false, playlist: [
-      { id: 8, userId: 42, specialType: 5, name: '不能按名字猜的系统集合' },
+      { id: likedPlaylistId, userId: 42, specialType: 5, name: '不能按名字猜的系统集合' },
       { id: 9, userId: 42, specialType: 0, name: '自建歌单' }, { id: 10, userId: 52, specialType: 0, name: '收藏歌单' }
     ] });
-    if (path === '/api/v6/playlist/detail') return json({ code: 200, playlist: { trackCount: playlistIds.length + (wrongTrackCount ? 1 : 0), trackIds: playlistIds.map(id => ({ id })) } });
+    if (path === '/api/v6/playlist/detail') {
+      const parameters = new URLSearchParams(await req.text()); const decrypted = encrypt.eapiReqDecrypt(parameters.get('params')!);
+      playlistCalls.push(String(decrypted!.data.id));
+      return json({ code: 200, playlist: { trackCount: playlistIds.length + (wrongTrackCount ? 1 : 0), trackIds: playlistIds.map(id => ({ id })) } });
+    }
     if (path === '/api/v3/song/detail') return json({ code: 200, songs: [...new Set(playlistIds)].reverse().map(id => ({ id, name: `歌曲${id}`, ar: [{ name: '歌手' }] })) });
     if (path === '/api/song/enhance/player/url/v1') {
       const parameters = new URLSearchParams(await req.text()); const decrypted = encrypt.eapiReqDecrypt(parameters.get('params')!);
@@ -50,7 +55,7 @@ function fixture() {
     return json({ code: 404 }, [], 404);
   }, { preconnect: fetch.preconnect });
   const ctx: Context = { instanceId: 'netease-a', config: { label: '网易云', quality: 'standard' }, privateState: null, signal: new AbortController().signal, fetch: fakeFetch };
-  return { ctx, calls, playbackCalls, setStatusUnavailable(state: boolean) { statusUnavailable = state; }, setBrokenVersion(state: boolean) { brokenVersion = state; },
+  return { ctx, calls, playbackCalls, playlistCalls, setLikedPlaylistId(id: number) { likedPlaylistId = id; }, setStatusUnavailable(state: boolean) { statusUnavailable = state; }, setBrokenVersion(state: boolean) { brokenVersion = state; },
     setPreview(state: boolean) { preview = state; }, setPlaylistIds(ids: number[]) { playlistIds = ids; }, setWrongTrackCount(state: boolean) { wrongTrackCount = state; },
     setPlaybackRows(transform: typeof playbackRows) { playbackRows = transform; },
     setMissingPlayback(state: boolean) { missingPlayback = state; }, cancelledBody: () => cancelledBody };
@@ -132,13 +137,31 @@ test('NetEase stat and open verify actual total bytes, re-resolve URLs and propa
   f.setBrokenVersion(true); expect(await plugin.open(f.ctx, file.fileRef, { expectedContentId: description.contentId })).toMatchObject({ ok: false, error: { kind: 'content_changed' } });
 });
 
-test('NetEase complete playlist pages preserve all positions and reject a changed sequence', async () => {
-  const f = fixture(); await authorize(f); f.setPreview(false); f.setPlaylistIds(Array.from({ length: 101 }, (_, i) => i + 1));
+test('NetEase liked pages locate once per instance while retaining order, repeated positions, old cursors and sequence checks', async () => {
+  const f = fixture(); await authorize(f); f.setPreview(false); f.setPlaylistIds([...Array.from({ length: 100 }, (_, i) => i + 1), 1]);
+  const initialCalls = f.calls.length;
   const first = value(await plugin.list(f.ctx, 'liked')); expect(first.items).toHaveLength(100); expect(first.nextCursor).toBeDefined();
-  const last = value(await plugin.list(f.ctx, 'liked', first.nextCursor)); expect(last.items).toHaveLength(1); expect(last.items[0]!.entryId).toBe('101:101:standard'); expect(last.nextCursor).toBeUndefined();
+  expect(f.calls.length - initialCalls).toBe(4); const beforeSecond = f.calls.length;
+  const last = value(await plugin.list(f.ctx, 'liked', first.nextCursor)); expect(last.items).toHaveLength(1); expect(last.items[0]!.entryId).toBe('101:1:standard'); expect(last.nextCursor).toBeUndefined();
+  expect(f.calls.length - beforeSecond).toBe(3);
+  expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(1); expect(f.playlistCalls).toEqual(['8', '8']);
   expect((first.statistics?.tracks ?? 0) + (last.statistics?.tracks ?? 0)).toBe(101);
+
+  const legacy = JSON.parse(first.nextCursor!) as Record<string, unknown>; delete legacy.likedPlaylistId; delete legacy.instanceId;
+  const beforeLegacy = f.calls.length;
+  expect(value(await plugin.list(f.ctx, 'liked', JSON.stringify(legacy))).items[0]!.entryId).toBe('101:1:standard');
+  expect(f.calls.length - beforeLegacy).toBe(4); expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(2);
   f.setPlaylistIds(Array.from({ length: 101 }, (_, i) => 101 - i));
   expect(await plugin.list(f.ctx, 'liked', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'content_changed' } });
+  expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(2);
+
+  const other = fixture(); other.ctx.instanceId = 'netease-b'; other.setLikedPlaylistId(18); await authorize(other); other.setPreview(false);
+  other.setPlaylistIds(Array.from({ length: 101 }, (_, i) => i + 201));
+  const beforeForeign = other.calls.length;
+  expect(await plugin.list(other.ctx, 'liked', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'invalid_config' } }); expect(other.calls).toHaveLength(beforeForeign);
+  const otherFirst = value(await plugin.list(other.ctx, 'liked'));
+  expect(value(await plugin.list(other.ctx, 'liked', otherFirst.nextCursor)).items[0]!.entryId).toBe('101:301:standard');
+  expect(other.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(1); expect(other.playlistCalls).toEqual(['18', '18']);
 });
 
 test('NetEase rejects incomplete native collections and incomplete playback batches', async () => {

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "id": "org.musicfs.netease",
   "name": "网易云音乐（开发预览）",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "apiRange": ">=0.1.2 <0.2.0",
   "hosts": { "desktop": "index.mjs", "worker": "index.mjs" },
   "configVersion": 1,
