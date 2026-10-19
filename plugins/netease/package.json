@@ -1,0 +1,15 @@
+{
+  "name": "@musicfs/plugin-netease",
+  "version": "0.1.0-dev.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "NeteaseCloudMusicApi": "4.32.0",
+    "tough-cookie": "6.0.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@musicfs/plugin-api": "workspace:*",
+    "ajv": "8.20.0"
+  }
+}

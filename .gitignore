@@ -7,6 +7,7 @@ coverage/
 plugins/sample/generated-config.mjs
 plugins/qq/generated-config.mjs
 plugins/qq/generated-upstream.mjs
+plugins/netease/generated-*.mjs
 .env
 .env.*
 !.env.example

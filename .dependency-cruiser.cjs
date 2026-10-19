@@ -6,7 +6,7 @@ module.exports = {
     { name: 'plugins-use-public-contract', severity: 'error',
       from: { path: '^plugins/' }, to: { path: '^src/' } },
     { name: 'platform-sdks-owned-by-plugins', severity: 'error',
-      from: { path: '^(src|packages)/' }, to: { path: 'node_modules/@yakult-green-tea/qq-music-api/' } },
+      from: { path: '^(src|packages)/' }, to: { path: 'node_modules/(@yakult-green-tea/qq-music-api|NeteaseCloudMusicApi)/' } },
     { name: 'core-stays-host-independent', severity: 'error',
       from: { path: '^src/core/' }, to: { path: '^src/(hosts|transport|infrastructure|web)/|^plugins/|node_modules/(hono|@zip\\.js)/' } },
     { name: 'core-has-no-native-runtime', severity: 'error',

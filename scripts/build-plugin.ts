@@ -2,9 +2,10 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { ZipWriter, Uint8ArrayWriter, Uint8ArrayReader } from '@zip.js/zip.js/index-native.js';
 import type { PluginManifest } from '@musicfs/plugin-api';
+import type { BunPlugin } from 'bun';
 
 /** Author tooling: bundle a plugin closure and package only its explicitly declared files. */
-export async function buildPlugin(directory: string, destination: string, options: { define?: Record<string, string> } = {}): Promise<Uint8Array> {
+export async function buildPlugin(directory: string, destination: string, options: { define?: Record<string, string>; external?: string[]; plugins?: BunPlugin[] } = {}): Promise<Uint8Array> {
   const manifest = await Bun.file(join(directory, 'manifest.json')).json() as PluginManifest;
   const build = await Bun.build({ entrypoints: [join(directory, 'index.ts')], target: 'browser', format: 'esm', minify: false, ...options });
   if (!build.success || !build.outputs[0]) throw new AggregateError(build.logs, `Plugin build failed: ${manifest.id}`);
