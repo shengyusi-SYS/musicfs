@@ -14,6 +14,7 @@
 | 查看架构与流程图 | [图表](docs/architecture/diagrams.md) |
 | 了解当前和后续工作 | [实施计划](outputs/musicfs-implementation-plan.md) |
 | 查找决策、调研与历史资料 | [文档索引](docs/README.md) |
+| 连接 OpenList 与播放器 | [客户端说明](docs/clients.md) |
 | 运行开发检查与 P0 探针 | [开发说明](docs/development.md) |
 
 开发入口和当前证据见[开发说明](docs/development.md)、[P0 目录/DAV 记录](docs/verification/p0-library-dav.md)、[WebUI 首轮记录](docs/verification/p1-webui.md)与[通用认证记录](docs/verification/p1-authentication.md)。尚未覆盖的真实平台、完整管理流程、云部署、目标系统和客户端能力保留在验收台账中。
