@@ -7,5 +7,5 @@ const service = await createDesktopService({ directory: resolve('dist/dev-data')
   dav: { username: 'musicfs', password: MUSICFS_DAV_PASSWORD }, webRoot: resolve('dist/web') });
 const server = Bun.serve({ hostname: '127.0.0.1', port: 8787, fetch: service.app.fetch });
 console.log(`Development service: ${server.url.origin} (credentials omitted)`);
-async function stop() { await server.stop(true); service.close(); process.exit(0); }
+async function stop() { await server.stop(true); await service.close(); process.exit(0); }
 process.once('SIGINT', () => void stop()); process.once('SIGTERM', () => void stop());

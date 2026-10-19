@@ -5,7 +5,7 @@ import type { HostKind, PluginManifest, SourcePlugin } from '@musicfs/plugin-api
 export const PLUGIN_API_VERSION = '0.1.2';
 
 export class ExtensionError extends Error {
-  constructor(public readonly code: 'invalid_package' | 'incompatible' | 'revision_conflict' | 'missing_plugin', message: string) {
+  constructor(public readonly code: 'invalid_package' | 'incompatible' | 'revision_conflict' | 'missing_plugin' | 'host_not_configured' | 'change_in_progress', message: string) {
     super(message);
     this.name = 'ExtensionError';
   }
@@ -58,6 +58,15 @@ export type PreparedPackage = { manifest: PluginManifest; digest: string; files:
 export type Installation = { manifest: PluginManifest; revision: string; generation: number; status: 'active' | 'missing' };
 export type LoadedPlugin = Installation & { module: SourcePlugin };
 
+export function assertInstallationCandidate(previous: Installation | undefined, prepared: PreparedPackage) {
+  if (previous?.manifest.version === prepared.manifest.version && previous.revision !== prepared.digest) {
+    throw new ExtensionError('revision_conflict', 'A different package already uses this plugin version');
+  }
+  if (previous && (previous.manifest.stateVersion !== prepared.manifest.stateVersion || previous.manifest.configVersion !== prepared.manifest.configVersion)) {
+    throw new ExtensionError('incompatible', 'State/config migrations must be prepared before installing this update');
+  }
+}
+
 export interface InstallationStore {
   installations(): Installation[] | Promise<Installation[]>;
   installation(id: string): Installation | undefined | Promise<Installation | undefined>;
@@ -76,13 +85,7 @@ export function createExtensions(store: InstallationStore, prepare: (prepared: P
     list: () => store.installations(),
     async install(prepared: PreparedPackage): Promise<Installation> {
       const previous = await store.installation(prepared.manifest.id);
-      if (previous?.manifest.version === prepared.manifest.version && previous.revision !== prepared.digest) {
-        throw new ExtensionError('revision_conflict', 'A different package already uses this plugin version');
-      }
-      if (previous && (previous.manifest.stateVersion !== prepared.manifest.stateVersion
-        || previous.manifest.configVersion !== prepared.manifest.configVersion)) {
-        throw new ExtensionError('incompatible', 'State/config migrations must be prepared before installing this update');
-      }
+      assertInstallationCandidate(previous, prepared);
       await prepare(prepared);
       return store.activate(prepared.manifest, prepared.digest, previous?.generation ?? null);
     },

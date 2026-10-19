@@ -1,12 +1,12 @@
 # MusicFS 架构与流程图
 
-日期：2026-10-20。「当前 P0/P1 链路」对应本地实现，其余为完整目标的设计图，不表示已完成部署或验收。Mermaid 源码在本页维护；模块定义见 [架构设计](README.md)，调用与字节合同见 [插件 Interface](plugin-interface.md)。关系图描述逻辑身份，不等同于 SQL 表结构。
+日期：2026-10-20。「当前链路」对应正式代码与本地验证；明确注明设计目标的流程仍含未实现部分，不表示已完成真实云端或目标系统验收。Mermaid 源码在本页维护；模块定义见 [架构设计](README.md)，调用与字节合同见 [插件 Interface](plugin-interface.md)。关系图描述逻辑身份，不等同于 SQL 表结构。
 
-当前已有共用管理页面、通用交互认证、插件/实例、目录快照/布局、管理 HTTP 和共用 Fetch DAV。QQ 的真实扫码、每日推荐和正式 DAV/rclone 字节已完成[限定验证](../verification/p1-qq-source.md)；完整示例、续期合并、部署/挂载与发行仍按设计推进。源码和范围见[开发说明](../development.md)、[P0 目录/DAV 记录](../verification/p0-library-dav.md)、[WebUI 接线](../verification/p1-webui.md)与[通用认证](../verification/p1-authentication.md)。
+当前已有共用页面、认证、插件/实例、目录快照/布局、管理 HTTP 和 Fetch DAV；QQ 与[网易云](../verification/p2-netease-source.md)有真实来源证据。正式桌面启动/挂载和 Worker 后台发布已接线，完整范围见[台账](../verification.md)。
 
-## 当前 P0/P1 链路
+## 当前链路
 
-仅描述已执行的本地请求路径。Worker 探针使用固定模块，不表示后台部署已实现；rclone 完成客户端读取，未执行系统挂载。
+描述正式代码与本地请求路径。Worker 模块组装与持久发布在本地 workerd/受控平台网络验证；rclone 完成真实读取及 RC 进程管理，系统挂载尚待对应环境。
 
 ```mermaid
 flowchart LR
@@ -16,15 +16,63 @@ flowchart LR
   Auth --> E[extensions 安装/移除]
   Auth --> S[sources 实例/配置/交互认证]
   Auth --> L[library 布局/刷新]
-  E --> Host[桌面外置加载 / Worker 固定注册]
+  E --> Host[桌面外置加载 / Worker 发布后精确注册]
   L --> S
   S --> Host
-  Host --> Plugin[独立最小插件 / QQ 开发预览]
+  Host --> Plugin[独立最小插件 / QQ / 网易云]
   Client[rclone / 字节测试客户端] --> DAV[Basic 认证 / 共用 Fetch DAV]
   DAV --> L
   L --> Store[SQLite / D1 快照与布局]
   S --> Store
   E --> Store
+```
+
+## 当前 Worker 插件发布
+
+仅此图描述已接线的发布实现；SDK 网络编码与恢复测试使用受控平台响应，真实云端仍待验。完整迁移激活目标见后文“插件变更”。
+
+```mermaid
+sequenceDiagram
+  participant U as 共用 WebUI
+  participant H as Worker changes
+  participant D as D1
+  participant C as Cloudflare Content API
+  U->>H: 安装 ZIP / 移除
+  H->>D: 保存操作、期望代际与候选模块
+  H-->>U: 202 + operationId
+  H->>C: 读取当前 core / registry / modules
+  H->>C: 上传候选代码集合，保留旧 active 修订
+  H->>C: 重读实际 registry
+  alt 标记匹配
+    H->>D: 条件激活 / 标记 missing，操作完成
+  else 响应丢失或暂时无法核对
+    H->>D: verifying，保留旧安装
+    U->>H: 查询原 operationId
+    H->>C: 只重读核对，不盲目再上传
+  else 明确拒绝
+    H->>D: failed，保留旧安装
+  end
+  U->>H: 查询持久进度至终态
+```
+
+## 当前桌面生命周期
+
+锁、后台、rclone RC及Linux本地/独立远程FUSE读取、忙时保留与退出已实测；其他目标系统挂载和平台弹窗仍待验。
+
+```mermaid
+flowchart LR
+  Click[点击发行程序] --> Identity[验证已有后台身份]
+  Identity -->|存在| Browser[open 打开共用页面]
+  Identity -->|不存在| Spawn[分离后台，持有 proper-lockfile]
+  Spawn --> Local[私有凭据 / SQLite / 本机 HTTP]
+  Local --> Browser
+  Browser --> Mounts[挂载管理 API]
+  Mounts --> RC[随包 rclone 私有 RC]
+  RC --> LocalDAV[本机 DAV]
+  RC --> RemoteDAV[远程 HTTP 或 HTTPS DAV]
+  Browser --> Quit[请求退出，先正常卸载]
+  Quit -->|忙| Keep[保持后台，返回可重试错误]
+  Quit -->|已卸载| Drain[202 接受，结束在途请求并退出]
 ```
 
 ## 当前目录属性读取

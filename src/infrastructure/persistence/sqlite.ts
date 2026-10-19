@@ -5,6 +5,7 @@ import type { AuthenticationRecord, Instance, InstanceStore, SourceStamp } from 
 import initialSchema from './migrations/0001.sql' with { type: 'text' };
 import librarySchema from './migrations/0002.sql' with { type: 'text' };
 import authenticationSchema from './migrations/0003.sql' with { type: 'text' };
+import workerChangesSchema from './migrations/0004.sql' with { type: 'text' };
 import type { LayoutNode, LibraryStore, Snapshot } from '../../core/library/types';
 
 type InstallationRow = { manifest: string; revision: string; generation: number; status: 'active' | 'missing' };
@@ -19,11 +20,12 @@ export function openSqlite(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = db.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version;
-  if (version === undefined || version < 0 || version > 3) { db.close(); throw new Error('Unsupported MusicFS database version'); }
-  if (version < 3) db.transaction(() => {
+  if (version === undefined || version < 0 || version > 4) { db.close(); throw new Error('Unsupported MusicFS database version'); }
+  if (version < 4) db.transaction(() => {
     if (version === 0) db.exec(initialSchema);
     if (version < 2) db.exec(librarySchema);
-    db.exec(authenticationSchema); db.exec('PRAGMA user_version = 3');
+    if (version < 3) db.exec(authenticationSchema);
+    db.exec(workerChangesSchema); db.exec('PRAGMA user_version = 4');
   })();
 
   const installation = (id: string): Installation | undefined => {

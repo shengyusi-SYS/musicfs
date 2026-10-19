@@ -1,6 +1,6 @@
 # MusicFS 架构设计
 
-日期：2026-10-20。状态：实现设计基线；插件合同处于 P0 草案阶段。插件基础和目录/快照、HTTP 管理、共用 Fetch DAV 已有[本地结果](../verification/p0-library-dav.md)，共用 WebUI 和通用认证已有[限定实测](../verification/p1-authentication.md)；QQ 已有[真实扫码/目录/音频的限定结果](../verification/p1-qq-source.md)，完整示例、完整 UI 与云端部署仍待验证。产品合同以 [统一需求](../../outputs/musicfs-requirements-and-technical-design.md) 为准，执行顺序以 [实施计划](../../outputs/musicfs-implementation-plan.md) 为准。
+日期：2026-10-20。状态：设计与当前实现并列说明，插件合同仍为 alpha。插件/实例、目录、共用协议和 UI 已接线；QQ 与[网易云](../verification/p2-netease-source.md)有真实扫码/目录/音频证据，[桌面启动/挂载](../desktop.md)与[Worker 后台发布](../worker.md)有正式入口及本地验证。真实云端、四目标运行/挂载和完整示例仍按台账收口。产品合同以 [统一需求](../../outputs/musicfs-requirements-and-technical-design.md) 为准，执行顺序以 [实施计划](../../outputs/musicfs-implementation-plan.md) 为准。
 
 设计采用一个应用中的领域 Module、独立发布的插件合同，以及实际有差异的宿主 Adapter。Module 按其 Interface 能隐藏的业务责任划分，Interface 包括数据、调用顺序、失败与性能合同，不按文件行数或页面数量拆包。结构和流程见 [图表](diagrams.md)。
 
@@ -75,6 +75,8 @@ tests/                       # 最小插件、协议样本、接口/集成与真
 
 安装执行 seam 是 `extensions` 声明的“准备候选、发布、核对结果”合同：桌面 Adapter 写暂存包并准备加载版本，Worker Adapter 组装预构建模块并用官方 SDK 上传/部署。跨领域变更用例从 `sources` 取得候选迁移状态，在宿主就绪后条件激活；它不读取 Cookie 或音质配置的内部含义。代码集合、数据库和外部部署之间不存在默认全局事务；不能把 SDK 返回成功等同于业务已激活。
 
+当前 Worker 的实际实现为宿主内 `changes` 持久协调与 `publisher` 官方 SDK 适配：`extensions.assertInstallationCandidate` 复用包/版本策略，D1 保存变更、候选模块和核对标记。固定 core、registry 与插件模块分别上传，重读 registry 后才激活安装；注册代码不会自动激活。配置/私有状态 schema 版本变化仍在发布前拒绝，候选迁移尚未实现。具体协议和真实云端未验边界见 [ADR 0006](../adr/0006-worker-code-publication.md)，不把上段完整迁移目标视为已经交付。
+
 ## 配置与认证
 
 插件声明 JSON Schema draft-07 和有限可序列化 UI 提示，实例保存自己的配置。前端采用 RJSF Ant Design 主题生成普通表单，Query 管理请求、轮询和草稿提交；核心用通用二维码、链接、验证码与输入步骤承载认证，不执行任意插件前端代码。
@@ -102,6 +104,8 @@ tests/                       # 最小插件、协议样本、接口/集成与真
 会改变来源含义的配置、换号、退出或删除更新实例代际；授权续期的私有状态使用独立 CAS 版本，避免把普通 token 续期当作换号。目录刷新有自己的请求身份。发布结果须同时满足当前安装代际、实例代际与仍有效的刷新身份，条件检查与写入在数据库一侧完成；进程内锁和 `p-limit` 不提供跨 Worker isolate 保证。
 
 实例刷新由 `library.refreshInstance` 统一编排：先刷新内容入口，再刷新各入口目录，并沿新快照遍历仍可达的已浏览子目录。`LibraryStore.knownDirectoryRefs` 只提供本实例的已访问目录身份，SQLite/D1 不判断歌曲、歌单或音质；新子目录首次浏览时再加载。遍历有去重和目录预算，每个目录独立完整发布，部分失败返回明细并保留原快照，取消和代际变化立即终止后续读取。界面区分实例刷新与单目录刷新；布局不参与内容刷新写入。[限定实测](../verification/p1-instance-refresh.md)记录了调用链、故障和双适配器结果。
+
+真实网易云 4,158 曲需要 42 页，已证明当前“一次 HTTP 读完”的执行粒度不适合免费 Worker。下一切片由 `library` 保持分页暂存和完整发布所有权，宿主按独立请求续步；页面展示进度，失败仍保留最近完整目录。减少插件重复请求与拆分调用预算是两个责任，不能把持久刷新做成来源专用接口，也不能用 `waitUntil` 内的连续循环重置单次预算。DAV allprop 的逐项真实描述同样需要独立收敛；分步刷新本身不会消除逐文件上游及数据库工作。
 
 分页统计与完整内容是同一快照：插件声明显示标签，并在每一内容页报告增量计数，`library` 校验并汇总，失败保留旧内容及计数。当前 QQ 使用它区分曲目和实际文件、隐藏/回退/合并版本；核心和 WebUI 不拥有这些字段的音乐含义。`directoryStatus` 只投影当前有效快照的时间与计数，不触发来源读取，旧快照无统计时保持未知。数据仍存于既有快照 JSON，无新 SQL 字段或历史迁移改写。合同见 [0.1.2 统计语义](plugin-interface.md#稳定身份分页与目录)。
 
@@ -139,6 +143,7 @@ Nephele 的固定版本 PoC 已执行：Bun 基础读取可用，本地 Worker �
 | Worker 发布 | Cloudflare 官方 SDK | 发布计划、绑定保留、结果核对、失败恢复 |
 | 并发、短期缓存 | p-limit、lru-cache 按实际需要 | 实例预算、缓存键和失效条件 |
 | 数据与系统能力 | bun:sqlite、D1、open、env-paths、Bun.spawn、rclone | SQL 事务与提交、生命周期、就绪及正常卸载 |
+| 桌面单后台 | proper-lockfile | 凭据、真实身份探测、端口与挂载恢复；库锁不代替进程身份 |
 | DAV | 共用 Fetch 只读映射、xmldom、range-parser；Worker FixedLengthStream | 标准只读行为、目录和真实字节的接线，见 ADR 0004 |
 | 导入图 | dependency-cruiser，仅开发期 | 允许依赖方向与例外的明确说明 |
 

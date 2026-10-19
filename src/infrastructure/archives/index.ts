@@ -49,7 +49,7 @@ export async function readPackage(
     }
     const manifestBytes = files.get('manifest.json');
     if (!manifestBytes) throw new ExtensionError('invalid_package', 'Missing plugin manifest');
-    const manifest = parseManifest(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(manifestBytes)), host);
+    const manifest = parseManifest(JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(manifestBytes)), host);
     if (files.size !== manifest.files.length + 1 || manifest.files.some(path => !files.has(path))) {
       throw new ExtensionError('invalid_package', 'Archive files must exactly match the manifest');
     }

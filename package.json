@@ -27,7 +27,10 @@
     "build:qq": "bun run scripts/build-qq.ts",
     "probe:worker:qq": "bun run scripts/probe-worker-qq.ts",
     "build:netease": "bun run scripts/build-netease.ts",
-    "probe:worker:netease": "bun run scripts/probe-worker-netease.ts"
+    "probe:worker:netease": "bun run scripts/probe-worker-netease.ts",
+    "build:worker": "bun run scripts/build-worker.ts",
+    "probe:worker:service": "bun run scripts/probe-worker-service.ts",
+    "build:desktop": "bun run scripts/build-desktop.ts"
   },
   "dependencies": {
     "@ant-design/icons": "6.3.4",

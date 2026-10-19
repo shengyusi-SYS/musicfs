@@ -1,5 +1,7 @@
 import type { Json, PluginFault } from '@musicfs/plugin-api';
 import type { Status, SourceInstance, PluginInstallation, SourceConfiguration, ContentSources, DirectoryStatus, InstanceRefresh, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
+import type { PluginChange } from '../contracts/plugin-changes';
+import type { MountInput, MountView } from '../contracts/mounts';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -12,6 +14,10 @@ export class ApiError extends Error {
     if (typeof detail !== 'object' || detail === null) return;
     const fault = 'sourceError' in detail ? detail.sourceError : 'error' in detail ? detail.error : undefined;
     return typeof fault === 'object' && fault !== null && 'kind' in fault ? fault as PluginFault : undefined;
+  }
+  get code(): string | undefined {
+    return typeof this.detail === 'object' && this.detail !== null && 'error' in this.detail && typeof this.detail.error === 'string'
+      ? this.detail.error : undefined;
   }
 }
 
@@ -32,9 +38,14 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     status: (signal?: AbortSignal) => request<Status>('/status', signal ? { signal } : {}),
     instances: (signal?: AbortSignal) => request<SourceInstance[]>('/instances', signal ? { signal } : {}),
     plugins: (signal?: AbortSignal) => request<PluginInstallation[]>('/plugins', signal ? { signal } : {}),
-    install: (file: File) => request<PluginInstallation>('/plugins', { method: 'POST', body: file }),
-    installUrl: (url: string) => request<PluginInstallation>('/plugins/from-url', json('POST', { url })),
-    removePlugin: (id: string) => request<void>(`/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    install: (file: File) => request<PluginInstallation | PluginChange>('/plugins', { method: 'POST', body: file }),
+    installUrl: (url: string) => request<PluginInstallation | PluginChange>('/plugins/from-url', json('POST', { url })),
+    removePlugin: (id: string) => request<void | PluginChange>(`/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    pluginChange: (id: string, signal: AbortSignal) => request<PluginChange>(`/plugin-changes/${encodeURIComponent(id)}`, { signal }),
+    mounts: (signal: AbortSignal) => request<MountView[]>('/mounts', { signal }),
+    mount: (input: MountInput) => request<MountView>('/mounts', json('POST', input)),
+    unmount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    quitDesktop: () => request<{ stopping: true }>('/desktop/quit', { method: 'POST' }),
     configuration: (id: string, signal: AbortSignal) => request<SourceConfiguration>(`/plugins/${encodeURIComponent(id)}/configuration`, { signal }),
     createInstance: (pluginId: string, name: string, config: Json) => request<Result<SourceInstance>>('/instances', json('POST', { pluginId, name, config })),
     configure: (id: string, config: Json) => request<Result<Json>>(`/instances/${encodeURIComponent(id)}/config`, json('PUT', { config })),

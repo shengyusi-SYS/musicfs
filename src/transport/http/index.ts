@@ -5,6 +5,8 @@ import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import type { HostKind, Json, Outcome } from '@musicfs/plugin-api';
 import type { Result, Connection, Status, PluginInstallation, SourceInstance, SourceConfiguration, Layout, ViewEntry, AuthenticationSession } from '../../contracts/management';
+import type { PluginChange } from '../../contracts/plugin-changes';
+import type { MountInput, MountManager } from '../../contracts/mounts';
 import { ExtensionError, type Extensions, type Installation } from '../../core/extensions';
 import { SourceError, type Sources } from '../../core/sources';
 import { LibraryError, type Library } from '../../core/library';
@@ -48,9 +50,12 @@ async function download(url: string, signal: AbortSignal, maxSize: number): Prom
 }
 
 export function createManagementApi(input: {
-  host: HostKind; adminToken: string; sources: Sources; library: Library; extensions: Extensions;
+  host: HostKind; adminToken: string; sources: Sources; library: Library; extensions: Pick<Extensions, 'list' | 'remove'>;
   connection?: Connection;
-  maxPackageBytes: number; install: (archive: Uint8Array, signal: AbortSignal) => Promise<Installation>;
+  mounts?: MountManager;
+  maxPackageBytes: number; install: (archive: Uint8Array, signal: AbortSignal) => Promise<Installation | PluginChange>;
+  remove?: (id: string, signal: AbortSignal) => Promise<PluginChange | void>;
+  pluginChange?: (id: string) => Promise<PluginChange | null>;
 }) {
   const { sources, library, extensions } = input;
   if (!input.adminToken) throw new Error('Management token is required');
@@ -60,7 +65,8 @@ export function createManagementApi(input: {
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();
     if (error instanceof z.ZodError) return c.json({ error: 'invalid_input', message: 'Invalid management input' }, 400);
-    if (error instanceof ExtensionError) return c.json({ error: error.code, message: error.message }, error.code === 'missing_plugin' ? 404 : error.code === 'revision_conflict' ? 409 : 422);
+    if (error instanceof ExtensionError) return c.json({ error: error.code, message: error.message }, error.code === 'host_not_configured' ? 503 : error.code === 'missing_plugin' ? 404 : error.code === 'revision_conflict' || error.code === 'change_in_progress' ? 409 : 422);
+    if (error instanceof Error && error.name === 'MountError' && 'code' in error) return c.json({ error: error.code, message: error.message }, error.code === 'not_found' ? 404 : error.code === 'mount_busy' ? 409 : 422);
     if (error instanceof SourceError) return c.json({ error: error.code, message: error.message }, error.code === 'missing_instance' ? 404 : error.code === 'stale_call' || error.code === 'invalid_auth_action' ? 409 : 502);
     if (error instanceof LibraryError) return c.json({ error: error.code, message: error.message, ...(error.sourceFault ? { sourceError: error.sourceFault } : {}) }, error.code === 'not_found' ? 404 : error.code === 'invalid_layout' ? 400 : error.code === 'conflict' ? 409 : 503);
     return c.json({ error: 'internal_error', message: 'Management operation failed' }, 500);
@@ -70,12 +76,29 @@ export function createManagementApi(input: {
   app.get('/api/status', c => c.json({ host: input.host, version: '0.1.0-dev.0' } satisfies Status));
   app.get('/api/connection', c => input.connection ? c.json(input.connection) : c.json({ error: 'not_supported', message: 'Connection details are unavailable' }, 404));
   app.get('/api/plugins', async c => c.json((await extensions.list()) satisfies PluginInstallation[]));
-  app.post('/api/plugins', async c => c.json(await input.install(new Uint8Array(await c.req.arrayBuffer()), c.req.raw.signal), 201));
+  const installed = (c: Context, result: Installation | PluginChange) => c.json(result, 'operationId' in result ? 202 : 201);
+  app.post('/api/plugins', async c => installed(c, await input.install(new Uint8Array(await c.req.arrayBuffer()), c.req.raw.signal)));
   app.post('/api/plugins/from-url', async c => {
     const { url } = urlInput.parse(await json(c));
-    return c.json(await input.install(await download(url, c.req.raw.signal, input.maxPackageBytes), c.req.raw.signal), 201);
+    return installed(c, await input.install(await download(url, c.req.raw.signal, input.maxPackageBytes), c.req.raw.signal));
   });
-  app.delete('/api/plugins/:id', async c => { await extensions.remove(c.req.param('id')); return c.body(null, 204); });
+  app.delete('/api/plugins/:id', async c => {
+    const result = input.remove ? await input.remove(c.req.param('id'), c.req.raw.signal) : await extensions.remove(c.req.param('id'));
+    return result ? c.json(result, 202) : c.body(null, 204);
+  });
+  app.get('/api/plugin-changes/:id', async c => {
+    const result = await input.pluginChange?.(c.req.param('id'));
+    return result ? c.json(result) : c.json({ error: 'not_found', message: 'Plugin change was not found' }, 404);
+  });
+  app.get('/api/mounts', async c => input.mounts ? c.json(await input.mounts.list()) : c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404));
+  app.post('/api/mounts', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    return c.json(await input.mounts.mount(await json(c) as MountInput), 201);
+  });
+  app.delete('/api/mounts/:id', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    return c.json(await input.mounts.unmount(c.req.param('id')));
+  });
   app.get('/api/plugins/:id/configuration', async c => c.json((await sources.configuration(c.req.param('id'))) satisfies SourceConfiguration));
   app.get('/api/instances', async c => c.json((await sources.instances()) satisfies SourceInstance[]));
   app.post('/api/instances', async c => {

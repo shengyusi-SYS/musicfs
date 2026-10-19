@@ -16,6 +16,9 @@
 | [QQ 真实来源首轮验证](verification/p1-qq-source.md) | 手机 QQ 扫码、会话恢复、每日推荐、DAV/rclone 字节和本地 workerd | 完整双示例、续期、真实云部署或播放器验收 |
 | [QQ 原始分类与分页](verification/p2-qq-catalog.md) | SDK 原始角色、有限推荐、完整歌单、微信扫码与非空喜欢/自建 | 非空收藏、全部音质或云端资源验收 |
 | [QQ 音质与目录统计](verification/p2-qq-quality.md) | 实例策略、实际版本、批量、通用计数、真实 MP3/M4A 与双会话 workerd | 全部真实档位、网易云、云端或播放器验收 |
+| [网易云真实来源](verification/p2-netease-source.md) | 真实扫码、4,158 曲完整喜欢、MP3/DAV/rclone、workerd恢复及多表示响应修正 | 全部音质/续期、完整分类、免费云端及播放器 |
+| [桌面宿主](desktop.md)与[限定验证](verification/p2-desktop-host.md) | 点击启动、后台复用、凭据、rclone挂载和四目标构建入口 | 四目标原生运行及系统挂载均通过 |
+| [Worker 宿主与发布](worker.md) | 正式入口、模板、持久发布与核对恢复、本地证据 | 真云配置保留、免费配额及零中断 |
 | [实例刷新](verification/p1-instance-refresh.md) | 实例/单目录范围、可达缓存遍历、失败保留、SQLite/D1 与浏览器结果 | 全树预读、后台进度或真实云端大集合验收 |
 | [共用界面设计](architecture/web-ui.md) | 已确认视觉基线、页面责任、前后端合同与令牌边界 | 产品全部管理能力已完成 |
 | [管理 HTTP 接口](management-api.md) | WebUI 可调用的实际路由与凭据合同 | 尚未实现的认证/部署/挂载入口 |
@@ -35,6 +38,7 @@
 - [ADR 0003 插件合同独立于核心和依赖对象](adr/0003-independent-plugin-interface.md)
 - [ADR 0004 共用 Fetch 只读 DAV](adr/0004-shared-fetch-readonly-dav.md)
 - [ADR 0005 QQ 固定 SDK 的原始读取适配](adr/0005-pinned-qq-sdk-read-adapter.md)
+- [ADR 0006 普通 Worker 的代码发布与安装激活](adr/0006-worker-code-publication.md)
 - [需求澄清记录](../outputs/musicfs-design-review.md)：保留产品问题、回答和历史修正，不作为另一份独立实现方案。
 
 ## 技术证据与候选调查

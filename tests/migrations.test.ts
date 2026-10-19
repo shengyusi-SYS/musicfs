@@ -5,12 +5,13 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { openSqlite } from '../src/infrastructure/persistence/sqlite';
 
-for (const version of [1, 2]) test(`version-${version} data survives the authentication migration and subsequent reopening`, async () => {
+for (const version of [1, 2, 3]) test(`version-${version} data survives current migrations and subsequent reopening`, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-migration-')); const path = join(directory, 'state.sqlite');
   try {
     const legacy = new Database(path);
     legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0001.sql').text());
-    if (version === 2) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0002.sql').text());
+    if (version >= 2) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0002.sql').text());
+    if (version >= 3) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0003.sql').text());
     legacy.exec(`PRAGMA user_version = ${version}`);
     legacy.query('INSERT INTO installations (id, manifest, revision, generation, status) VALUES (?, ?, ?, 1, ?)').run('legacy', '{}', 'old', 'active');
     legacy.query('INSERT INTO instances (id, plugin_id, name, config, private_state, epoch, state_revision) VALUES (?, ?, ?, ?, ?, 1, 1)')

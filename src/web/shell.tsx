@@ -45,7 +45,10 @@ export function App() {
 
 function Workspace({ api, disconnect }: { api: Api; disconnect: () => void }) {
   const [page, setPage] = useState<Page>('sources');
+  const [stopped, setStopped] = useState(false);
   const status = useQuery({ queryKey: ['status'], queryFn: ({ signal }) => api.status(signal) });
+  if (stopped) return <div className="access-screen"><section className="access-panel"><Typography.Title level={2}>退出请求已接受</Typography.Title>
+    <Typography.Paragraph>挂载已正常卸载，后台正在结束在途读取并退出。可以关闭此页面；再次使用时，点击桌面启动程序。</Typography.Paragraph></section></div>;
   return <Layout className="workspace"><aside className="sidebar">
     <a href="#" className="wordmark" onClick={event => { event.preventDefault(); setPage('sources'); }}>MusicFS<span>音乐文件服务</span></a>
     <div className="nav-caption">工作区</div><Menu mode="inline" selectedKeys={[page]} onClick={({ key }) => setPage(key as Page)} items={[
@@ -62,7 +65,7 @@ function Workspace({ api, disconnect }: { api: Api; disconnect: () => void }) {
       {page === 'sources' && <Sources api={api} showPlugins={() => setPage('plugins')} />}
       {page === 'plugins' && <Plugins api={api} />}
       {page === 'library' && <Library api={api} />}
-      {page === 'connection' && <Connection api={api} />}
+      {page === 'connection' && <Connection api={api} onStopped={() => setStopped(true)} />}
     </Suspense>}</main>
   </Layout></Layout>;
 }

@@ -1,0 +1,15 @@
+{
+  "name": "musicfs",
+  "main": "worker.mjs",
+  "no_bundle": true,
+  "find_additional_modules": true,
+  "compatibility_date": "2026-07-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "rules": [
+    { "type": "ESModule", "globs": ["**/*.mjs", "**/*.js"], "fallthrough": true },
+    { "type": "Text", "globs": ["plugins/**/*.json", "plugins/**/*.txt", "plugins/**/*.md"], "fallthrough": true }
+  ],
+  "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*", "/dav", "/dav/*"] },
+  "d1_databases": [{ "binding": "DB", "database_name": "musicfs", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "migrations" }],
+  "vars": { "CF_ACCOUNT_ID": "REPLACE_WITH_ACCOUNT_ID", "CF_WORKER_NAME": "musicfs" }
+}

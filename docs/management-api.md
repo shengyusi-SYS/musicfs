@@ -1,6 +1,6 @@
 # 管理 HTTP 接口
 
-当前实现入口是[桌面服务装配](../src/hosts/desktop/service.ts)，共用 [Hono 管理路由](../src/transport/http/index.ts)和 [Fetch DAV](../src/transport/dav/index.ts)，已连接[共用管理页面](architecture/web-ui.md)。通用认证及 QQ 真实扫码已有实现；可点击启动器、完整示例来源、挂载与 Worker 自动发布尚未交付。
+当前实现入口是[桌面服务装配](../src/hosts/desktop/service.ts)和[Worker 服务装配](../src/hosts/worker/service.ts)，共用 [Hono 管理路由](../src/transport/http/index.ts)、[Fetch DAV](../src/transport/dav/index.ts)与[管理页面](architecture/web-ui.md)。正式宿主、后台插件变更和桌面挂载已接线；真实云部署与目标系统挂载的状态见[台账](verification.md)。
 
 管理请求使用 `Authorization: Bearer <管理 token>`；DAV 使用独立 Basic 读取凭据。两者由装配传入，平台私有状态不通过管理列表或 DAV 暴露。错误的认证方案由 Hono 返回 challenge，DAV 凭据不能调用任何管理操作。
 
@@ -9,9 +9,10 @@
 | `GET /api/status` | 宿主和应用版本 |
 | `GET /api/connection` | 受管理认证保护的 DAV 地址路径、用户名及读取密码；宿主未提供时返回 404 |
 | `GET /api/plugins` | 安装清单、版本与 active/missing 状态 |
-| `POST /api/plugins` | 请求正文为预构建 ZIP，成功返回安装记录 |
+| `POST /api/plugins` | 请求正文为预构建 ZIP；桌面成功返回 201 安装记录；Worker 返回 202 持久变更操作 |
 | `POST /api/plugins/from-url` | `{url}`，下载有大小/超时限制的 HTTP(S) 发布包并安装 |
-| `DELETE /api/plugins/:id` | 停止该插件的新调用，保留实例与布局引用 |
+| `DELETE /api/plugins/:id` | 桌面完成返回 204；Worker 返回 202 持久变更操作；完成后停止该插件的新调用，保留实例与布局引用 |
+| `GET /api/plugin-changes/:operationId` | Worker 查询持久安装/更新/移除进度；未结束操作继续安排核对，不存在返回 404 |
 | `GET /api/plugins/:id/configuration` | JSON Schema/UI 提示与是否声明认证，供通用界面使用 |
 | `GET /api/instances` | 实例身份、名称和配置；不包含 privateState |
 | `POST /api/instances` | `{pluginId,name,config}`，由插件校验后创建 |
@@ -25,6 +26,12 @@
 | `GET /api/layout` | `{revision,nodes}`；nodes 为 null 表示按实例默认布局 |
 | `PUT /api/layout` | `{expectedRevision,nodes}`；冲突返回 409，节点合同见 library 类型 |
 | `GET /api/library?path=...` | 导出视图中的有序浅目录；文件元数据在实际 stat/读取时准备 |
+| `GET /api/mounts` | 正式桌面启动器装配的本机挂载状态；开发服务和 Worker 不提供 |
+| `POST /api/mounts` | `{name?,mountPoint,source}`；source 为 `{kind:"local"}` 或 `{kind:"remote",url,username,password}`。结果必须查看 state，错误状态不表示挂载成功 |
+| `DELETE /api/mounts/:id` | 正常卸载指定挂载；占用失败保留可操作状态 |
+| `POST /api/desktop/quit` | 仅正式桌面后台，正常卸载后返回 202 `{stopping:true}`，随后结束在途读取并退出；挂载占用返回 409 并继续运行 |
+
+Worker 的 `PluginChange` 包含 `operationId/kind/pluginId/status/createdAt/updatedAt` 和可选安装结果/错误；status 为 queued、uploading、deploying、verifying、completed 或 failed。202 仅表示受理，页面持续查询到终态；刷新页面可用保存的 operationId 恢复。发布凭据缺失返回 503，有未结束变更返回 409。执行与恢复边界见[Worker 指南](worker.md)。
 
 结构错误与坏 JSON 返回 400；配置/认证语义错误返回 422 及插件字段错误。来源失败保留结构化 `sourceError`，包括需认证、限流或临时错误。配置及认证的公开结果过滤 `nextPrivateState`，管理响应统一 `Cache-Control: no-store`。认证绑定、取消/过期和恢复语义见[验证记录](verification/p1-authentication.md)。真实来源的支持范围查[台账](verification.md)，尚未交付的部署和挂载不返回伪成功。
 
