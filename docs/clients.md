@@ -36,7 +36,7 @@ OpenList 必须能访问填写的地址。另一台机器或容器中的 `127.0.
 
 Windows 桌面程序的“本机挂载”使用随包 rclone 和系统 WinFsp，支持 HTTP/HTTPS DAV；挂载发生在运行该后台的电脑。通过 Windows 浏览器打开 WSL 管理页，不会把 WSL 的挂载变成 Windows 盘符。
 
-资源管理器“映射网络驱动器”使用另一套 Windows WebDAV 客户端。它需要现有 WebClient 服务运行；Windows 默认 `BasicAuthLevel=1` 仅允许 HTTPS 的 Basic 认证，因此不能把本机 HTTP DAV 直接映射视为默认可用。优先使用上述桌面挂载；原生映射应使用可达且证书受信任的 HTTPS DAV、读取凭据和已准备目录。本轮测试 VM 的 HTTP 原生映射未通过，rclone/WinFsp 实际盘符读取与卸载通过，见[Windows记录](verification/p2-windows-mount.md)。[Microsoft 原生客户端说明](https://learn.microsoft.com/en-us/iis/publish/using-webdav/using-the-webdav-redirector)
+资源管理器“映射网络驱动器”使用另一套 Windows WebDAV 客户端。它需要现有 WebClient 服务运行；Windows 默认 `BasicAuthLevel=1` 仅允许 HTTPS 的 Basic 认证，因此不能把本机 HTTP DAV 直接映射视为默认可用。本机 HTTP 优先使用上述桌面挂载；原生映射使用可达且证书受信任的 HTTPS DAV、读取凭据和已准备目录。测试 VM 已在保持默认认证策略时成功映射现有 HTTPS Worker 的 sample 子目录、列出文件并正常断开；本机 rclone/WinFsp 的实际读取与卸载也通过，见[Windows记录](verification/p2-windows-mount.md)。原生映射后的播放仍未验。[Microsoft 原生客户端说明](https://learn.microsoft.com/en-us/iis/publish/using-webdav/using-the-webdav-redirector)
 
 ## 其他播放器
 

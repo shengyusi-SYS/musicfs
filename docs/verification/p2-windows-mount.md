@@ -36,7 +36,7 @@ WinFsp 安装器来自[官方稳定发布](https://github.com/winfsp/winfsp/rele
 
 去敏机器结果及临时 PowerShell 探针保存在执行机器的 `/tmp/musicfs-windows-mount-diagnostic/`。凭据仅由测试 VM 内部读取到请求内存，不写入记录或 Git。
 
-## 资源管理器原生 WebDAV：仍未闭合
+## 资源管理器原生 WebDAV：HTTPS 目录映射通过，HTTP 未通过
 
 这条路径使用 Windows WebDAV redirector，与 MusicFS 管理的 rclone/WinFsp 挂载独立，不能用缺少 WinFsp 解释。
 
@@ -44,9 +44,22 @@ WinFsp 安装器来自[官方稳定发布](https://github.com/winfsp/winfsp/rele
 
 最后只补两项判别：Windows [`DavGetHTTPFromUNCPath`](https://learn.microsoft.com/en-us/windows/win32/api/davclnt/nf-davclnt-davgethttpfromuncpath)返回 0，转换结果精确等于当前 VM 的 DAV 地址；明确指定已注册的 `Web Client Network` 提供程序后，映射返回 50（不支持该请求）。同一端点无凭据 HEAD 返回 401 和 Basic 挑战，说明不是把管理页地址或错误的 UNC 转换当作 DAV。
 
-机器现有 `BasicAuthLevel=1`，按 [Microsoft 文档](https://learn.microsoft.com/en-us/iis/publish/using-webdav/using-the-webdav-redirector#webdav-redirector-registry-settings)只允许 HTTPS 的 Basic 认证；当前 HTTP fixture 不满足该默认认证条件。本轮没有修改此全局策略，1203/50 也不足以把全部失败唯一归因于这一设置。资源管理器直接映射至少需要现有 WebClient 服务运行、可达且使用受信任证书的 HTTPS DAV、正确读取凭据及已准备的目录；这些是使用条件，不是本轮已证明的 HTTPS 成功结果。
+机器现有 `BasicAuthLevel=1`，按 [Microsoft 文档](https://learn.microsoft.com/en-us/iis/publish/using-webdav/using-the-webdav-redirector#webdav-redirector-registry-settings)只允许 HTTPS 的 Basic 认证；当前 HTTP fixture 不满足该默认认证条件。本轮没有修改此全局策略，1203/50 也不足以把全部失败唯一归因于这一设置。
 
-当前确定可用的替代是上节已验证的 MusicFS rclone/WinFsp 本机挂载，可读取 HTTP DAV，得到同样的 Windows 盘符与文件读取效果。没有为了原生映射同一内容而放宽全局认证策略或引入证书框架；没有宣称资源管理器映射成功，也没有截图或播放器验收。
+用户随后授权继续最小对照。复用已有 HTTPS Worker、已发布的 `Cloud acceptance/First` sample 子目录，保持同一 Windows API、SSH 用户上下文和 `CONNECT_TEMPORARY=4`；该参数是 [WNetAddConnection2 官方支持的选项](https://learn.microsoft.com/en-us/windows/win32/api/winnetwk/nf-winnetwk-wnetaddconnection2w)。只执行一次原生目录映射与正常断开：
+
+| HTTPS 对照 | 真实结果 |
+|---|---|
+| 同一 VM 对 sample 目录的认证 HEAD | 204，证实目录、凭据与 HTTPS 可达；没有音频响应体 |
+| Windows HTTP→UNC 转换 | 返回 0 |
+| `WNetAddConnection2` 自动提供程序映射 | 返回 0，操作成功 |
+| 从原生映射盘符列目录 | 唯一文件为 `440 Hz.wav`，没有读取文件内容 |
+| `WNetCancelConnection2` 正常断开 | 返回 0 |
+| 系统与云端配置 | WebClient Running，`BasicAuthLevel=1` 保持；无防火墙、证书、云端发布或资源变更 |
+
+这条对照证明当前 VM 的原生 API 和 SSH 执行上下文本身可用，受信任 HTTPS DAV 的目录映射已实际通过。HTTPS 对照同时改变了协议和目标主机，因此不把本机回环或认证策略单独宣称为 1203/50 的唯一根因。本机 HTTP 继续使用上节已验证的 rclone/WinFsp 路径；原生映射使用可达且证书受信任的 HTTPS DAV、读取凭据和已准备目录。
+
+本次只用了两个管理 GET 确认现有 sample/布局、一个 sample 目录 HEAD 及一次原生映射的有限 DAV 交互；没有刷新来源、读取音频、安装插件或创建资源。临时 DAV 凭据文件在 WSL 与 VM 均已删除，去敏结果为 `/tmp/musicfs-windows-mount-diagnostic/result-https-map-once.json`。没有截图、播放或拖动验收，也没有为了原生映射本机 HTTP 放宽全局认证策略或引入证书框架。
 
 ## 宿主边界
 
@@ -61,4 +74,4 @@ flowchart LR
   Explorer[Windows 资源管理器] -->|WebDAV redirector| DAV[可达的 MusicFS DAV]
 ```
 
-未覆盖 Windows 忙卸载、崩溃恢复、默认图形启动、远程 rclone 挂载、资源管理器成功映射或播放/拖动；本轮没有音乐平台请求、重复扫码、压力测试或新的云端操作。
+未覆盖 Windows 忙卸载、崩溃恢复、默认图形启动、远程 rclone 挂载、原生映射后的音频读取或播放/拖动；本轮没有音乐平台请求、重复扫码、压力测试或新的云端部署。

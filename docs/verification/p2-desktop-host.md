@@ -1,6 +1,6 @@
 # 桌面启动、后台与挂载接线
 
-2026-10-21补充：[Windows VM实际挂载记录](p2-windows-mount.md)已证明Windows程序/sample、本机盘符读取及正常卸载；修复了裸盘符被规范化为相对目录，以及Bun读取驱动器根路径的问题。以下2026-10-20内容保留原检查点边界；Windows默认图形启动、忙路径与恢复仍未验，资源管理器原生WebDAV另行跟进。
+2026-10-21补充：[Windows VM实际挂载记录](p2-windows-mount.md)已证明Windows程序/sample、本机盘符读取及正常卸载；修复了裸盘符被规范化为相对目录，以及Bun读取驱动器根路径的问题。已有HTTPS Worker的sample另经Windows原生目录映射与正常断开通过，本机HTTP原生映射未通过，认证策略未改。以下2026-10-20内容保留原检查点边界；Windows默认图形启动、忙路径与恢复仍未验。
 
 日期：2026-10-20。记录 FR10—FR12、FR14、FR16 的桌面实现和限定证据；完整需求仍以[统一方案](../../outputs/musicfs-requirements-and-technical-design.md)为准。操作说明与流程图见[桌面说明](../desktop.md)。本记录不宣告四个目标系统或发布验收完成。
 

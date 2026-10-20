@@ -98,4 +98,4 @@ bun src/desktop.ts --resources dist/desktop/linux-x64/resources
 
 实际浏览器验证了远程表单、两种挂载状态、失败保留表单，以及退出流程：真实打开文件时拒绝正常卸载并保持后台，关闭句柄后可正常退出。真实忙卸载还发现rclone错误含fusermount名称，原映射误报缺依赖；已优先识别busy，并让页面按具体错误显示而非把所有409都提示重新载入。最终原生探针对此作实际回归。
 
-此前“缺少/dev/fuse”的判断来自受限环境视图；允许本地进程的宿主实际具备FUSE，已补做上述挂载。2026-10-21补做Windows VM的正式程序/sample旅程，修复盘符被改写及Bun根目录读取路径，实际WinFsp挂载、16,044字节读取与正常卸载通过；资源管理器原生WebDAV仍未闭合。默认图形打开、平台弹窗和Windows异常退出恢复未验，macOS仍只有交叉编译产物。限定证据见[Windows记录](verification/p2-windows-mount.md)、[桌面记录](verification/p2-desktop-host.md)和[总台账](verification.md)。
+此前“缺少/dev/fuse”的判断来自受限环境视图；允许本地进程的宿主实际具备FUSE，已补做上述挂载。2026-10-21补做Windows VM的正式程序/sample旅程，修复盘符被改写及Bun根目录读取路径，实际WinFsp挂载、16,044字节读取与正常卸载通过。另以已有HTTPS Worker的sample完成Windows原生目录映射和正常断开；本机HTTP原生映射仍未通过，保持默认认证策略。默认图形打开、平台弹窗和Windows异常退出恢复未验，macOS仍只有交叉编译产物。限定证据见[Windows记录](verification/p2-windows-mount.md)、[桌面记录](verification/p2-desktop-host.md)和[总台账](verification.md)。
