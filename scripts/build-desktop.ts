@@ -1,7 +1,10 @@
-import { chmod, cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { ZipReader, Uint8ArrayReader, Uint8ArrayWriter } from '@zip.js/zip.js/index-native.js';
+import { readPackage } from '../src/infrastructure/archives';
+import { createReleaseIdentity } from './helpers/release-identity';
+import { writeBundleLicenses } from './helpers/bundle-licenses';
 
 const targets = {
   'linux-x64': { compile: 'bun-linux-x64', rclone: 'linux-amd64', executable: 'musicfs' },
@@ -25,6 +28,10 @@ async function run(script: string) {
 if (!values['skip-web']) await run('build:web');
 if (!await Bun.file('dist/web/index.html').exists()) throw new Error('Build the shared WebUI before desktop packaging');
 await run('build:sample'); await run('build:qq'); await run('build:netease');
+const pluginInputs = [['org.musicfs.sample', 'dist/plugins/org.musicfs.sample.zip'], ['org.musicfs.qq', 'dist/plugins/org.musicfs.qq.zip'],
+  ['org.musicfs.netease', 'dist/netease/org.musicfs.netease.zip']] as const;
+const identity = await createReleaseIdentity(await Promise.all(pluginInputs.map(async ([, path]) =>
+  readPackage(new Uint8Array(await Bun.file(path).arrayBuffer()), 'desktop', new AbortController().signal))), 'dist/web');
 
 async function fetchBytes(url: string): Promise<Uint8Array> {
   const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
@@ -92,24 +99,24 @@ for (const selectedTarget of selected as Target[]) {
   await mkdir(dirname(executable), { recursive: true }); await mkdir(resources, { recursive: true });
   await cp('dist/web', join(resources, 'web'), { recursive: true });
   await rclone(target.rclone, resources);
-  const result = await Bun.build({ entrypoints: ['src/desktop.ts'], minify: true, define: { MUSICFS_COMPILED: 'true' },
+  const result = await Bun.build({ entrypoints: ['src/desktop.ts'], minify: true, metafile: true, define: { MUSICFS_COMPILED: 'true' },
     compile: { target: target.compile, outfile: executable, ...(selectedTarget === 'windows-x64' ? { windows: { hideConsole: true } } : {}) } });
   if (!result.success) throw new AggregateError(result.logs, `Desktop compilation failed for ${selectedTarget}`);
   if (macos) await writeFile(join(releaseDirectory, 'MusicFS.app/Contents/Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>CFBundleExecutable</key><string>MusicFS</string><key>CFBundleIdentifier</key><string>org.musicfs.desktop</string><key>CFBundleName</key><string>MusicFS</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.1.0</string><key>LSUIElement</key><true/></dict></plist>\n`);
+<plist version="1.0"><dict><key>CFBundleExecutable</key><string>MusicFS</string><key>CFBundleIdentifier</key><string>org.musicfs.desktop</string><key>CFBundleName</key><string>MusicFS</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>${identity.version.split('-')[0]}</string><key>LSUIElement</key><true/></dict></plist>\n`);
   const plugins = join(releaseDirectory, 'plugins'); await mkdir(plugins, { recursive: true });
-  for (const [id, source] of [['org.musicfs.sample', 'dist/plugins/org.musicfs.sample.zip'], ['org.musicfs.qq', 'dist/plugins/org.musicfs.qq.zip'], ['org.musicfs.netease', 'dist/netease/org.musicfs.netease.zip']]) await cp(source!, join(plugins, `${id}.zip`));
-  await cp('docs/desktop.md', join(releaseDirectory, 'DESKTOP.md'));
+  for (const [id, source] of pluginInputs) await cp(source, join(plugins, `${id}.zip`));
+  await cp('docs/user-guide.md', join(releaseDirectory, 'README.md'));
+  if (await Bun.file('LICENSE').exists()) await cp('LICENSE', join(releaseDirectory, 'LICENSE'));
   await cp('package.json', join(releaseDirectory, 'dependencies.json')); await cp('bun.lock', join(releaseDirectory, 'bun.lock'));
-  const licenses = join(releaseDirectory, 'licenses'); await mkdir(licenses, { recursive: true });
-  // Keep bundled JS dependency licenses, including transitives, beside the executable.
-  for (const name of await readdir('node_modules', { recursive: true })) {
-    if (!/(^|\/)(license|licence|copying)(\.[^/]*)?$/i.test(name)) continue;
-    const source = join('node_modules', name);
-    if ((await Bun.file(source).exists())) { const destination = join(licenses, name); await mkdir(dirname(destination), { recursive: true }); await cp(source, destination); }
-  }
-  await writeFile(join(releaseDirectory, 'release.json'), JSON.stringify({ target: selectedTarget, version: '0.1.0-dev.0', rclone: rcloneVersion,
+  const licenses = join(releaseDirectory, 'licenses');
+  await writeBundleLicenses(result.metafile, join(licenses, 'core'));
+  await cp('dist/web/THIRD_PARTY_LICENSES.md', join(licenses, 'WebUI.md'));
+  await cp(`third-party/bun-${Bun.version}-LICENSE.md`, join(licenses, `bun-${Bun.version}-LICENSE.md`));
+  await cp('third-party/README.md', join(licenses, 'README.md'));
+  await writeFile(join(releaseDirectory, 'release.json'), JSON.stringify({ target: selectedTarget, version: identity.version, rclone: rcloneVersion,
+    identity, bunVersion: Bun.version, entrypoint: 'src/desktop.ts',
     executable: executable.slice(releaseDirectory.length + 1), generatedAt: new Date().toISOString(), targetRuntimeVerified: false,
     executableSha256: new Bun.CryptoHasher('sha256').update(await Bun.file(executable).arrayBuffer()).digest('hex') }, null, 2) + '\n');
   console.log(`Desktop artifact: ${releaseDirectory} (target runtime and system mounting require separate verification)`);

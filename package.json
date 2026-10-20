@@ -30,7 +30,9 @@
     "probe:worker:netease": "bun run scripts/probe-worker-netease.ts",
     "build:worker": "bun run scripts/build-worker.ts",
     "probe:worker:service": "bun run scripts/probe-worker-service.ts",
-    "build:desktop": "bun run scripts/build-desktop.ts"
+    "build:desktop": "bun run scripts/build-desktop.ts",
+    "build:author-kit": "bun run scripts/build-author-kit.ts",
+    "package:release": "bun run scripts/package-release.ts"
   },
   "dependencies": {
     "@ant-design/icons": "6.3.4",

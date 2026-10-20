@@ -4,11 +4,17 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { requestReady } from './helpers/refresh-http';
-import type { PluginInspection } from '../src/contracts/management';
+import type { ContentSources, PluginInspection, Result, SourceInstance } from '../src/contracts/management';
 
 // Runs a generated native release, rather than src/desktop.ts or the dev service.
-const { values } = parseArgs({ args: Bun.argv.slice(2), options: { directory: { type: 'string' }, 'keep-running': { type: 'boolean' }, mount: { type: 'boolean' } } });
+const { values } = parseArgs({ args: Bun.argv.slice(2), options: { directory: { type: 'string' }, 'keep-running': { type: 'boolean' }, mount: { type: 'boolean' },
+  'plugin-archive': { type: 'string' }, 'plugin-id': { type: 'string' } } });
+assert.equal(values['plugin-archive'] !== undefined, values['plugin-id'] !== undefined, 'Provide --plugin-archive and --plugin-id together');
+const authorPlugin = values['plugin-archive'] !== undefined;
+if (authorPlugin) assert(values['plugin-archive']!.trim() && values['plugin-id']!.trim(), 'Provide a nonempty plugin archive path and plugin ID');
 const release = resolve(values.directory ?? 'dist/desktop/linux-x64');
+const pluginArchive = resolve(values['plugin-archive'] ?? join(release, 'plugins/org.musicfs.sample.zip'));
+const pluginId = values['plugin-id'] ?? 'org.musicfs.sample';
 const metadata = await Bun.file(join(release, 'release.json')).json() as { target: string; executable: string };
 const native = `${process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : process.platform}-${process.arch}`;
 assert.equal(metadata.target, native, 'Run each release probe on its native target system');
@@ -32,17 +38,36 @@ try {
   const page = await fetch(origin); assert.equal(page.status, 200); assert((await page.text()).includes('<div id="root">'));
   const initial = await fetch(origin + '/api/plugins', { headers: admin }); assert.deepEqual(await initial.json(), []);
   const inspection = await fetch(origin + '/api/plugins/inspect', { method: 'POST', headers: admin,
-    body: await Bun.file(join(release, 'plugins/org.musicfs.sample.zip')).arrayBuffer() });
+    body: await Bun.file(pluginArchive).arrayBuffer() });
   assert.equal(inspection.status, 200);
   const preview = await inspection.json() as PluginInspection;
-  assert.equal(preview.manifest.id, 'org.musicfs.sample');
+  assert.equal(preview.manifest.id, pluginId);
   assert.deepEqual(preview.compatibility, { host: 'desktop', apiVersion: '0.1.5', apiCompatible: true, hostCompatible: true });
   assert.deepEqual(await (await fetch(origin + '/api/plugins', { headers: admin })).json(), []);
-  const installed = await fetch(origin + '/api/plugins', { method: 'POST', headers: admin, body: await Bun.file(join(release, 'plugins/org.musicfs.sample.zip')).arrayBuffer() });
+  const installed = await fetch(origin + '/api/plugins', { method: 'POST', headers: admin, body: await Bun.file(pluginArchive).arrayBuffer() });
   assert.equal(installed.status, 201); await installed.body?.cancel();
   const created = await fetch(origin + '/api/instances', { method: 'POST', headers: json,
-    body: JSON.stringify({ pluginId: 'org.musicfs.sample', name: '发行物测试', config: { label: '已知音频' } }) });
-  assert.equal(created.status, 201); await created.body?.cancel();
+    body: JSON.stringify({ pluginId, name: '发行物测试', config: { label: '已知音频' } }) });
+  assert.equal(created.status, 201);
+  if (authorPlugin) {
+    const first = await created.json() as Result<SourceInstance>; assert(first.ok);
+    const secondResponse = await fetch(origin + '/api/instances', { method: 'POST', headers: json,
+      body: JSON.stringify({ pluginId, name: '作者第二实例', config: { label: '独立音频' } }) });
+    assert.equal(secondResponse.status, 201); const second = await secondResponse.json() as Result<SourceInstance>; assert(second.ok);
+    assert.notEqual(first.value.id, second.value.id);
+    const roots = async (id: string) => {
+      const response = await requestReady((url, init) => fetch(url, init), origin + `/api/instances/${encodeURIComponent(id)}/roots`, { headers: admin });
+      assert.equal(response.status, 200); return (await response.json() as ContentSources).map(root => root.name);
+    };
+    const configure = async (id: string, label: string) => {
+      const response = await fetch(origin + `/api/instances/${encodeURIComponent(id)}/config`, { method: 'PUT', headers: json, body: JSON.stringify({ config: { label } }) });
+      assert.equal(response.status, 200); const result = await response.json() as Result<SourceInstance['config']>; assert(result.ok);
+    };
+    assert.deepEqual(await roots(first.value.id), ['已知音频']); assert.deepEqual(await roots(second.value.id), ['独立音频']);
+    await configure(first.value.id, '仅修改第一实例');
+    assert.deepEqual(await roots(first.value.id), ['仅修改第一实例']); assert.deepEqual(await roots(second.value.id), ['独立音频']);
+    await configure(first.value.id, '已知音频'); assert.deepEqual(await roots(first.value.id), ['已知音频']);
+  } else await created.body?.cancel();
   const file = origin + '/dav/' + ['发行物测试', '已知音频', '440 Hz.wav'].map(encodeURIComponent).join('/');
   const dav = { Authorization: 'Basic ' + btoa(`${credentials.username}:${credentials.password}`) };
   const head = await requestReady((url, init) => fetch(url, init), file, { method: 'HEAD', headers: dav }, admin);
@@ -99,6 +124,7 @@ try {
   }
   console.log(JSON.stringify({ target: native, nativeRelease: true, separateBackground: true, sharedWebUI: true,
     compatibilityInspection: true, externalPluginInstalled: true, davHead: 16044, exactRange: 'RIFF', repeatedLaunchReused: true,
+    ...(authorPlugin ? { authorPluginId: pluginId, independentInstances: 2 } : {}),
     mountsEndpoint: true, dependencyFailureTested, systemMountTested, ...(systemMountTested ? { mountedBytes: 16044, mountedRanges: 5 } : {}),
     ...(values['keep-running'] ? { origin, keptForBrowserVerification: true } : {}) }));
 } finally {

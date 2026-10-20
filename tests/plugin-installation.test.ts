@@ -90,7 +90,7 @@ describe('package and compatibility checks', () => {
     const decoded = unzipSync(archive);
     const recompressed = zipSync(decoded);
     expect((await readPackage(recompressed, 'desktop', signal())).manifest.id).toBe(manifest.id);
-    expect(Object.keys(decoded).sort()).toEqual(['LICENSE.txt', 'config.schema.json', 'index.mjs', 'manifest.json']);
+    expect(Object.keys(decoded).sort()).toEqual(['LICENSE.txt', 'THIRD_PARTY_LICENSE.txt', 'config.schema.json', 'index.mjs', 'manifest.json']);
   });
 
   test('rejects undeclared files, traversal and actual decompression budget overflow', async () => {

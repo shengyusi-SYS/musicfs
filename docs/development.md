@@ -28,6 +28,8 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun scripts/probe-worker-refresh.ts --cpu-profile /tmp/musicfs-dav-worker.cpuprofile` | 同一正式本地链路准备后采样一次DAV allprop的用户isolate，保存可由DevTools打开的V8 profile；不是云端计费CPU |
 | `bun scripts/probe-dav-resources.ts` | 已准备描述的纯XML耗时/CPU/内存增量，1/100/4,657文件；不是云端CPU或峰值内存验收 |
 | `bun run build:desktop -- --all` | 构建四个桌面目标，含共用页面、校验后的 rclone 和三个插件 ZIP；具体参数见[桌面说明](desktop.md) |
+| `bun run build:author-kit` | 生成公开类型/最小插件/构建器/文档及独立锁文件，不带核心、页面或来源SDK |
+| `bun run package:release` | 从已有正式构建生成四目标/Worker/作者ZIP、独立插件、统一清单与SHA256SUMS；拒绝混用源码/页面/插件版本 |
 | `bun scripts/probe-desktop-product.ts --mount` | 在原生Linux运行实际发行物、外置sample、后台复用及真实FUSE全文/偏移/忙卸载/退出；不用源码服务代替发行物 |
 | `bun run build:web` | 构建共用 React/Vite 页面至 dist/web |
 | `bun run build:auth-fixture` | 开发专用的“非真实音源”认证测试包，生成至 dist/p0/authentication-fixture.zip |
@@ -43,6 +45,19 @@ bun install --frozen-lockfile --ignore-scripts
 `dev:service` 需要开发者显式设置 `MUSICFS_ADMIN_TOKEN` 和 `MUSICFS_DAV_PASSWORD`，开发 DAV 用户名为 `musicfs`；不能把测试凭据当作发行默认值。构建前端后可直接打开 8787 服务，或用 Vite 开发；页面手动输入管理令牌，也可由启动入口经 fragment 传入并立即移除。[正式桌面启动器](desktop.md)另行生成私有凭据、持有后台并管理挂载；开发服务不装配本机挂载或退出接口。
 
 最小/QQ 包分别输出到 `dist/plugins/org.musicfs.sample.zip` 和 `dist/plugins/org.musicfs.qq.zip`，网易云输出到 `dist/netease/org.musicfs.netease.zip`；正式宿主输出到 `dist/desktop/` 和 `dist/worker/`。编译基础探针输出到 `dist/p0/`。这些目录不进入版本控制。插件生成的校验代码在构建时产生；其 `.d.mts` 类型声明随源码保存。
+
+统一发行在源码冻结后顺序执行，避免探针覆盖正式Worker目录：
+
+```sh
+bun run build:desktop -- --all
+bun run build:worker dist/plugins/org.musicfs.sample.zip dist/plugins/org.musicfs.qq.zip dist/netease/org.musicfs.netease.zip
+bun run build:author-kit
+bun run package:release
+```
+
+`build:desktop`已构建共用页面及三个插件；Worker命令必须显式选择这三个插件，空参数仍表示空注册表。`package:release`只打包既有产物，不偷偷重建；各包写入同一源码内容摘要、页面摘要与插件修订，发生输入变更则先重建。结果位于`dist/releases/`，先在该目录执行`sha256sum -c SHA256SUMS`，再解压对应目标验收。构建身份保留基线Git提交与dirty标志，并以实际内容摘要判断输入是否一致，不把工作区构建描述成干净提交构建。
+
+作者旅程见[指南](plugin-authoring.md)。在仓库外构建后，可运行`bun scripts/probe-desktop-product.ts --plugin-archive /绝对路径/自有插件.zip --plugin-id 自有插件ID`验证与最小示例相同合同的已知音频及双实例；此参数只用于该验收样本，不适用于任意插件音频。系统解压后的产品验收增加`--directory /绝对路径/解压目录`。探针不重建应用，本轮结果见[发行记录](verification/p4-release-artifacts.md)。
 
 各正式探针正常结束时清理临时数据库及安装文件。默认仅使用本地测试状态，不要求 Cloudflare 账号或音乐账号；QQ 探针的可选真实会话模式例外，见下文。Worker 探针固定兼容日期和显式模块清单，不执行线上部署，也不证明免费配额适用。`check` 中的 HTTP 测试也需回环端口；淘汰的 Nephele/Node 桥接诊断已归档到基线提交 `bfee998`，参见 [ADR 0004](adr/0004-shared-fetch-readonly-dav.md)。
 
