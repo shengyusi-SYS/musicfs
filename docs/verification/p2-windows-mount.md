@@ -98,6 +98,14 @@ flowchart LR
 
 当前 SSH 上下文对 CurrentUser Root 的 .NET 和 certutil 写入均返回 ERROR_NOT_SUPPORTED；同证书写入 LocalMachine Root 成功，并被 Windows 原生客户端接受。这不推导所有交互用户上下文都不能使用 CurrentUser 信任。产品收敛为一次系统连接设置，不让用户选择证书存储技术细节，也不引入本地 CA 或代理。
 
+## dev.3：原生映射文件上限与恢复
+
+2026-10-21，正式 App 设置入口增加 `FileSizeLimitInBytes=4294967295`，保留原 DWORD 或原先未配置的状态；提供独立恢复入口。提高/恢复仅在需要时重启正在运行的 WebClient，不修改 BasicAuthLevel、服务启动类型或其他设置；退出 App 不自动恢复。Windows 配置提取到 `windows-webdav.ts`，HTTPS 模块继续只承担证书与监听生命周期。
+
+构建输入为干净提交 `4fe2297f8e2fee12a55c52429671766653bc489b`。本轮定向检查 9 项/64 次断言通过，覆盖原值缺失/自定义值/预先已提高上限、取消与未完成设置的重试、非 Windows 边界、TLS 和启动器。三组类型检查通过；依赖图 204 模块/778 依赖无违规。
+
+实机验收仍待连接恢复，未记为通过。WSL 到既有 VM `192.0.2.74` 的邻居解析为 FAILED/INCOMPLETE，SSH 未进入认证阶段；用户确认 IP 未变。只读诊断确认真实 WSL 网卡与同网段路由存在，尚不能在 VM 网络链路和 WSL 网络过滤之间定因，没有重置网络或调用 Windows 宿主。已准备不访问音乐平台的临时小插件，以流式生成的 64MiB WAV 验证提高上限后的原生读取与原值恢复；该 fixture 不进入发行包。
+
 测试脚本的 PowerShell `Start-Process -Wait` 会等待后代后台，最初使探针停在启动阶段；已改为只等待启动器进程退出，并在同一 SSH 会话内完成验收和正常退出。辅助转换函数的 DLL 入口在此系统不可用，最终直接使用标准 `\\127.0.0.1@SSL@端口\DavWWWRoot\dav\Sample` 路径。两项均属验收工具问题，没有增加产品等待重试或更改 WebDAV 协议。
 
 本轮没有压力测试、真实来源刷新或新的云端资源。未增加播放/拖动、macOS 原生运行或普通用户交互桌面的 UAC 点击验收。当前 Windows 原生客户端默认 50,000,000 字节传输上限仍保留；大文件使用 App 管理的 WinFsp 路径。去敏回执位于本机忽略目录 `.musicfs/windows-mount-dev2/`。
