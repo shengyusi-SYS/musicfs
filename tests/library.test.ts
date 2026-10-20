@@ -180,13 +180,16 @@ test('configuration changes invalidate in-flight refresh publication', async () 
 });
 
 test('portable duplicate names remain deterministic after reorder and fit UTF-8 limits', async () => {
-  const input = [{ id: 'a', name: 'CON' }, { id: 'b', name: 'CON' }, { id: 'c', name: '汉'.repeat(200) + '.flac' }];
+  const input = [{ id: 'a', name: 'CON' }, { id: 'b', name: 'CON' }, { id: 'c', name: '汉'.repeat(200) + '.flac' },
+    { id: 'case-a', name: 'Case.FLAC' }, { id: 'case-b', name: 'case.flac' },
+    { id: 'accent-a', name: 'e\u0301.flac' }, { id: 'accent-b', name: 'é.flac' }];
   const first = await nameEntries(input); const second = await nameEntries([...input].reverse());
   for (const item of first) {
     expect(new TextEncoder().encode(item.pathName).byteLength).toBeLessThanOrEqual(255);
     expect(second.find(entry => entry.id === item.id)?.pathName).toBe(item.pathName);
     expect(item.pathName).not.toBe('CON');
   }
+  expect(new Set(first.map(entry => entry.pathName.normalize('NFC').toLowerCase())).size).toBe(input.length);
   expect(first.find(entry => entry.id === 'c')?.pathName.endsWith('.flac')).toBe(true);
 });
 

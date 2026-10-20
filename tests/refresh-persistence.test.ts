@@ -12,6 +12,7 @@ import type { LibraryStore, Snapshot, SnapshotKey } from '../src/core/library/ty
 import type { RefreshRecord, RefreshStore, SnapshotHeader } from '../src/core/library/refresh-types';
 import { createD1Store } from '../src/infrastructure/persistence/d1';
 import { openSqlite } from '../src/infrastructure/persistence/sqlite';
+import { snapshotEntriesSQL, type SnapshotEntryRow } from '../src/infrastructure/persistence/refresh-sql';
 
 type Store = InstallationStore & InstanceStore & LibraryStore & RefreshStore;
 const cleanup: (() => Promise<void>)[] = [];
@@ -62,6 +63,31 @@ async function setup(adapter: 'SQLite' | 'D1') {
 }
 
 for (const adapter of ['SQLite', 'D1'] as const) {
+  test(`${adapter}: snapshot reads carry one header and retain ordered, empty and legacy directories`, async () => {
+    const fixture = await setup(adapter); const { stamp, rows } = fixture;
+    const old: Snapshot = { stamp, id: 'legacy', kind: 'directory', completedAt: date, items: [file('legacy')] };
+    await rows('INSERT INTO directory_snapshots (instance_id, kind, ref, request_id, document) VALUES (?, ?, ?, ?, ?)',
+      stamp.id, key.kind, key.ref, 'legacy', JSON.stringify(old));
+    expect(await fixture.store.snapshot(stamp.id, key)).toEqual({ value: old, error: null });
+    const items = Array.from({ length: 96 }, (_, index) => file(`entry-${index}`));
+    const cases: [string, Entry[]][] = [['populated', items], ['empty', []]];
+    for (const [id, entries] of cases) {
+      await fixture.store.createRefresh(record(stamp, id), true);
+      const claimed = (await fixture.store.claimRefresh(id, id, now, now + 100))!;
+      const published = header(claimed, id);
+      expect(await fixture.store.commitRefresh(claimed, next(claimed, { status: 'completed', task: null }), { items: entries, publish: published })).toBe('committed');
+      expect(await fixture.store.snapshot(stamp.id, key)).toEqual({ value: { ...published, kind: 'directory', items: entries }, error: null });
+      const selected = await rows<SnapshotEntryRow>(snapshotEntriesSQL, stamp.id, key.kind, key.ref);
+      expect(selected).toHaveLength(Math.max(1, entries.length));
+      expect(selected.filter(row => row.document !== null)).toHaveLength(1);
+      expect(JSON.parse(selected[0]!.document!)).toEqual(published);
+      if (entries.length > 1) {
+        const repeated = selected.map(row => ({ ...row, document: selected[0]!.document }));
+        expect(Buffer.byteLength(JSON.stringify(selected))).toBeLessThan(Buffer.byteLength(JSON.stringify(repeated)));
+      }
+    }
+  });
+
   test(`${adapter}: paged entries resume without partial publication, duplicate identities or cyclic cursors`, async () => {
     const fixture = await setup(adapter); const { stamp, rows } = fixture;
     const old: Snapshot = { stamp, id: 'old', kind: 'directory', completedAt: date, statistics: { exported: 1 }, items: [file('old')] };

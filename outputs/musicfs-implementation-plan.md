@@ -28,7 +28,7 @@
 
 QQ续期、剩余facade取消和必要生命周期沿用[ADR0005](../docs/adr/0005-pinned-qq-sdk-read-adapter.md)。真实网易云42页驱动了持久续步：正式service/UI、SQLite/D1共同SQL和跨请求/重启已验，见[分页记录](../docs/verification/p2-durable-refresh.md)。普通缓存缺失复用当前任务，主动刷新可替换旧任务，不建通用队列/仓储框架。API0.1.3的完整Entry.info已随现有分页暂存/发布，DAV按来源批量检查；QQ复用真实CDN范围探测，45次请求护栏和小页避免无界工作，不能拿size_*提示伪造。正式D1的4,158文件allprop为15条SQL、0来源stat/外部请求，真实网易云35/QQ2文件描述已验，见[目录记录](../docs/verification/p2-listing-metadata.md)。OpenList v4.2.7/独立mpv的双来源本地MP3链路现已通过，包含冷503→共用页面准备→重试、实际解码/双向seek与客户端缓存刷新，见[客户端记录](../docs/verification/p2-clients.md)。[插件schema v1→v2整体激活](../docs/verification/p2-plugin-migration.md)已完成本地切片：sources准备候选，application协调，两驱动共同SQL整体切换安装与全部实例；正式桌面后台重启恢复、旧DAV隔离及Worker精确新调用接棒通过。
 
-[API0.1.5按需续期](../docs/verification/p2-session-lifecycle.md)已有SQLite/D1协调、失败保存及QQ实际安装包的SDK轮换证据；原开发两个QQ实例已整体迁移并保留账号，网易云有效Cookie恢复通过。网易云固定SDK不支持二维码Cookie的login/refresh，不做无效定时刷新。两示例认证已简化为凭据就绪即完成、资料按内容需要补齐，正式管理入口及QQ实际workerd包通过。下一出口处理Worker剩余CPU，QQ剩余认证Fetch取消独立推进；真实自然续期/失效重登、云端迁移传播及状态保留继续待验。大目录XML和真实免费额度独立测量，不新增元数据任务或缓存框架。
+[API0.1.5按需续期](../docs/verification/p2-session-lifecycle.md)已有SQLite/D1协调、失败保存及QQ实际安装包的SDK轮换证据；原开发两个QQ实例已整体迁移并保留账号，网易云有效Cookie恢复通过。网易云固定SDK不支持二维码Cookie的login/refresh，不做无效定时刷新。两示例认证已简化为凭据就绪即完成、资料按内容需要补齐，正式管理入口及QQ实际workerd包通过。[读取CPU定位](../docs/verification/p2-read-cpu.md)已有正式workerd采样和XML/命名/SQL重复工作减法；下一候选验证确定的文件描述派生量随现有分页保存，避免读时重做，不先增加独立任务或缓存平台。QQ剩余认证Fetch取消独立推进；真实自然续期/失效重登、云端迁移传播及状态保留继续待验。大目录XML和真实免费额度独立测量，不新增元数据任务或缓存框架。
 
 提交按完整行为组织：已验证基线、局部减法、一个宿主用例、一个来源切片；相关文档随行为提交。一次完整检查通过后，除非有新变更或失败，不重复所有探针。保持全部目标：真实云端、OpenList/普通播放器、四目标运行/挂载及完整发行仍分别验收。
 

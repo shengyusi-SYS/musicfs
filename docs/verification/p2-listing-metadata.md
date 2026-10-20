@@ -40,6 +40,8 @@ QQ 本地 workerd 命令沿用 `probe:worker:qq`，仅显式选择开发数据�
 
 决定：本轮继续 `@xmldom/xmldom`，不增加根依赖、手写转义器或 XML 缓存框架。先验普通客户端旅程与真实免费环境，再根据测量调整表示/序列化边界。官方建议见 [fast-xml-parser README](https://github.com/NaturalIntelligence/fast-xml-parser#before-using-this-library)。
 
+后续正式热点采样和同一xmldom内的请求投影/命名/SQL减法见[读取CPU记录](p2-read-cpu.md)；上面的数字保留本检查点，不将局部改善改写为免费云端已验。
+
 ## 未完成出口
 
 普通客户端不会推进管理任务。来源内容准备、503/重试提示、OpenList/播放器冷目录到播放/拖动的完整体验仍需实测；连接页已补现有准备入口说明，没有增加另一套任务 UI。

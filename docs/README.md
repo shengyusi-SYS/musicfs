@@ -12,6 +12,7 @@
 | [客户端真实验收](verification/p2-clients.md) | 两来源本地OpenList、MP3播放/双向seek及Linux mpv | 全部格式、跨平台、云端或主观听音 |
 | [插件结构升级](verification/p2-plugin-migration.md) | API0.1.4、整体候选激活、正式桌面重启与Worker新调用接棒 | 真实Cloudflare传播/配额或示例会话续期 |
 | [来源会话生命周期](verification/p2-session-lifecycle.md) | API0.1.5、实例按需续期、SQLite/D1协调、QQ固定SDK轮换与网易云失效判断 | 真实自然到期/完整重登、全部认证取消或云端已验 |
+| [大目录读取与CPU定位](verification/p2-read-cpu.md) | 正式workerd采样入口、XML/命名/SQL重复工作减法及限定结果 | 真实免费计划CPU、峰值内存或云端已验 |
 | [开发与验证入口](development.md) | 工程命令、实现入口和探针运行方法 | 完整用户版应用 |
 | [P0 插件基础验证](verification/p0-plugin-foundation.md) | 实际依赖、双宿主本地结果、状态及归档边界 | 真实云部署、音乐账号与全部目标系统 |
 | [P0 目录/DAV/管理验证](verification/p0-library-dav.md) | 快照、布局、HTTP 字节、workerd 与真实 rclone | 平台实播、系统挂载和全量交付 |

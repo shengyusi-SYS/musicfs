@@ -25,6 +25,7 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun run build:worker` | 组装正式 Worker core/薄入口/独立 registry、WebUI、模板及迁移；可附已有插件 ZIP 路径 |
 | `bun run probe:worker:service` | 实际正式入口在本地 workerd 的页面/API/DAV、D1重启、未配置发布凭据及坏插件启动拒绝 |
 | `bun scripts/probe-worker-refresh.ts` | 正式 Worker service 的 42 页独立 HTTP 推进、D1重启续接、每步查询数量及4,158文件allprop无逐项来源读取；使用本地来源样本，不证明云端免费 CPU |
+| `bun scripts/probe-worker-refresh.ts --cpu-profile /tmp/musicfs-dav-worker.cpuprofile` | 同一正式本地链路准备后采样一次DAV allprop的用户isolate，保存可由DevTools打开的V8 profile；不是云端计费CPU |
 | `bun scripts/probe-dav-resources.ts` | 已准备描述的纯XML耗时/CPU/内存增量，1/100/4,657文件；不是云端CPU或峰值内存验收 |
 | `bun run build:desktop -- --all` | 构建四个桌面目标，含共用页面、校验后的 rclone 和三个插件 ZIP；具体参数见[桌面说明](desktop.md) |
 | `bun scripts/probe-desktop-product.ts --mount` | 在原生Linux运行实际发行物、外置sample、后台复用及真实FUSE全文/偏移/忙卸载/退出；不用源码服务代替发行物 |

@@ -3,9 +3,12 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Log, LogLevel, Miniflare } from 'miniflare';
+import { parseArgs } from 'node:util';
+import { profileWorker } from './helpers/worker-profile';
 import type { RefreshView } from '../src/contracts/refreshes';
 
 type ProbeResponse = Awaited<ReturnType<Miniflare['dispatchFetch']>>;
+const { values } = parseArgs({ args: Bun.argv.slice(2), options: { 'cpu-profile': { type: 'string' } } });
 const directory = await mkdtemp(join(tmpdir(), 'musicfs-worker-refresh-'));
 let edition: 'seed' | 'large' = 'seed';
 let upstreamRequests = 0;
@@ -21,7 +24,8 @@ try {
     outdir: directory, naming: 'worker.mjs' });
   if (!build.success) throw new AggregateError(build.logs, 'Refresh Worker probe build failed');
   const options = { modulesRoot: directory, modules: [{ type: 'ESModule' as const, path: resolve(directory, 'worker.mjs') }],
-    compatibilityDate: '2026-07-30', d1Databases: { DB: 'musicfs-refresh-probe' }, d1Persist: join(directory, 'd1'),
+    compatibilityDate: '2026-07-30', ...(values['cpu-profile'] ? { inspectorPort: 0 } : {}),
+    d1Databases: { DB: 'musicfs-refresh-probe' }, d1Persist: join(directory, 'd1'),
     bindings: { PAGE_URL: new URL('/page', upstream.url).href }, log: new Log(LogLevel.ERROR) };
   mf = new Miniflare(options);
   let db = await mf.getD1Database('DB');
@@ -134,11 +138,16 @@ try {
   assert.deepEqual(listing.map(item => item.name), rows.results.map(row => (JSON.parse(row.document) as { name: string }).name));
   const completed = await json<RefreshView>(await call(resource)); assert.equal(completed.status, 'completed');
   assert.equal(measurements.at(-1)!.pages, 0); assert.equal(measurements.at(-1)!.subrequests, 0);
-  const properties = await call('/dav/Paged%20instance/Large/', undefined, 'PROPFIND');
+  const readProperties = async () => {
+    const properties = await call('/dav/Paged%20instance/Large/', undefined, 'PROPFIND');
+    return { properties, xml: await properties.text() };
+  };
+  const profiled = values['cpu-profile'] ? await profileWorker(mf, values['cpu-profile'], readProperties) : null;
+  const { properties, xml } = profiled?.value ?? await readProperties();
+  if (profiled) console.log(JSON.stringify({ localV8Profile: profiled.summary }));
   assert.equal(properties.status, 207); assert.equal(properties.headers.get('X-Probe-plugin-stats'), '0');
   const largeListing = measurements.at(-1)!;
   assert.equal(largeListing.subrequests, 0); assert.equal(largeListing.pages, 0);
-  const xml = await properties.text();
   assert.equal((xml.match(/<D:response>/g) ?? []).length, 4159);
   assert.equal((xml.match(/<D:getcontentlength>16044<\/D:getcontentlength>/g) ?? []).length, 4158);
 

@@ -4,9 +4,9 @@
 
 ## 当前事实
 
-已有开发alpha，核心/协议/共用页面已接线，QQ/微信与网易云真实扫码、目录和音频已有证据。QQ完整音质策略见[音质/统计](verification/p2-qq-quality.md)；网易云完整喜欢 **4,158曲/4,657个多版本文件**、每日30曲/35个多版本文件和真实128k/320k MP3见[来源记录](verification/p2-netease-source.md)。正式桌面点击启动/挂载管理、Worker入口/持久后台发布已接线；**212项测试、2,546次断言**、三组类型及152模块/541依赖边界通过，现有页面构建继续复用；[持久分页刷新](verification/p2-durable-refresh.md)已有核心、SQLite/D1、正式workerd与真实网易云/浏览器证据。目标系统、其余客户端范围、真实云端及完整示例仍未完成。
+已有开发alpha，核心/协议/共用页面已接线，QQ/微信与网易云真实扫码、目录和音频已有证据。QQ完整音质策略见[音质/统计](verification/p2-qq-quality.md)；网易云完整喜欢 **4,158曲/4,657个多版本文件**、每日30曲/35个多版本文件和真实128k/320k MP3见[来源记录](verification/p2-netease-source.md)。正式桌面点击启动/挂载管理、Worker入口/持久后台发布已接线；**215项测试、2,592次断言**、三组类型及153模块/545依赖边界通过，现有页面构建继续复用；[持久分页刷新](verification/p2-durable-refresh.md)已有核心、SQLite/D1、正式workerd与真实网易云/浏览器证据。目标系统、其余客户端范围、真实云端及完整示例仍未完成。
 
-三个正式交付包已并行接线。持久分步已完成本地链路，真实网易云无损+标准多目标42页发布4,657文件，并取得真实FLAC字节；[目录描述批量读取](verification/p2-listing-metadata.md)已落地，4,158文件正式D1 allprop为15条SQL、0来源stat/外部请求；[OpenList/独立mpv](verification/p2-clients.md)的双来源本地MP3播放/双向seek已验；[插件结构迁移](verification/p2-plugin-migration.md)已通过正式桌面与真实本地D1/Worker接棒；[按需续期及认证完成边界](verification/p2-session-lifecycle.md)已有两驱动/实际QQ包和正式管理入口证据。下一主线是Worker剩余CPU，QQ认证facade取消独立推进，目标系统按环境收口。一次只推进一页仍不等于真实免费Worker已验。真实自然续期/失效重登继续独立保留。用户确认暂时没有Cloudflare测试账号，先继续本地开发；云端验收保留待验。具体出口与约15—28有效人日估算见[计划](../outputs/musicfs-implementation-plan.md)和[复盘](../outputs/musicfs-effort-risk-roi-assessment.md)。
+三个正式交付包已并行接线。持久分步已完成本地链路，真实网易云无损+标准多目标42页发布4,657文件，并取得真实FLAC字节；[目录描述批量读取](verification/p2-listing-metadata.md)已落地，4,158文件正式D1 allprop为15条SQL、0来源stat/外部请求；[OpenList/独立mpv](verification/p2-clients.md)的双来源本地MP3播放/双向seek已验；[插件结构迁移](verification/p2-plugin-migration.md)已通过正式桌面与真实本地D1/Worker接棒；[按需续期及认证完成边界](verification/p2-session-lifecycle.md)已有两驱动/实际QQ包和正式管理入口证据。[读取CPU](verification/p2-read-cpu.md)已完成正式本地采样和重复投影/命名/快照头减法；下一项验证读时ETag等派生工作的收敛，QQ认证facade取消独立推进，目标系统按环境收口。一次只推进一页仍不等于真实免费Worker已验。真实自然续期/失效重登继续独立保留。用户确认暂时没有Cloudflare测试账号，先继续本地开发；云端验收保留待验。具体出口与约15—28有效人日估算见[计划](../outputs/musicfs-implementation-plan.md)和[复盘](../outputs/musicfs-effort-risk-roi-assessment.md)。
 
 ## 正式宿主与第二来源检查点
 
@@ -81,6 +81,8 @@
 | 交付物 | 四个桌面目标产物、Worker 模板/迁移、插件包、使用/作者说明、许可与图表 | 三个插件ZIP、四目标发行目录、Worker core/registry/页面/七份迁移已生成（本轮重建Linux和Worker，其余桌面目标仍为上一构建检查点）；发行压缩包、干净机器及完整文档/许可仍待收口 |
 
 ## 验证记录
+
+- [大目录读取的重复工作与CPU定位](verification/p2-read-cpu.md)：正式workerd V8采样、同一xmldom请求投影、命名快返、SQLite/D1单次快照头及仍未收口的云端CPU。
 
 - [来源会话续期与失效判断](verification/p2-session-lifecycle.md)：API0.1.5、实例短租约/状态预留、SQLite/D1共同SQL、QQ实际包SDK轮换、网易云Cookie语义和真实账号更新恢复；自然到期与完整重登仍待验。
 

@@ -22,7 +22,9 @@ export const refreshRecordSQL = 'SELECT document FROM library_refresh_jobs WHERE
 export const currentRefreshSQL = 'SELECT document FROM library_refresh_jobs WHERE instance_id = ? ORDER BY rowid DESC LIMIT 1';
 export const readyRefreshesSQL = `SELECT operation_id FROM library_refresh_jobs r WHERE ${active} AND ${current}
   AND (lease_token IS NULL OR lease_until <= ?) ORDER BY rowid LIMIT ?`;
-export const snapshotEntriesSQL = `SELECT s.document, s.error, s.published_attempt_id, e.document AS entry
+// The reader uses only the first header. Avoid repeating it for every entry in a D1 result.
+export const snapshotEntriesSQL = `SELECT CASE WHEN e.ordinal = 0 OR e.ordinal IS NULL THEN s.document END AS document,
+  s.error, s.published_attempt_id, e.document AS entry
   FROM directory_snapshots s LEFT JOIN library_snapshot_entries e ON e.attempt_id = s.published_attempt_id
   WHERE s.instance_id = ? AND s.kind = ? AND s.ref = ? ORDER BY e.ordinal`;
 export const snapshotHeaderSQL = `SELECT json_extract(document, '$.stamp') AS stamp, json_extract(document, '$.id') AS id,

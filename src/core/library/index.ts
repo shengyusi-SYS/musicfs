@@ -230,13 +230,18 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       signal.throwIfAborted();
       const results = new Map<ViewEntry, Description | Error>();
       const groups = new Map<string, MetadataGroup>();
+      const stampKeys = new WeakMap<SourceStamp, string>();
       for (const entry of entries) {
         try {
           const resolved = listedEntries.get(entry) ?? await resolve(entry.path, signal);
           const { target } = resolved;
           if (target.kind !== 'file' && target.kind !== 'directory') { results.set(entry, await describe(resolved)); continue; }
           const stamp = target.stamp;
-          const key = JSON.stringify([stamp.id, stamp.pluginId, stamp.epoch, stamp.pluginRevision, stamp.pluginGeneration]);
+          let key = stampKeys.get(stamp);
+          if (key === undefined) {
+            key = JSON.stringify([stamp.id, stamp.pluginId, stamp.epoch, stamp.pluginRevision, stamp.pluginGeneration]);
+            stampKeys.set(stamp, key);
+          }
           const group = groups.get(key) ?? { stamp, entries: [] };
           group.entries.push([entry, resolved]); groups.set(key, group);
         } catch (error) { signal.throwIfAborted(); results.set(entry, metadataError(error)); }

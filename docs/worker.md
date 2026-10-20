@@ -78,6 +78,8 @@ bunx wrangler deploy
 
 单页预算与完整集合预算仍需分开测量。分页化不证明加密 CPU、插件内部请求、CDN 出口或逐文件 DAV 元数据满足免费额度；当前没有真实 Cloudflare 测试账号，继续本地验证，云端项保持待验。设计与已测边界见 [ADR 0007](adr/0007-durable-paged-refresh.md)和[分页记录](verification/p2-durable-refresh.md)。
 
+读取侧已有[本地CPU定位与重复工作减法](verification/p2-read-cpu.md)：属性投影、命名快返、快照头只返回一次，以及可选的正式workerd V8 profile入口。逐文件ETag和整份XML仍有成本；这不等于真实免费Worker的CPU已通过，也不增加额外定时器或存储服务。
+
 ## 按需会话续期
 
 来源会话续期使用独立的按需入口：插件本地判断必要性，D1短租约协调同一实例并发调用并保存结果。普通目录/音频读取在续期完成后继续，不由Cron定时登录。QQ的下一检查时间留在插件私有状态；网易云二维码Cookie不支持SDK的login/refresh，不新增无效定时调用。详见[会话记录](verification/p2-session-lifecycle.md)。
