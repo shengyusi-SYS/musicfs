@@ -57,6 +57,7 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     createInstance: (pluginId: string, name: string, config: Json) => request<Result<SourceInstance>>('/instances', json('POST', { pluginId, name, config })),
     configure: (id: string, config: Json) => request<Result<Json>>(`/instances/${encodeURIComponent(id)}/config`, json('PUT', { config })),
     deleteInstance: (id: string) => request<void>(`/instances/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    logoutInstance: (id: string) => request<void>(`/instances/${encodeURIComponent(id)}/session`, { method: 'DELETE' }),
     roots: (id: string, signal: AbortSignal) => request<ContentSources>(`/instances/${encodeURIComponent(id)}/roots`, { signal }),
     directoryStatus: (id: string, ref: string, signal: AbortSignal) => request<DirectoryStatus | null>(`/instances/${encodeURIComponent(id)}/directory-status?directoryRef=${encodeURIComponent(ref)}`, { signal }),
     startRefresh: (id: string, scope: RefreshScope) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', scope.kind === 'instance' ? { scope: 'instance' }

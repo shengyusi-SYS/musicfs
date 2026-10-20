@@ -123,6 +123,7 @@ export function createManagementApi(input: {
     return c.json(result(configured), configured.ok ? 200 : 422);
   });
   app.delete('/api/instances/:id', async c => { await sources.delete(c.req.param('id')); return c.body(null, 204); });
+  app.delete('/api/instances/:id/session', async c => { await sources.logout(c.req.param('id'), c.req.raw.signal); return c.body(null, 204); });
   app.get('/api/instances/:id/authentication', async c => c.json((await sources.authentication(c.req.param('id'))) satisfies AuthenticationSession | null));
   app.post('/api/instances/:id/authentication', async c => {
     const action = authInput.parse(await json(c));

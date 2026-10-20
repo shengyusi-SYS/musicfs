@@ -42,5 +42,18 @@ try {
   release.resolve(); assert.equal((await poll).status, 409);
   const currentDb = await mf.getD1Database('DB'); const rows = await currentDb.prepare('SELECT private_state FROM instances ORDER BY rowid').all<{ private_state: string }>();
   assert.deepEqual(JSON.parse(rows.results[0]!.private_state), { authorized: true, token: 'fixture-session-token' }); assert.equal(JSON.parse(rows.results[1]!.private_state), null);
-  console.log(JSON.stringify({ runtime: 'local workerd', api: 'formal management routes', d1AuthenticationRestart: true, instances: 2, inputFailureState: true, latePollAfterCancel: 409, privateStateLeaked: false }));
+  const logout = await mf.dispatchFetch(`http://probe/api/instances/${first}/session`, { method: 'DELETE', headers: { Authorization: 'Bearer fixture-admin' } });
+  assert.equal(logout.status, 204);
+  await mf.dispose(); mf = new Miniflare(options);
+  assert.equal(await (await call(`/api/instances/${first}/authentication`)).json(), null);
+  const unavailable = await call(`/api/instances/${first}/roots`); assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json() as { sourceError: { kind: string } }).sourceError.kind, 'needs_auth');
+  const restarted = await auth(first, { kind: 'start' }); assert.equal(restarted.step?.kind, 'input');
+  const relogged = await auth(first, { kind: 'submit', operationId: restarted.operationId,
+    challengeId: restarted.step && 'challengeId' in restarted.step ? restarted.step.challengeId : '', input: { code: '123456' } });
+  assert.equal(relogged.step?.kind, 'complete'); assert.equal((await call(`/api/instances/${first}/roots`)).status, 200);
+  const other = await (await call(`/api/instances/${second}/authentication`)).json() as AuthenticationSession;
+  assert.equal(other.operationId, cancelled.operationId); assert.equal(other.step?.kind, 'cancelled');
+  console.log(JSON.stringify({ runtime: 'local workerd', api: 'formal management routes', d1AuthenticationRestart: true, instances: 2, inputFailureState: true, latePollAfterCancel: 409,
+    logoutSurvivesRestart: true, reloginRestoresContent: true, otherInstancePreserved: true, privateStateLeaked: false }));
 } finally { release.resolve(); await mf?.dispose(); await upstream.stop(true); await rm(directory, { recursive: true, force: true }); }

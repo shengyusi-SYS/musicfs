@@ -26,9 +26,20 @@ export default function Sources({ api, showPlugins }: { api: Api; showPlugins: (
     await client.invalidateQueries({ queryKey: ['instances'] }); await client.invalidateQueries({ queryKey: ['library'] });
     await client.invalidateQueries({ queryKey: ['directory-status'] }); message.success('实例已删除');
   } });
+  const logout = useMutation({ mutationFn: (id: string) => api.logoutInstance(id), onSuccess: async (_value, id) => {
+    setAuthenticating(current => current?.instance.id === id ? null : current);
+    setInspecting(current => current?.id === id ? null : current);
+    for (const key of ['authentication', 'authentication-poll', 'roots', 'directory-status', 'refresh-current']) {
+      await client.cancelQueries({ queryKey: [key, id] });
+      client.removeQueries({ queryKey: [key, id] });
+    }
+    await client.resetQueries({ queryKey: ['library'] });
+    await client.invalidateQueries({ queryKey: ['instances'] });
+    message.success('已退出此实例授权；配置和目录布局已保留，请重新授权后使用。');
+  } });
   return <>
     <div className="page-actions"><span>{instances.data?.length ?? 0} 个独立实例</span><Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing('create')}>添加数据源</Button></div>
-    <Failure error={instances.error} retry={() => void instances.refetch()} /><Failure error={plugins.error} /><Failure error={remove.error} />
+    <Failure error={instances.error} retry={() => void instances.refetch()} /><Failure error={plugins.error} /><Failure error={remove.error} /><Failure error={logout.error} />
     {instances.isPending ? <Skeleton active /> : !instances.isError && !instances.data?.length ? <section className="surface"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<div><Typography.Title level={3}>从一个数据源开始</Typography.Title><p>先安装来源插件，再为它创建独立实例。</p></div>}><Button onClick={showPlugins}>前往插件</Button></Empty></section> :
       <div className="instance-list">{instances.data?.map(instance => {
         const plugin = plugins.data?.find(value => value.manifest.id === instance.pluginId); const available = plugin?.status === 'active';
@@ -36,7 +47,10 @@ export default function Sources({ api, showPlugins }: { api: Api; showPlugins: (
           <Typography.Text type="secondary">{plugin?.manifest.name ?? instance.pluginId}</Typography.Text><div className="secondary-id">{instance.id}</div></div>
           <div className="instance-actions"><Tag color={available ? 'success' : 'default'}>{available ? '插件可用' : '等待重装插件'}</Tag><Space wrap>
             <Button disabled={!available} onClick={() => setInspecting(instance)}>内容源</Button><Button disabled={!available} onClick={() => setEditing(instance)}>配置</Button>
-            {withAuthentication.has(instance.pluginId) && <Button onClick={() => setAuthenticating({ instance, needsReauthorization: false })}>授权</Button>}
+            {withAuthentication.has(instance.pluginId) && <><Button disabled={logout.isPending && logout.variables === instance.id} onClick={() => setAuthenticating({ instance, needsReauthorization: false })}>授权</Button>
+              <Button disabled={logout.isPending || remove.isPending} onClick={() => modal.confirm({ title: `退出“${instance.name}”的授权？`,
+                content: '将清除此实例保存的授权，并停止后续读取。实例配置和目录布局会保留，重新授权后可继续使用；其他实例不受影响。',
+                okText: '退出授权', cancelText: '保留授权', onOk: () => logout.mutateAsync(instance.id) })}>退出授权</Button></>}
             <Button type="text" danger disabled={remove.isPending} onClick={() => modal.confirm({ title: `删除实例“${instance.name}”？`, content: '此实例的配置、授权和缓存将删除。其他实例不受影响；目录布局中的引用会保留为失效引用。', okText: '删除实例', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => remove.mutateAsync(instance.id) })}>删除</Button>
           </Space></div></article>;
       })}</div>}

@@ -184,6 +184,14 @@ export function createSources(store: InstanceStore & RenewalStore, registry: Plu
       execute(id, signal, (plugin, ctx) => plugin.validateConfig(ctx, config), {
         commit: (snapshot, value, state) => store.configure(snapshot, value, state)
       }),
+    async logout(id: string, signal: AbortSignal): Promise<void> {
+      signal.throwIfAborted();
+      const snapshot = await capture(id);
+      signal.throwIfAborted();
+      // Reset local authorization without calling the source or changing its configuration.
+      // The atomic epoch advance also invalidates cached content and any pending state writes.
+      if (!await store.configure(snapshot, snapshot.config, null)) throw stale();
+    },
     roots: (id: string, signal: AbortSignal, cursor?: string): Promise<Outcome<Page<Root>>> =>
       execute(id, signal, (plugin, ctx) => plugin.roots(ctx, cursor)),
     list: (id: string, directory: string, signal: AbortSignal, cursor?: string): Promise<Outcome<Page<Entry>>> =>
