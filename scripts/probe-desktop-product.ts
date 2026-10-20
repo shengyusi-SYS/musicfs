@@ -4,7 +4,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { requestReady } from './helpers/refresh-http';
-import type { ContentSources, PluginInspection, Result, SourceInstance } from '../src/contracts/management';
+import type { ContentSources, DirectoryListing, PluginInspection, Result, SourceInstance } from '../src/contracts/management';
 
 // Runs a generated native release, rather than src/desktop.ts or the dev service.
 const { values } = parseArgs({ args: Bun.argv.slice(2), options: { directory: { type: 'string' }, 'keep-running': { type: 'boolean' }, mount: { type: 'boolean' }, 'crash-recovery': { type: 'boolean' },
@@ -74,6 +74,11 @@ try {
   const head = await requestReady((url, init) => fetch(url, init), file, { method: 'HEAD', headers: dav }, admin);
   assert.equal(head.status, 200); assert.equal(head.headers.get('content-length'), '16044');
   const range = await fetch(file, { headers: { ...dav, Range: 'bytes=0-3' } }); assert.equal(range.status, 206); assert.equal(await range.text(), 'RIFF');
+  const listed = await fetch(origin + '/api/library/directory?path=' + encodeURIComponent('/发行物测试/已知音频'), { headers: admin });
+  assert.equal(listed.status, 200);
+  const listing = await listed.json() as DirectoryListing;
+  assert.deepEqual(listing.entries.map(entry => entry.name), ['440 Hz.wav']);
+  assert(listing.status); assert.equal(listing.status.error, null);
   await launch();
   const repeated = JSON.parse(await readFile(join(directory, 'runtime.json'), 'utf8')) as typeof runtime;
   assert.equal(repeated.pid, runtime.pid); assert.equal(repeated.origin, origin);
@@ -182,7 +187,7 @@ try {
     keptForBrowser = true;
   }
   console.log(JSON.stringify({ target: native, nativeRelease: true, separateBackground: true, sharedWebUI: true,
-    compatibilityInspection: true, externalPluginInstalled: true, davHead: 16044, exactRange: 'RIFF', repeatedLaunchReused: true,
+    compatibilityInspection: true, externalPluginInstalled: true, directoryListingWithStatus: true, davHead: 16044, exactRange: 'RIFF', repeatedLaunchReused: true,
     ...(authorPlugin ? { authorPluginId: pluginId, independentInstances: 2 } : {}),
     mountsEndpoint: true, dependencyFailureTested, systemMountTested, ...(systemMountTested ? { mountedBytes: 16044, mountedRanges: 5 } : {}),
     ...(values['crash-recovery'] ? { originalRcloneRetained: true, credentialsRetained: true, crashRecoveries } : {}),

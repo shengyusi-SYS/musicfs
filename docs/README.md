@@ -9,9 +9,9 @@
 | [Codex 主线目标](codex-goal.md) | 持续执行范围、依据与全部完成判定 | 产品已经交付 |
 | [实现与验收台账](verification.md) | FR01—FR25、目标环境与交付物的实现/验证状态及证据 | 尚未覆盖环境已通过 |
 | [连接OpenList与播放器](clients.md) | 准备、代理配置及客户端缓存刷新步骤 | 所有客户端/宿主已经验收 |
-| [客户端真实验收](verification/p2-clients.md) | 两来源本地OpenList、MP3播放/双向seek及Linux mpv | 全部格式、跨平台、云端或主观听音 |
+| [客户端真实验收](verification/p2-clients.md) | 两来源本地OpenList/MP3、QQ M4A及Linux mpv播放/双向seek | FLAC、跨平台、云端或主观听音 |
 | [插件结构升级](verification/p2-plugin-migration.md) | API0.1.4、整体候选激活、正式桌面重启与Worker新调用接棒 | 真实Cloudflare传播/配额或示例会话续期 |
-| [来源会话生命周期](verification/p2-session-lifecycle.md) | API0.1.5、实例按需续期、SQLite/D1协调、QQ固定SDK轮换与网易云失效判断 | 真实自然到期/完整重登、全部认证取消或云端已验 |
+| [来源会话生命周期](verification/p2-session-lifecycle.md) | API0.1.5、实例按需续期、SQLite/D1协调、QQ SDK轮换/认证取消与网易云失效判断 | 真实自然到期/完整重登或云端已验 |
 | [大目录读取与CPU定位](verification/p2-read-cpu.md) | 正式workerd采样入口、XML/命名/SQL重复工作减法及限定结果 | 真实免费计划CPU、峰值内存或云端已验 |
 | [开发与验证入口](development.md) | 工程命令、实现入口和探针运行方法 | 完整用户版应用 |
 | [使用说明](user-guide.md)与[插件作者指南](plugin-authoring.md) | 随包启动、来源/客户端及独立作者包的操作步骤 | 全部系统、真实云端与完整许可已验 |
@@ -24,9 +24,9 @@
 | [QQ 原始分类与分页](verification/p2-qq-catalog.md) | SDK 原始角色、有限推荐、完整歌单、微信扫码与非空喜欢/自建 | 非空收藏、全部音质或云端资源验收 |
 | [QQ 音质与目录统计](verification/p2-qq-quality.md) | 实例策略、实际版本、批量、通用计数、真实 MP3/M4A 与双会话 workerd | 全部真实档位、网易云、云端或播放器验收 |
 | [网易云真实来源](verification/p2-netease-source.md) | 真实扫码、4,158 曲完整喜欢、MP3/DAV/rclone、workerd恢复及多表示响应修正 | 全部音质/续期、完整分类、免费云端及播放器 |
-| [桌面宿主](desktop.md)与[限定验证](verification/p2-desktop-host.md) | 点击启动、后台复用、凭据、rclone挂载和四目标构建入口 | 四目标原生运行及系统挂载均通过 |
+| [桌面宿主](desktop.md)与[限定验证](verification/p2-desktop-host.md) | 启动/后台复用、Linux挂载和活动挂载崩溃恢复、四目标构建 | 四目标原生运行及系统挂载均通过 |
 | [Worker 宿主与发布](worker.md) | 正式入口、模板、持久发布与核对恢复、本地证据 | 真云配置保留、免费配额及零中断 |
-| [实例刷新](verification/p1-instance-refresh.md)与[持久分页](verification/p2-durable-refresh.md) | 范围、完整发布、页检查点、后台/跨请求续步及本地 SQL 预算 | 全树预读、DAV 大目录预算或真实云端免费验收 |
+| [实例刷新](verification/p1-instance-refresh.md)与[持久分页](verification/p2-durable-refresh.md) | 范围、完整发布、持久目录失败标记、跨请求续步及本地SQL预算 | 全树预读、DAV大目录预算或真实云端免费验收 |
 | [共用界面设计](architecture/web-ui.md) | 已确认视觉基线、页面责任、前后端合同与令牌边界 | 产品全部管理能力已完成 |
 | [管理 HTTP 接口](management-api.md) | WebUI 可调用的实际路由与凭据合同 | 尚未实现的认证/部署/挂载入口 |
 | [统一需求](../outputs/musicfs-requirements-and-technical-design.md) | 产品范围、用户结果、FR01—FR25 与发布验收 | 已实现或兼容通过 |
