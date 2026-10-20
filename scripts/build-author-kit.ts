@@ -16,10 +16,10 @@ export async function buildAuthorKit(): Promise<string> {
     const destination = join(directory, file); await mkdir(dirname(destination), { recursive: true });
     await cp(file, destination);
   }
-  const root = await Bun.file('package.json').json() as { version: string; packageManager: string;
+  const root = await Bun.file('package.json').json() as { version: string; packageManager: string; license: string;
     dependencies: Record<string, string>; devDependencies: Record<string, string> };
   await Bun.write(join(directory, 'package.json'), JSON.stringify({ name: 'musicfs-plugin-author-kit', private: true, type: 'module',
-    version: root.version, packageManager: root.packageManager,
+    version: root.version, packageManager: root.packageManager, license: root.license,
     scripts: { build: 'bun run scripts/build-sample.ts', typecheck: 'tsc --noEmit' },
     dependencies: { '@musicfs/plugin-api': 'file:./packages/plugin-api' }, devDependencies: {
       '@zip.js/zip.js': root.dependencies['@zip.js/zip.js'], ajv: root.devDependencies.ajv,

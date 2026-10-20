@@ -20,7 +20,7 @@ bun run typecheck
 | [config.schema.json](config.schema.json) | 必填的 `label` 配置，以“目录名称”显示在通用表单 |
 | [manifest.json](manifest.json) | 稳定插件 ID、发布版本、宿主入口、结构版本和需要封装的文件 |
 | [generated-config.d.mts](generated-config.d.mts) | Ajv 生成验证器的类型声明；`.mjs` 在构建时生成 |
-| [LICENSE.txt](LICENSE.txt) | 当前示例的 MIT 许可 |
+| [LICENSE.txt](LICENSE.txt) | 当前示例自有代码的 GPL-3.0-only 许可 |
 
 `roots` 返回一个入口，`list` 返回一份带完整 `info` 的文件描述，`stat` 返回相同描述。`open` 核对内容身份和闭区间范围，以小块原生流交付实际字节，并检查取消信号。音频字节是与实例无关的确定常量；实例配置直接从 `ctx.config` 读取，不存到模块变量。
 

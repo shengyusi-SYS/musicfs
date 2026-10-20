@@ -22,3 +22,5 @@
 QQ 开发预览已接入手机 QQ/微信扫码、会话恢复、原始歌单分类、实例单/多音质与缺失策略；真实 MP3/M4A、正式 DAV/rclone 范围读取和双会话本地 workerd 已有[限定证据](docs/verification/p2-qq-quality.md)。[按需续期及失效判断](docs/verification/p2-session-lifecycle.md)已有SQLite/D1和实际QQ包的本地验证；真实自然续期/完整重登、其余档位和云端仍待验，详见[插件说明](plugins/qq/README.md)。
 
 网易云已完成真实授权、每日推荐、4,158 曲喜欢列表的完整刷新和 MP3 读取，详见[真实来源记录](docs/verification/p2-netease-source.md)。桌面和 Worker 的构建、运行及未验边界分别见[桌面说明](docs/desktop.md)与[Worker 说明](docs/worker.md)。
+
+本项目自行编写的代码、公开插件接口、构建工具和示例插件采用 **GPL-3.0-only**，Copyright (c) 2026 MusicFS contributors，正文见[LICENSE](LICENSE)。第三方组件、引用或另行标注的文件保留原许可和署名；随包资料见[第三方说明](third-party/README.md)。发行时提供同版本项目源码归档与构建说明，公开API尚未发布到npm。

@@ -10,6 +10,31 @@ import { createLibrary } from '../../src/core/library';
 import { createManagementApi } from '../../src/transport/http';
 
 const app = new Hono<{ Bindings: { DB: D1Database; RENEWAL_URL: string } }>(); const manifest = parseManifest(rawManifest, 'worker'); const revision = 'd'.repeat(64);
+app.get('/probe/authentication-cancellation', async c => {
+  const controller = new AbortController(); let began!: () => void;
+  const started = new Promise<void>(resolve => { began = resolve; });
+  let requests = 0; let fetchCancelled = false;
+  const work = plugin.authenticate!({ instanceId: 'packed-auth-cancellation', config: { channel: 'wechat' }, privateState: null,
+    signal: controller.signal, fetch: (async (input, init) => {
+      const request = new Request(input, init); requests++;
+      return new Promise<Response>((_resolve, reject) => {
+        request.signal.throwIfAborted();
+        request.signal.addEventListener('abort', () => { fetchCancelled = true; reject(request.signal.reason); }, { once: true });
+        began();
+      });
+    }) as typeof fetch }, { kind: 'start' });
+  // Surface startup failures rather than awaiting a Fetch that the bundle never reached.
+  void work.then(began, began);
+  await started;
+  if (!requests) {
+    try { const outcome = await work; return c.json({ beforeFetch: true, outcome: outcome.ok ? 'completed' : outcome.error }, 500); }
+    catch (error) { return c.json({ beforeFetch: true, message: error instanceof Error ? error.message : String(error) }, 500); }
+  }
+  controller.abort(new Error('packed-auth-cancelled'));
+  let rejected = false;
+  try { await work; } catch (error) { rejected = error instanceof Error && error.message === 'packed-auth-cancelled'; }
+  return c.json({ requests, fetchCancelled, rejectedWithoutStateCandidate: rejected });
+});
 // Only this local probe redirects renewal to a controlled upstream. The packed
 // plugin still performs SDK rotation; ordinary content does not use fake accounts.
 app.get('/probe/renewal/:id', async c => {

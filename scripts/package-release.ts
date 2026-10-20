@@ -1,6 +1,6 @@
 import { createWriteStream } from 'node:fs';
-import { cp, lstat, mkdir, mkdtemp, readdir, rename, rm } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { chmod, cp, lstat, mkdir, mkdtemp, readdir, rename, rm } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { Writable } from 'node:stream';
 import { finished } from 'node:stream/promises';
 import { parseArgs } from 'node:util';
@@ -28,7 +28,7 @@ const workerSchema = z.object({ entrypoint: z.literal('src/worker.ts'), identity
 })) });
 const metadataSchema = z.object({ kind: z.literal('plugin-author-kit'), identity: identitySchema });
 type ReleaseFile = { file: string; bytes: number; sha256: string };
-type Archive = ReleaseFile & { kind: 'desktop' | 'worker' | 'plugin-author-kit'; target?: Target };
+type Archive = ReleaseFile & { kind: 'desktop' | 'worker' | 'plugin-author-kit' | 'source'; target?: Target };
 
 function version(value: string): string {
   if (valid(value) !== value) throw new Error(`Release version is not a canonical semantic version: ${value}`);
@@ -65,7 +65,7 @@ async function pluginManifest(path: string): Promise<{ id: string; version: stri
   } finally { await reader.close(); }
 }
 
-/** Existing generated roots only; streams files directly to the archive and retains their Unix modes. */
+/** Prepared release roots only; streams files directly to the archive and retains their Unix modes. */
 async function archive(directory: string, stem: string, staging: string): Promise<ReleaseFile> {
   const file = `${stem}.zip`; const destination = join(staging, file);
   const output = createWriteStream(destination, { flags: 'wx' });
@@ -87,6 +87,34 @@ async function archive(directory: string, stem: string, staging: string): Promis
   try { await add(directory, stem); await writer.close(); }
   catch (error) { output.destroy(); await finished(output).catch(() => {}); throw error; }
   return describe(destination, file);
+}
+
+async function copyProjectSource(directory: string, identity: ReleaseIdentity): Promise<void> {
+  const directories = ['src', 'packages', 'plugins', 'scripts', 'tests', 'docs', 'outputs', 'worker-template', 'third-party'];
+  const rootFiles = ['package.json', 'bun.lock', 'bunfig.toml', 'tsconfig*.json', 'vite.config.*',
+    '.dependency-cruiser.cjs', '.gitignore', '.gitattributes', 'README*', 'LICENSE*'];
+  const selected = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--',
+    ...directories.map(name => `:(top)${name}`), ...rootFiles.map(name => `:(top,glob)${name}`)], { stdout: 'pipe', stderr: 'pipe' });
+  if (selected.exitCode !== 0) throw new Error('Could not select project source files from the Git checkout');
+  const excluded = new Set(['dist', 'node_modules', '.git', '.musicfs', '.wrangler', 'dev-data', 'coverage']);
+  const files = [...new Set(new TextDecoder().decode(selected.stdout).split('\0').filter(Boolean))].sort();
+  await mkdir(directory, { recursive: true });
+  for (const file of files) {
+    if (file.split('/').some(part => excluded.has(part))) continue;
+    let info: Awaited<ReturnType<typeof lstat>>;
+    try { info = await lstat(file); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
+    if (!info.isFile()) throw new Error(`Project source must contain regular files only: ${file}`);
+    const destination = join(directory, file); await mkdir(dirname(destination), { recursive: true });
+    await cp(file, destination, { preserveTimestamps: true });
+    await chmod(destination, info.mode & 0o7777);
+  }
+  await Bun.write(join(directory, 'SOURCE.md'), '# MusicFS 对应源码\n\n'
+    + '本包包含下列发行版本的项目源码、公开 API、插件、构建工具、测试与文档，原文件保持不变。'
+    + '开发环境与从源码构建步骤见[开发说明](docs/development.md#从源码发行包构建)。'
+    + '源码包不包含原仓库的 `.git`；请先按该节建立本地 Git 构建身份，再运行既有构建命令。\n\n'
+    + '以下身份记录原发行的输入与插件修订；本地构建会记录自己的 Git 身份：\n\n```json\n'
+    + JSON.stringify(identity, null, 2) + '\n```\n');
 }
 
 async function main() {
@@ -141,10 +169,13 @@ async function main() {
   const directory = resolve('dist/releases'); await mkdir(directory, { recursive: true });
   const staging = await mkdtemp(join(directory, '.packaging-'));
   try {
+    const sourceDirectory = join(staging, 'source');
+    await copyProjectSource(sourceDirectory, reference);
     const archives: Archive[] = [];
     for (const item of desktop) archives.push({ ...await archive(item.directory, `musicfs-${releaseVersion}-${item.target}`, staging), kind: 'desktop', target: item.target });
     archives.push({ ...await archive(workerDirectory, `musicfs-${releaseVersion}-worker`, staging), kind: 'worker' });
     archives.push({ ...await archive(kitDirectory, `musicfs-${releaseVersion}-plugin-author-kit`, staging), kind: 'plugin-author-kit' });
+    archives.push({ ...await archive(sourceDirectory, `musicfs-${releaseVersion}-source`, staging), kind: 'source' });
     const pluginFiles: (ReleaseFile & { id: string; version: string; revision: string })[] = [];
     await mkdir(join(staging, 'plugins'));
     for (const plugin of plugins) {

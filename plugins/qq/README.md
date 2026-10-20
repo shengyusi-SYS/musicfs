@@ -1,6 +1,8 @@
 # QQ 音乐示例插件（开发预览）
 
-当前开发候选为 `org.musicfs.qq` / `0.1.0-alpha.9`，需要公开插件合同 `>=0.1.5 <0.2.0`。它使用与独立最小插件相同的接口和安装器；核心、DAV 和共用页面没有 QQ 专用分支。当前不是完整发行版。
+当前开发候选为 `org.musicfs.qq` / `0.1.0-alpha.10`，需要公开插件合同 `>=0.1.5 <0.2.0`。它使用与独立最小插件相同的接口和安装器；核心、DAV 和共用页面没有 QQ 专用分支。当前不是完整发行版。
+
+alpha.10 为 SDK 的扫码初始化、QQ/微信轮询和目录账号状态装配调用专属的 Fetch/取消信号。沿用 SDK 的登录操作、认证服务、密文 QR、驱动以及 Cookie/重定向处理，不改全局 Fetch 或平台协议。受控测试验证底层在途请求实际取消、已取消调用不发请求、取消结果不提供可保存状态。实际安装模块已在无Node兼容开关的本地workerd验证底层取消；Bun及正式workerd管理入口均完成真实QQ/微信二维码创建、未扫码轮询及取消，本轮未要求用户重新扫码。认证Fetch显式使用`cache: no-store`，避免Axios默认cache模式被workerd拒绝。
 
 alpha.9 在 SDK 交换出有效密文后，本地解析确认并立即完成授权，不再等待额外账号资料请求。昵称只取新凭据中可用的字段，缺失时不继承旧账号名。资料查询留在后续目录读取；临时故障可以独立重试，不需要再次消费二维码。宿主仍拒绝二维码步骤本身已到期后才返回的结果，没有放宽旧操作/取消检查。
 
@@ -20,17 +22,19 @@ alpha.7 在歌曲小页中准备真实文件描述，复用当次 SDK 批量解�
 
 会话续期复用固定 SDK 的 sealed resolver 与原生续期函数：进入最后 6 小时时才尝试，QQ/微信以实际凭证的登录类型续期；新令牌写回本实例私有状态。暂时网络或续期业务失败保留仍可用的旧令牌，不因此强制重登；无论令牌是否轮换，都持久保存至少 5 分钟的下一检查间隔，服务重启或换 Worker isolate 后仍生效。SDK 不会在令牌过期后补续，也不会把原始登录延长超过 30 天；旧令牌没有续期材料时用至到期后重新扫码。
 
-明确授权失效或状态接口报告未登录时清除该实例的无效令牌和账号名；普通业务错误保留凭证。插件内部可恢复旧版本已经换得的confirmed令牌，不再次兑换已消费的二维码；新流程在取得有效凭据时直接完成，不产生等待资料的扫码步骤。原始分类/歌单、推荐歌单、批量音质解析、续期和媒体读取已接入宿主取消；仍经 SDK HTTP facade 的扫码及目录账号状态调用尚未全部贯通底层取消。当前尚未完成全部真实双宿主验收。
+明确授权失效或状态接口报告未登录时清除该实例的无效令牌和账号名；普通业务错误保留凭证。插件内部可恢复旧版本已经换得的confirmed令牌，不再次兑换已消费的二维码；新流程在取得有效凭据时直接完成，不产生等待资料的扫码步骤。扫码、账号状态、原始分类/歌单、推荐歌单、批量音质解析、续期和媒体读取已接入宿主取消。当前尚未完成全部真实双宿主验收。
 
 “收藏歌单”表示收藏的整张歌单，不包含专辑或歌手收藏。已验证微信账号的 1 首喜欢、1 张自建歌单及其 1 首内容；当前会话未返回这些曲目的完整 128k 地址，因此导出 0 个文件。歌曲数与文件数分别核对，不能据文件数推断账号为空。实测细节见[分类与微信验证](../../docs/verification/p2-qq-catalog.md)。
 
 ## 模块与依赖
 
-`index.ts` 仅装配公开接口；`configuration.ts` 管理实例默认值和策略；`client.ts` 管理实例私有状态、SDK 批量调用与错误翻译；`authentication.ts` 处理挑战和会话交换；`catalog.ts` 处理分类、分页、出现位置与计数，`collections.ts` 保留原始集合角色；`playback.ts` 处理目标到实际音频的解析、回退、去重、引用和 CDN；`file-info.ts` 统一解释真实响应头，`media.ts` 处理文件描述与字节读取。`upstream.ts` 固定选择认证所用 SDK 的纯 `/serverless` 入口，不能导入会自动启动 Koa 的 npm 根入口。
+`index.ts` 仅装配公开接口；`configuration.ts` 管理实例默认值和策略；`client.ts` 管理实例私有状态、SDK 批量调用与错误翻译；`authentication.ts` 处理挑战和会话交换；`catalog.ts` 处理分类、分页、出现位置与计数，`collections.ts` 保留原始集合角色；`playback.ts` 处理目标到实际音频的解析、回退、去重、引用和 CDN；`file-info.ts` 统一解释真实响应头，`media.ts` 处理文件描述与字节读取。`upstream.ts` 只装配所需的五个 SDK 登录操作，将本次调用的 Fetch/取消信号传给 SDK 认证 HTTP 和纯 HTTP QQ 驱动；不能导入会自动启动 Koa 的 npm 根入口。
 
 默认音频设置为 `{mode:"single",qualities:["128"],missingQuality:"hide"}`，保存在本实例 config.audio。多版本可选择多档；FLAC 与 APE 同级，回退均按 320k MP3 → 128k MP3 → M4A，不互相充当较低档。APE 文件资料不能确认时报告临时失败，不按缺失静默隐藏。文件打开时仅读取已发布的实际版本，不再次回退到不同字节。完整结果与限制见[音质与统计验证](../../docs/verification/p2-qq-quality.md)。
 
-上游固定为 `@yakult-green-tea/qq-music-api@3.3.3`，复用进程内 `handleRequest`、SDK 原始读取客户端和续期函数，不需要另部署 API 服务。续期仅转换 SDK Fetch transport 与认证函数间的 JSON POST 结果形状；令牌解析、寿命、续期参数和签发仍由 SDK 处理。`generated-upstream` 由作者构建生成，直接复用固定发布包的 ESM 导出，不修改依赖源码；升级检查与代价见 [ADR 0005](../../docs/adr/0005-pinned-qq-sdk-read-adapter.md)。SDK 日志模块读取 `process.env`；作者构建时用 Bun 的 `define` 固定日志配置，生成的安装模块无需 `process` 全局或 Worker Node 兼容开关。包包含 SDK、Zod 和 Ajv 的必要许可及来源声明，不执行安装脚本。
+上游固定为 `@yakult-green-tea/qq-music-api@3.3.3`，复用 SDK 登录服务/操作、原始读取客户端和续期函数，不需要另部署 API 服务。其公共 HTTP facade 未开放 Fetch 注入，因此作者入口复用下层可注入工厂，并使用 SDK 已安装的 Axios 1.20.0 Fetch adapter；没有新增另一份依赖。微信封存 Cookie 恢复使用 SDK 自带 jar helpers，重定向时保留更新、删除和多个 Set-Cookie。续期仅转换 SDK Fetch transport 与认证函数间的 JSON POST 结果形状；令牌解析、寿命、续期参数和签发仍由 SDK 处理。`generated-upstream` 由作者构建生成，直接复用固定发布包的 ESM 导出，不修改依赖源码；升级检查与代价见 [ADR 0005](../../docs/adr/0005-pinned-qq-sdk-read-adapter.md)。SDK 日志模块读取 `process.env`；作者构建时用 Bun 的 `define` 固定日志配置，生成的安装模块无需 `process` 全局或 Worker Node 兼容开关。包包含 SDK、Axios、Zod 和 Ajv 的必要许可及来源声明，不执行安装脚本。
+
+插件自有代码采用 GPL-3.0-only；第三方依赖保留原许可证，随包提供各自许可及来源声明。
 
 ## 开发验证
 

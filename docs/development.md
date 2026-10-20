@@ -59,11 +59,28 @@ bun run package:release
 
 作者旅程见[指南](plugin-authoring.md)。在仓库外构建后，可运行`bun scripts/probe-desktop-product.ts --plugin-archive /绝对路径/自有插件.zip --plugin-id 自有插件ID`验证与最小示例相同合同的已知音频及双实例；此参数只用于该验收样本，不适用于任意插件音频。系统解压后的产品验收增加`--directory /绝对路径/解压目录`。探针不重建应用，本轮结果见[发行记录](verification/p4-release-artifacts.md)。
 
+## 从源码发行包构建
+
+`musicfs-<版本>-source.zip`提供同次发行的项目源码、构建/测试入口、锁文件和文档，不包含`.git`历史、已安装依赖或用户数据。`SOURCE.md`保留原发行身份。使用锁定的Bun，以及开发检查需要的Node和Git；在解压目录先建立本地Git快照，供现有构建工具枚举输入并记录内容身份：
+
+```sh
+git init
+git add .
+git -c user.name='MusicFS source build' -c user.email='source@musicfs.invalid' commit -m 'Import MusicFS source release'
+bun install --frozen-lockfile --ignore-scripts
+bun run check
+bun run build:desktop
+```
+
+这是开发者从源码复现的步骤，普通桌面用户直接运行发行程序，插件作者使用作者包即可。源码包导入后的Git提交与原发行提交不同，`SOURCE.md`保存二者的原始对应关系；不将本地重建描述成原二进制逐字节复现。构建其他目标、Worker或统一发行沿用上文命令，需要下载已固定版本的依赖和rclone。
+
 各正式探针正常结束时清理临时数据库及安装文件。默认仅使用本地测试状态，不要求 Cloudflare 账号或音乐账号；QQ 探针的可选真实会话模式例外，见下文。Worker 探针固定兼容日期和显式模块清单，不执行线上部署，也不证明免费配额适用。`check` 中的 HTTP 测试也需回环端口；淘汰的 Nephele/Node 桥接诊断已归档到基线提交 `bfee998`，参见 [ADR 0004](adr/0004-shared-fetch-readonly-dav.md)。
 
 ## 可选真实来源复测
 
 QQ 的真实授权/字节验证见[首条链路](verification/p1-qq-source.md)，原始分类、SDK 适配和当前缺口见[后续记录](verification/p2-qq-catalog.md)。本地 workerd 复测已有开发会话时，显式设置 `MUSICFS_QQ_TEST_STATE_DB`（开发 SQLite 的绝对路径）及 `MUSICFS_QQ_TEST_INSTANCE_ID`，再运行 `bun run probe:worker:qq`。脚本只读所选 QQ 实例的私有状态，在临时 D1 恢复后校验真实账号、每日推荐、自建/收藏和有限推荐集合，最后清理；不输出凭据，不执行云部署或重新扫码。
+
+默认QQ Worker探针另验证实际安装ESM的认证底层取消，无Node兼容开关。显式设置`MUSICFS_QQ_LIVE_QR_PROBE=1`时，它在本地workerd正式管理入口分别创建QQ/微信二维码、未扫码轮询并取消，不要求人扫码、不复用或改变真实账号。这项需要访问平台网络；二维码、密文和会话不打印，不代表真实Cloudflare出口或新的人为扫码已验。
 
 网易云对应设置 `MUSICFS_NETEASE_TEST_STATE_DB` 和 `MUSICFS_NETEASE_TEST_INSTANCE_ID`，运行 `bun run probe:worker:netease`。它只读该实例私有状态，恢复到临时 D1 后读取真实每日推荐，不重新消费原二维码；当前[实测记录](verification/p2-netease-source.md)包括完整喜欢和真实 MP3。
 

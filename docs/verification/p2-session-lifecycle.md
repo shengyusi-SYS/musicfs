@@ -50,7 +50,7 @@ Linux二进制SHA-256：`9b26c94bd9e70e8bdac62ac46116512083ad9919f83b24d1531d77a
 
 - 真实QQ/微信自然续期、最终失效重登，以及网易云真实自然到期后的重登尚未验。普通业务失效可返回needs_auth；共用认证历史步骤与当前会话状态的完整诊断仍需收口。
 - 早先confirmed/资料补全边界已按下节收敛。宿主仍按原期限拒绝扫码本身过期后的迟到结果；没有新增无限期补登录或放宽旧操作规则。
-- QQ扫码/状态的SDK HTTP facade仍未完全传递底层取消。现有续期、原始内容、推荐、音质和媒体Fetch接线不代表全部认证取消已验。
+- 此检查点的QQ扫码/状态facade仍有取消缺口；后续alpha.10已按文末收口，不把早先续期证据冒认为当时已经完成。
 - 本地workerd不证明真实Cloudflare传播、状态/绑定保留、免费CPU/出口或在途流切换。用户暂时没有Cloudflare账号，继续本地CPU与其他可执行交付；不降低最终验收范围。
 
 本轮没有增加依赖、全局并发队列、ORM、事件总线或通用认证工作流。WebCrypto/原生AbortSignal、现有SDK和tough-cookie处理通用/平台机制，实例代际和条件保存仍是MusicFS自己的业务责任。
@@ -67,4 +67,18 @@ QQ alpha.9在SDK签发后本地解析有效密文，立即返回现有complete�
 
 代码冻结后重建Linux与三插件Worker产物；Linux核心二进制摘要与本记录前述值相同，发行目录带alpha.9/alpha.7新ZIP。8787开发服务通过正式兼容安装均返回201，安装前后的全部实例行（含私有状态）和布局相同；两个QQ和一个网易云账号根入口恢复200/5项。不重复自然续期、扫码或完整媒体矩阵。
 
-本次不修改核心或页面，继续使用现有可选accountName展示。下一主线转向Worker剩余CPU；QQ扫码/目录账号状态facade的取消作为独立缺口推进，不把QQ局部再次设成全项目串行门槛。
+此认证完成切片不修改核心或页面，继续使用既有可选accountName。当时后续安排为读取CPU与独立推进QQ取消；当前状态以文末和总台账为准。
+
+## 后续收口：QQ alpha.10认证底层取消
+
+固定SDK3.3.3的公共HTTP入口没有请求Fetch/信号注入口，因此`upstream.ts`只装配五个SDK登录操作、原有QR/device/session/sealed助手。SDK的AuthHttpClient继续处理Cookie和重定向，固定SDK已安装的Axios1.20.0 Fetch adapter绑定本次ctx.fetch/AbortSignal；恢复微信封存Cookie时使用SDK jar helpers维护保留、替换和删除。没有改全局Fetch、复制平台签名/加密、另部署API服务或增加依赖。公开插件合同和数据库schema不变。
+
+新增五项真实SDK路径测试：预取消零请求、设备bootstrap在途中止、QQ和微信驱动在途轮询取消、目录账号状态取消且不清凭据、微信封存Cookie经重定向更新/删除及多个Set-Cookie。取消调用不返回可保存状态候选。完整检查为**221 pass/0 fail、2,644断言**，三组类型及**155模块/559依赖**边界通过；最终局部修正后再次通过这五项/30断言及三组类型。
+
+整包本地workerd首次失败在进入宿主Fetch之前。直接构造Request复现`cache: default`抛`Unsupported cache mode: default`，`no-store`通过；Axios默认值因此显式改为认证不缓存的no-store。修正后实际安装ESM在**没有Node兼容开关**的workerd通过bootstrap Fetch取消、无状态候选、D1合并续期和正式管理认证完成。没有用Promise.race替代底层取消。
+
+Bun实际包完成QQ/微信真实二维码创建、未扫码轮询和取消（分别4/6次请求）；开启`MUSICFS_QQ_LIVE_QR_PROBE=1`后，最终包又经本地workerd的正式管理API完成两个渠道的相同旅程。不输出二维码、密文或平台URL，本轮没有请求人重新扫码，不能据此声称新一次人工确认/凭据交换或真实Cloudflare已验。
+
+隔离真实会话实例从alpha.9更新到alpha.10，实例ID/配置保留，真实账号根状态和M4A小目录仍可用，经OpenList/mpv的结果见[客户端记录](p2-clients.md)。自有代码许可按用户决定改为GPL-3.0-only；sample0.1.3、QQalpha.10、网易云alpha.8均保留第三方原许可。真实自然续期/失效重登及云端继续待验。
+
+原8787开发服务通过正式安装入口更新三个包均返回201，安装前后全部6个实例行（含私有状态）及1份布局的摘要一致。随后两个QQ/微信实例及一个网易云实例各自根入口恢复200/5项；没有重跑完整歌曲集合或重新扫码。

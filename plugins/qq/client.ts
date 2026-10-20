@@ -1,9 +1,9 @@
 import type { Context, Json, Outcome, PluginFault } from '@musicfs/plugin-api';
-import type { handleRequest } from '@yakult-green-tea/qq-music-api/serverless';
+import type { QqRequestHandler } from './upstream';
 import { z } from 'zod';
 import { AUTH_REFRESH_EARLY_MS, AUTH_REFRESH_RETRY_MS, createFetchTransport, createSealedSessionResolver, createSessionMusicuClient, refreshLoginCredential, recommendPlaylistsResult, QqApiError, type AuthHttpClient, type AuthSession, type MusicuDescriptor } from './generated-upstream.mjs';
 
-export type QqHandler = typeof handleRequest;
+export type QqHandler = QqRequestHandler;
 const pending = z.object({ id: z.string(), key: z.string(), channel: z.enum(['qq', 'wechat']), expiresAt: z.string(), qrImage: z.string(), confirmed: z.boolean() }).strict();
 const savedV1 = z.object({ version: z.literal(1), secret: z.string().min(32), token: z.string().nullable(), accountName: z.string().nullable(), pending: pending.nullable() }).strict();
 const saved = savedV1.extend({ version: z.literal(2), renewAfter: z.number().int().nonnegative() }).strict();
@@ -126,7 +126,8 @@ export class QqClient {
     const url = new URL(path, 'https://qq-plugin.musicfs.invalid');
     for (const [name, value] of Object.entries(params)) url.searchParams.set(name, value);
     const response = await this.handler(new Request(url, { method, signal: this.ctx.signal,
-      headers: this.state.token ? { 'x-qq-session': this.state.token } : {} }), { QQ_SESSION_SECRET: this.state.secret });
+      headers: this.state.token ? { 'x-qq-session': this.state.token } : {} }), { QQ_SESSION_SECRET: this.state.secret },
+    { fetch: this.ctx.fetch, signal: this.ctx.signal });
     return this.readResponse(response);
   }
   async recommendations(): Promise<Record<string, unknown>> {

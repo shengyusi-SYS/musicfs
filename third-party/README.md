@@ -7,4 +7,4 @@
 - `licenses/WebUI.md`由锁定的Vite内建`build.license`生成，包含已打包页面依赖的许可资料。机制说明：<https://vite.dev/config/build-options#build-license>。
 - QQ、网易云与最小来源的许可随各自插件ZIP保存。桌面随包rclone的原始README包含其MIT正文及版本资料，位于资源目录的`RCLONE-README.txt`；实际文件摘要另见`rclone-release.json`。
 
-MusicFS自行编写代码的许可与各第三方许可分别适用；不从示例插件的许可推断所有文件采用同一许可。
+MusicFS自行编写的代码、公开接口、工具及示例采用GPL-3.0-only，见根目录LICENSE；第三方代码和另行标注文件保留各自许可。项目源码归档和各第三方资料分别交付，Bun运行时资料的上述缺口继续保留。

@@ -69,3 +69,5 @@ bunx wrangler deploy
 ## 随包资料
 
 `release.json`或`bundle.json`记录当前构建身份；发行目录外的 `release-manifest.json` 和 `SHA256SUMS`用于核对归档与插件包。`licenses/`保存实际构建依赖的许可资料，桌面还包含固定Bun运行时说明和rclone原始README；插件ZIP保留各自许可。插件作者使用独立的 `plugin-author-kit`，按其README构建自己的来源。
+
+MusicFS自行编写的代码、公开接口、工具及示例插件采用GPL-3.0-only，正文见随包`LICENSE`；第三方与另行标注文件保留各自许可。同次发行的`source.zip`包含项目源码、锁文件、测试和构建说明，开发复现入口为其中的`SOURCE.md`。

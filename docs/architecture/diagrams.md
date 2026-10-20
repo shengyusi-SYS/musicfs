@@ -218,7 +218,7 @@ sequenceDiagram
 
 ## 当前 QQ 插件内部链路
 
-描述 alpha.9 的已接线责任。自建/收藏、推荐、完整分页、实例音质/回退/去重已接入；SDK续期及凭据就绪即完成授权已通过本地包验证，真实自然到期/失效重登及部分认证facade取消仍待收口。没有把 SDK 的整个路由服务暴露成 MusicFS API。
+描述 alpha.10 的已接线责任。自建/收藏、推荐、完整分页、实例音质/回退/去重已接入；SDK续期、凭据就绪即完成授权和认证底层取消已通过本地包验证，真实自然到期/失效重登继续待验。没有把 SDK 的整个路由服务暴露成 MusicFS API。
 
 ```mermaid
 flowchart LR
@@ -234,13 +234,17 @@ flowchart LR
   Playback --> Client
   Media --> Playback
   Media --> Client
-  Client --> SDK["固定 3.3.3 的 serverless SDK"]
+  Client --> Ports["upstream：五个SDK登录操作 / QR与会话服务装配"]
+  Ports --> Http["SDK AuthHttpClient / Cookie jar / Axios Fetch adapter"]
+  Ports --> Driver["SDK QQ纯HTTP驱动"]
   Catalog --> Collections["collections：保留自建 / 收藏原始角色"]
   Collections --> Client
   Client --> RPC["固定 SDK 的 sealed resolver / session Musicu"]
   RPC --> QQ
   Build["作者构建：生成有限原始导出入口"] -.-> RPC
-  SDK --> QQ["QQ HTTP / 扫码接口"]
+  Http --> HostFetch["ctx.fetch / AbortSignal / no-store"]
+  Driver --> HostFetch
+  HostFetch --> QQ["QQ HTTP / 扫码接口"]
   Media --> Fetch["ctx.fetch：媒体 Range / 取消 / 流"]
   Playback --> Select["SDK CDN selector：调用内选择 / 1 字节探测"]
   Select --> Fetch

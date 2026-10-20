@@ -1,6 +1,6 @@
 # QQ 插件复用固定 SDK 的原始读取能力
 
-日期：2026-10-20。状态：已采用，适用于 QQ 开发预览 alpha.3 起，当前 alpha.9。依据：[来源职责](0001-installable-source-plugins.md)、[独立插件合同](0003-independent-plugin-interface.md)、[QQ 实测](../verification/p2-qq-catalog.md)及[音质批量验证](../verification/p2-qq-quality.md)。
+日期：2026-10-20。状态：已采用，适用于 QQ 开发预览 alpha.3 起，当前 alpha.10。依据：[来源职责](0001-installable-source-plugins.md)、[独立插件合同](0003-independent-plugin-interface.md)、[QQ 实测](../verification/p2-qq-catalog.md)及[音质批量验证](../verification/p2-qq-quality.md)。
 
 ## 问题
 
@@ -22,7 +22,7 @@ SDK 已有可复用的 sealed 会话解析和 Musicu 请求客户端，能注入
 
 alpha.8沿用同一路线复用 SDK 的 `resolver.rotate`、`refreshLoginCredential` 和 Fetch transport。插件只将该续期RPC所需的JSON POST与宿主Fetch/取消信号接线，不重写凭据刷新、加密或登录重定向。QQ/微信渠道取自实际凭据，来源的六小时提前窗口、五分钟失败间隔和原登录有效期限制由固定SDK决定。插件私有状态v2保存下一检查时间，由公开迁移合同保留v1已有账号。
 
-SDK进程内的 in-flight/retry 表不提供跨 Worker isolate 保证；实例互斥和持久失败合并由 `sources` 的可选续期合同及SQLite/D1完成。当前 SDK 认证HTTP facade没有实例Fetch/取消注入口，QR/状态请求的剩余取消缺口继续单列，不能把续期接线写成全部认证取消已经通过。证据见[会话记录](../verification/p2-session-lifecycle.md)。
+SDK进程内的 in-flight/retry 表不提供跨 Worker isolate 保证；实例互斥和持久失败合并由 `sources` 的可选续期合同及SQLite/D1完成。SDK认证HTTP facade没有实例Fetch/取消注入口，alpha.10因此在插件内装配五个既有SDK登录操作及可注入的QR/device/sealed/session服务，原始平台协议和登录交换仍由SDK执行。固定SDK已安装的Axios1.20.0 Fetch adapter传递本次ctx.fetch/signal；SDK jar helpers恢复封存微信Cookie并保留重定向更新/删除，避免复制Cookie算法或改全局Fetch。workerd实测拒绝Axios默认cache模式，因此认证显式使用no-store。证据见[会话记录](../verification/p2-session-lifecycle.md)。
 
 alpha.9将SDK已签发凭据的本地确认作为扫码完成点；昵称可直接取凭据字段，不为它额外调用状态facade。后续内容读取处理资料错误，核心到期/CAS合同保持原样；没有复制SDK登录交换逻辑或增加新的认证步骤。
 

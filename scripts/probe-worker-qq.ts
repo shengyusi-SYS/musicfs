@@ -6,6 +6,7 @@ import { Miniflare, Log, LogLevel } from 'miniflare';
 import { Database } from 'bun:sqlite';
 import { buildQq } from './build-qq';
 import { completeRefresh, publishedDirectory, requestReady } from './helpers/refresh-http';
+import type { AuthenticationSession, Result } from '../src/contracts/management';
 
 await buildQq(); await mkdir('dist/p0/qq', { recursive: true });
 const build = await Bun.build({ entrypoints: ['tests/probes/worker-qq.ts'], target: 'browser', format: 'esm', outdir: 'dist/p0/qq', naming: 'worker.mjs',
@@ -29,6 +30,11 @@ try {
   }
   const headers = { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' };
   const dispatch = (url: string, init?: Pick<RequestInit, 'method' | 'headers'>) => mf.dispatchFetch(url, { ...init, headers: Object.fromEntries(new Headers(init?.headers)) });
+  const cancelled = await mf.dispatchFetch('http://probe/probe/authentication-cancellation');
+  assert.equal(cancelled.status, 200, await cancelled.clone().text());
+  assert.deepEqual(await cancelled.json(), { requests: 1, fetchCancelled: true, rejectedWithoutStateCandidate: true });
+  console.log(JSON.stringify({ runtime: 'local workerd', packedAuthenticationCancellation: true, sdkBootstrapFetchCancelled: true,
+    rejectedWithoutStateCandidate: true, nodeCompatibility: false }));
   const instanceIds: string[] = [];
   for (const name of ['QQ 甲', 'QQ 乙']) {
     const created = await mf.dispatchFetch('http://probe/api/instances', { method: 'POST', headers, body: JSON.stringify({ pluginId: 'org.musicfs.qq', name, config: {} }) });
@@ -38,6 +44,31 @@ try {
   const rows = await db.prepare('SELECT private_state FROM instances ORDER BY rowid').all<{ private_state: string }>();
   assert.equal(rows.results.length, 2); const states = rows.results.map(row => JSON.parse(row.private_state) as { secret: string });
   assert.notEqual(states[0]!.secret, states[1]!.secret);
+  if (process.env.MUSICFS_QQ_LIVE_QR_PROBE === '1') {
+    for (const channel of ['qq', 'wechat']) {
+      const configured = await mf.dispatchFetch(`http://probe/api/instances/${instanceIds[0]}/config`, { method: 'PUT', headers,
+        body: JSON.stringify({ config: { channel } }) });
+      assert.equal(configured.status, 200); await configured.body?.cancel();
+      const endpoint = `http://probe/api/instances/${instanceIds[0]}/authentication`;
+      const started = await mf.dispatchFetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ kind: 'start' }) });
+      assert.equal(started.status, 200);
+      const result = await started.json() as Result<AuthenticationSession>;
+      assert(result.ok, 'Live QR start must succeed'); assert(result.value.step?.kind === 'waiting');
+      const { operationId, step } = result.value;
+      assert(step && step.kind === 'waiting');
+      const polled = await mf.dispatchFetch(endpoint, { method: 'POST', headers,
+        body: JSON.stringify({ kind: 'poll', operationId, challengeId: step.challengeId }) });
+      assert.equal(polled.status, 200);
+      const status = await polled.json() as Result<AuthenticationSession>;
+      assert(status.ok, 'Live QR poll must succeed'); assert.equal(status.value.step?.kind, 'waiting');
+      const cancelled = await mf.dispatchFetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ kind: 'cancel', operationId }) });
+      assert.equal(cancelled.status, 200);
+      const ended = await cancelled.json() as Result<AuthenticationSession>;
+      assert(ended.ok); assert.equal(ended.value.step?.kind, 'cancelled');
+      console.log(JSON.stringify({ runtime: 'local workerd', channel, liveQrCreated: true, liveUnscannedPoll: 'waiting',
+        cancelled: true, formalManagementRoute: true, humanScanTested: false, cloudDeploymentTested: false }));
+    }
+  }
   const { createSealedSessionResolver, deriveAndroidDevice } = await import('../plugins/qq/generated-upstream.mjs');
   const secret = states[1]!.secret; const resolver = createSealedSessionResolver({ secrets: { current: secret } });
   const token = await resolver.issue({ credential, device: await deriveAndroidDevice(secret), expiresAt: Date.now() + 3_600_000 });
