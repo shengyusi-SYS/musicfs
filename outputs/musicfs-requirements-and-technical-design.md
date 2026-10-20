@@ -2,7 +2,8 @@
 
 日期：2026-10-20  
 版本：插件式数据源统一方案，已合并插件 Q1—Q11 与既有 WebUI、Bun 方向  
-状态：需求已对齐，已进入 P0 基础实现；完整产品与真实环境验收未完成  
+状态：需求已对齐，已进入 P4/P5 交付收尾；当前进度与未完成范围见验收台账
+
 暂定项目名：`musicfs`。
 
 本项目通过可安装的数据源插件，把音乐服务或音频文件来源转换为可浏览、可播放的只读音乐目录。采用 TypeScript 实现，共用业务核心、插件合同与 WebUI，分别运行在 Windows、Linux、macOS 的本地后台，以及 Cloudflare Worker。
@@ -17,7 +18,7 @@
 
 前端保留 React + Vite 与成熟交互组件。Vite 统一生成 WebUI 静态产物，Bun 负责桌面后端及发行打包，不为采用 Bun 替换前端工具链。
 
-Worker 插件安装、更新和移除允许由后台自动发布普通 Worker 新版本，用户无需手工编译或部署。这是避免付费动态加载前提的优先验证路线，免费计划适配、部署接口及版本切换影响仍待 P0。[插件边界](../docs/adr/0001-installable-source-plugins.md)、[Worker 安装决定](../docs/adr/0002-worker-plugin-installation-by-deployment.md)
+Worker 插件安装、更新和移除允许由后台自动发布普通 Worker 新版本，用户无需手工编译或部署。这是避免付费动态加载前提的优先验证路线，普通Worker的实际发布/配置保留和核心升级已有证据；免费计划结论及切换影响仍按台账收口。[插件边界](../docs/adr/0001-installable-source-plugins.md)、[Worker 安装决定](../docs/adr/0002-worker-plugin-installation-by-deployment.md)
 
 ## 1 范围与已确定方向
 
@@ -485,7 +486,7 @@ TS 开启严格检查；在适配边界检查平台响应。Bun 与 Worker 分�
 | P4 双端产品化 | 桌面启动器、外置插件与 rclone；Worker 资源路由与自动部署 | 三端点击启动与挂载，云端独立安装和运行兼容插件 |
 | P5 发布验收 | 真实客户端、故障恢复、发行包、文档与许可 | 第 14 节通过，标明实际测试范围 |
 
-阶段可在合同稳定后交错推进，不预估未经验证的工期。已对齐的需求与设计现由 [Codex 主线目标](../docs/codex-goal.md)承接完整实现与交付；已进入 P0 工程和插件基础实现，真实进展与未完成义务见[验收台账](../docs/verification.md)。
+阶段可在合同稳定后交错推进，不预估未经验证的工期。已对齐的需求与设计现由 [Codex 主线目标](../docs/codex-goal.md)承接完整实现与交付；当前处于 P4/P5 收尾，真实进展与未完成义务见[验收台账](../docs/verification.md)。
 
 ## 16 依据与澄清记录
 

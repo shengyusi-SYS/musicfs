@@ -1,6 +1,6 @@
 # MusicFS 架构设计
 
-日期：2026-10-20。状态：设计与当前实现并列说明，插件合同仍为 alpha。插件/实例、目录、共用协议和 UI 已接线；QQ 与[网易云](../verification/p2-netease-source.md)有真实扫码/目录/音频证据，[桌面启动/挂载](../desktop.md)与[Worker 后台发布](../worker.md)有正式入口及本地验证。真实云端、四目标运行/挂载和完整示例仍按台账收口。产品合同以 [统一需求](../../outputs/musicfs-requirements-and-technical-design.md) 为准，执行顺序以 [实施计划](../../outputs/musicfs-implementation-plan.md) 为准。
+日期：2026-10-20。状态：设计与当前实现并列说明，插件合同仍为 alpha。插件/实例、目录、共用协议和 UI 已接线；QQ 与[网易云](../verification/p2-netease-source.md)有真实扫码/目录/音频证据，[桌面启动/挂载](../desktop.md)与[Worker 后台发布](../worker.md)有正式入口及本地验证。真实云端已有部署/发布/双示例授权读取/核心升级证据；四目标原生运行及剩余示例/资源仍按台账收口。产品合同以 [统一需求](../../outputs/musicfs-requirements-and-technical-design.md) 为准，执行顺序以 [实施计划](../../outputs/musicfs-implementation-plan.md) 为准。
 
 设计采用一个应用中的领域 Module、独立发布的插件合同，以及实际有差异的宿主 Adapter。Module 按其 Interface 能隐藏的业务责任划分，Interface 包括数据、调用顺序、失败与性能合同，不按文件行数或页面数量拆包。结构和流程见 [图表](diagrams.md)。
 
@@ -153,7 +153,7 @@ Nephele 的固定版本 PoC 已执行：Bun 基础读取可用，本地 Worker �
 | 验证 | Zod；插件 Schema 用 Ajv 及生成代码 | 领域允许值、实例语义与错误映射 |
 | 插件归档与版本 | zip.js；npm semver；fflate 仅用于独立编码互操作测试 | 库未覆盖的包检查、内容合同、兼容与安装切换 |
 | Worker 发布 | Cloudflare 官方 SDK | 发布计划、绑定保留、结果核对、失败恢复 |
-| 并发、短期缓存 | p-limit、lru-cache 按实际需要 | 实例预算、缓存键和失效条件 |
+| 并发、短期缓存 | p-limit、lru-cache仅候选，当前未引入 | 实例预算、缓存键和失效条件 |
 | 数据与系统能力 | bun:sqlite、D1、open、env-paths、Bun.spawn、rclone | SQL 事务与提交、生命周期、就绪及正常卸载 |
 | 桌面单后台 | proper-lockfile | 凭据、真实身份探测、端口与挂载恢复；库锁不代替进程身份 |
 | DAV | 共用 Fetch 只读映射、xmldom、range-parser；Worker FixedLengthStream | 标准只读行为、目录和真实字节的接线，见 ADR 0004 |

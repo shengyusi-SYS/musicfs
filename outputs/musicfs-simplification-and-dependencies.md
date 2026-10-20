@@ -1,13 +1,13 @@
 # 方案精简与依赖替代建议
 
 日期：2026-10-20（原调查 2026-10-18）  
-范围：保留已确认功能，减少通用基础设施与手写实现。依据为当前方案、官方文档与候选源码；没有安装依赖或完成运行验证。
+范围：保留已确认功能，减少通用基础设施与手写实现。本文保留原选型调查及候选依据，不是未完成任务清单；当前实际采用以package.json、ADR及[验收台账](../docs/verification.md)为准。
 
 插件 Q1—Q11 已确认：数据源插件是必要产品能力，网易云与 QQ 是完整示例插件；支持多实例，来源配置及音质规则归插件。核心提供通用合同、实例与目录管理，Worker 插件变更允许后台自动部署，优先验证普通免费路线。本文已按此修订，技术证据仍以原调查和后续 P0 为界。[澄清记录](musicfs-design-review.md)
 
 本文维护通用依赖选择；领域职责、源码层级和 Interface 见 [架构设计](../docs/architecture/README.md)，新增表单/校验、插件包、部署 SDK 与导入图的证据见 [2026-10-20 核查](research-architecture-dependencies.md)。表中优先采用仍须在实际版本与两个宿主中验证，未安装的候选不写为已集成。
 
-桌面宿主已按本轮讨论更新为 Bun 建议路线，具体收益与发行边界见 [Bun 桌面评估](musicfs-bun-desktop-evaluation.md)。这仍待 P0 验证。
+桌面宿主已按本轮讨论更新为 Bun 建议路线，具体收益与发行边界见 [Bun 桌面评估](musicfs-bun-desktop-evaluation.md)。当前已有编译发行物及Linux/WSL运行证据，其他目标系统仍按台账验收。
 
 前端保留 React + Vite，Bun 只负责桌面宿主及发行打包。精简以减少整体实现和维护成本为准，保留成熟前端工具与复杂交互所需依赖。
 
@@ -44,13 +44,13 @@
 | 插件后台结构校验 | 官方工具链优先作者构建时 Ajv standalone ESM，随插件发布 | 标准 Schema 校验代码生成与执行 | Schema 与结果一致、来源语义校验；第三方内部可选其他实现，Worker 不动态 compile |
 | 页面请求状态 | `@tanstack/react-query` | 认证轮询、部署进度、保存后失效、取消 | 生命周期与哪些操作影响目录 |
 | 运行时数据验证 | Zod | 插件包、设置与布局输入检查和类型推导 | 核心校验通用合同与树，插件校验来源配置 |
-| 后台并发限制 | `p-limit` | 排队与并发计数 | 按实例与来源选择并发预算 |
+| 后台并发限制，确有需要时 | `p-limit`（当前未引入） | 排队与并发计数 | 按实例与来源选择并发预算 |
 | 后台短期缓存，确有需要时 | `lru-cache` | 有界缓存、TTL、适用范围内的加载合并 | 缓存 key、实例隔离、来源有效期与失效条件 |
 | 打开系统浏览器 | `open`，仅桌面 | Windows/macOS/Linux 默认浏览器调用差异 | 等服务就绪再打开，失败时显示地址 |
 | 子进程 | `Bun.spawn` | 进程、流、退出状态与终止接口 | rclone 配置、就绪、卸载、后台存活与重复启动 |
 | 本地数据库与发行 | `bun:sqlite`、`bun build --compile`，`env-paths` 按需 | SQLite、核心合包、资源内嵌、三端目录 | 外部数据库、迁移、编译产物的外置插件加载、rclone 随包或释放 |
 | 示例插件协议 | 网易云必要模块、QQ 的 `/serverless` 子入口 | 扫码、签名与会话机制 | 插件内部的宿主适配、来源归一化、音质规则和回归 |
-| 插件归档 | `zip.js` 与 `fflate` 同批 PoC 后选一 | ZIP/DEFLATE、库已有的流与归档检查 | 包清单、剩余路径/实际大小检查、暂存与激活；比较总维护成本 |
+| 插件归档 | 已采用`zip.js`；`fflate`仅开发期独立编码互操作 | ZIP/DEFLATE、库已有的流与归档检查 | 包清单、剩余路径/实际大小检查、暂存与激活 |
 | 版本范围 | npm `semver` | 合法版本与范围、预发行语义 | 插件合同/宿主/状态兼容的业务决定 |
 | Worker 发布 | 官方 `cloudflare` TypeScript SDK | API 类型、上传编码、错误、超时和低层重试 | 发布计划、资源绑定保留、结果核对及恢复 |
 | 导入图 | `dependency-cruiser`，仅开发依赖 | 循环、跨层和间接越界检查 | Module 依赖规则、两宿主真实构建与插件打包验证 |
@@ -76,12 +76,12 @@ TanStack Query 的 [useQuery](https://tanstack.com/query/latest/docs/framework/r
 |---|---|
 | `webdav`、`tsdav` | 是客户端，不能用来提供本项目服务 |
 | `webdav-server` | 可挂自定义文件系统；默认 GET 从完整流截取范围，不能直接认定适合远端音频随机读取 |
-| Nephele | 有公开自定义资源与只读插件；已执行 alpha.67 探针，Bun 基础可用，本地 Worker 完整取流失败，留为开发调查依赖 |
+| Nephele | 有公开自定义资源与只读插件；已执行 alpha.67 探针，Bun 基础可用，本地 Worker 完整取流失败，已退出当前开发依赖，保留历史取舍 |
 | OpenList-Worker、CloudPaste、r2-webdav | 属于完整应用实现，耦合各自用户与存储；可参考或在处理许可后局部复用，不当作开箱即用的小库 |
 
 Worker 官方现在支持 [Node HTTP 桥接](https://developers.cloudflare.com/workers/runtime-apis/nodejs/http/)，不能仅凭 Node/Express 导入就认定 Nephele 无法运行。
 
-当前薄映射复用 `@xmldom/xmldom` 的 DOM/命名空间和序列化、`range-parser` 的范围解析、Hono 的认证及 Fetch 接线。只承载已确认的只读方法、属性和音乐文件事实，不扩展完整可写 DAV。Bun、本地 Worker 和真实 rclone 的已知字节路径已验证；OpenList、播放器和真实云端仍待验。
+当前薄映射复用 `@xmldom/xmldom` 的 DOM/命名空间和序列化、`range-parser` 的范围解析、Hono 的认证及 Fetch 接线。只承载已确认的只读方法、属性和音乐文件事实，不扩展完整可写 DAV。Bun、本地 Worker 和真实 rclone 的已知字节路径已验证；OpenList/播放器的本地代表性格式及真实Worker主链路已有证据，具体范围见台账。
 
 `range-parser` 的超长 suffix 边界经集中输入规范化后覆盖；Worker 音频流用官方 FixedLengthStream。大小、实际范围、取消和截断继续由来源合同/library 核对。XML 库不等于 DAV，Range 解析库也不等于远端流代理。
 
@@ -99,7 +99,7 @@ Worker 官方现在支持 [Node HTTP 桥接](https://developers.cloudflare.com/w
 
 源码层级和各 Module 的公开 Interface 统一见 [架构设计](../docs/architecture/README.md#模块组织)，不另维护一份目录树。
 
-核心保持一个应用工程，不为每个职责发布包或创建服务；来源插件则提供可独立安装的构建产物。Bun 与 Worker 使用不同后端入口，隔离本机能力。两端共用 Vite 静态资源，新插件不要求重编译前端；Worker 插件变更允许组装预构建模块并后台部署，免费兼容仍待 P0。
+核心保持一个应用工程，不为每个职责发布包或创建服务；来源插件则提供可独立安装的构建产物。Bun 与 Worker 使用不同后端入口，隔离本机能力。两端共用 Vite 静态资源，新插件不要求重编译前端；Worker 插件变更允许组装预构建模块并后台部署，普通路线发布已有真实证据，免费计划额度结论仍待验。
 
 核心负责插件/实例管理、目录布局和 DAV 接线；来源插件负责认证、内容和音质等专属规则。目录调用者只需理解列目录、元数据和打开内容，不接触来源协议；插件也不需要实现整套 WebDAV。
 
