@@ -1,6 +1,6 @@
 # MusicFS 当前交付物
 
-应用`0.1.0-dev.2`、插件API`0.1.6`、数据库schema8。2026-10-21按用户要求打包最新实现，包含可选音乐资料补全、挂载项管理、WinFsp安装引导和本机HTTPS WebDAV。下面列出产物、使用入口及未验证范围；既有记录保留各自版本边界，本次仅补现有Windows虚拟机的必要验收，不追加音乐平台请求。
+应用`0.1.0-dev.3`、插件API`0.1.6`、数据库schema8。2026-10-21按用户要求打包最新实现，包含可选音乐资料补全、挂载项管理、WinFsp安装引导、本机HTTPS及Windows原生映射文件上限设置与恢复。下面列出产物、使用入口及未验证范围；既有记录保留各自版本边界，本次仅补现有Windows虚拟机的必要验收，不追加音乐平台请求。
 
 ## 本次发行范围
 
@@ -9,7 +9,7 @@
 | 本次跳过 | 当前事实 |
 |---|---|
 | QQ正常窗口内的真实续期 | 协调、持久化和SDK轮换已有回归，未实际等到正常续期窗口；网易云扫码Cookie不支持login/refresh |
-| 其他系统原生运行 | 最新 Windows 程序已在现有 VM 验证 sample 挂载/重挂/移除、本机自签名 HTTPS、App 系统连接设置及原生映射读取；未重装已有 WinFsp，未验普通用户桌面中的 UAC 点击。macOS仍只有交叉构建，原生Linux图形入口未验 |
+| 其他系统原生运行 | dev.2 Windows 程序已在现有 VM 验证 sample 挂载/重挂/移除、本机自签名 HTTPS、App 系统连接设置及原生映射读取；本轮大文件阈值实机验收尚待 VM 恢复连接，未记作通过；未重装已有 WinFsp，未验普通用户桌面中的 UAC 点击。macOS仍只有交叉构建，原生Linux图形入口未验 |
 | 免费Worker和大目录资源 | 现有真实结果来自付费账号；免费计划适用性及相应大目录开销未确认 |
 | Bun运行时资料完整性核查 | 随包保留既有固定原始声明、正文、NOTICE及来源索引，`complete:false`不变；完整性与对应上游材料缺口见[第三方说明](../third-party/README.md)，本次不继续上游源码/依赖闭包调查 |
 
@@ -21,13 +21,13 @@
 
 | 用途 | 归档 | 解压后的入口 |
 |---|---|---|
-| Linux x64 | [Linux ZIP](../dist/releases/musicfs-0.1.0-dev.2-linux-x64.zip) | `musicfs` |
-| Windows x64 | [Windows ZIP](../dist/releases/musicfs-0.1.0-dev.2-windows-x64.zip) | `MusicFS.exe` |
-| macOS Intel | [macOS x64 ZIP](../dist/releases/musicfs-0.1.0-dev.2-macos-x64.zip) | `MusicFS.app` |
-| macOS Apple Silicon | [macOS arm64 ZIP](../dist/releases/musicfs-0.1.0-dev.2-macos-arm64.zip) | `MusicFS.app` |
-| 独立云端部署 | [Worker ZIP](../dist/releases/musicfs-0.1.0-dev.2-worker.zip) | `README.md`、`WORKER.md`、`wrangler.jsonc` |
-| 开发自己的来源插件 | [作者包 ZIP](../dist/releases/musicfs-0.1.0-dev.2-plugin-author-kit.zip) | 包内`README.md` |
-| 从源码构建 | [源码 ZIP](../dist/releases/musicfs-0.1.0-dev.2-source.zip) | `SOURCE.md` |
+| Linux x64 | [Linux ZIP](../dist/releases/musicfs-0.1.0-dev.3-linux-x64.zip) | `musicfs` |
+| Windows x64 | [Windows ZIP](../dist/releases/musicfs-0.1.0-dev.3-windows-x64.zip) | `MusicFS.exe` |
+| macOS Intel | [macOS x64 ZIP](../dist/releases/musicfs-0.1.0-dev.3-macos-x64.zip) | `MusicFS.app` |
+| macOS Apple Silicon | [macOS arm64 ZIP](../dist/releases/musicfs-0.1.0-dev.3-macos-arm64.zip) | `MusicFS.app` |
+| 独立云端部署 | [Worker ZIP](../dist/releases/musicfs-0.1.0-dev.3-worker.zip) | `README.md`、`WORKER.md`、`wrangler.jsonc` |
+| 开发自己的来源插件 | [作者包 ZIP](../dist/releases/musicfs-0.1.0-dev.3-plugin-author-kit.zip) | 包内`README.md` |
+| 从源码构建 | [源码 ZIP](../dist/releases/musicfs-0.1.0-dev.3-source.zip) | `SOURCE.md` |
 
 Linux发行程序在此前版本已有WSL解压运行、FUSE本地/远程挂载及恢复验证，本次仅检查新归档，不重复该旅程。必要原生验收只在现有 Windows VM 执行；其他系统与免费环境边界见上表。
 
@@ -46,7 +46,7 @@ Worker首次部署按包内`WORKER.md`或[部署说明](worker.md#首次部署)�
 - Windows修复裸盘符规范化和挂载根目录就绪检查，沿用已验证的rclone/WinFsp路径。
 - 挂载项支持重新挂载、卸载和移除；重挂复用保存的连接与凭据，移除清理对应保存记录和 rclone 配置。
 - Windows 包附带固定官方 WinFsp 运行时安装器，App 检测后按需引导安装；已有组件复用。
-- 可选本机 HTTPS WebDAV 复用专用自签名证书；App 经正常系统权限确认完成系统证书信任及启动现有 WebClient，不放宽全局 Basic 认证策略。原生客户端仍有默认文件大小等系统限制，较大音乐文件使用 App 的 WinFsp 挂载。
+- 可选本机 HTTPS WebDAV 复用专用自签名证书；App 经正常系统权限确认完成系统证书信任及启动现有 WebClient，不放宽全局 Basic 认证策略。dev.3 在同一明确操作中将原生映射单文件上限提高到 4GiB−1，并记录原值以供恢复；修改/恢复会重启运行中的 WebClient，短暂中断本机所有原生 WebDAV 连接。更大的文件使用 App 的 WinFsp 挂载。
 - 共用目录预览按50项分页，避免一次渲染数千条目。
 - 核心/WebUI升级工具保留云端实际插件模块与注册表。
 - Worker随包提供详细部署/升级说明；首次部署一次写入四项Secrets，关闭Cron后的续步行为有明确说明。

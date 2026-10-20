@@ -20,7 +20,11 @@ Windows 挂载前会检测 WinFsp 的实际运行组件。缺失时页面提供�
 
 “服务连接 → 本机 HTTPS WebDAV”提供可选的回环 HTTPS 入口。点击启用后生成此数据目录专用的自签名证书，再点击“完成 Windows 连接设置”：一次标准系统权限确认，将此证书加入系统信任并启动现有 WebClient 服务，不改变服务启动类型。已就绪的设置直接复用。复制显示的 HTTPS 地址和相同读取凭据到资源管理器。地址只供这台运行后台的电脑使用；它不覆盖局域网地址或云端证书。证书和端口会保留，重启恢复入口；停用会断开此 HTTPS 入口，证书材料保留以便再启用。
 
-此入口使用 Bun 原生 TLS，复用同一 DAV 处理链路，不额外运行反向代理。管理页面、启动器身份和 App 管理的 rclone 挂载继续使用既有回环连接。Windows 默认 WebClient 只在 HTTPS 上使用 Basic 认证，故仅生成证书还不够，必须让 Windows 信任；不通过放宽全局 `BasicAuthLevel` 来解决。原生客户端仍受 Windows 自身限制，例如默认 50,000,000 字节的文件传输上限；需要完整音乐文件挂载时优先使用下方 App 管理的挂载。[Microsoft WebDAV 说明](https://learn.microsoft.com/en-us/iis/publish/using-webdav/using-the-webdav-redirector)
+dev.3 起，同一连接设置还会将 Windows 原生映射的单文件上限提高到 4,294,967,295 字节（4GiB−1）。页面显示当前值；WebClient 已运行且需要修改上限时，按钮为“应用设置并重连”。修改影响这台电脑所有原生 WebDAV 连接，并重启正在运行的 WebClient，现有连接会短暂断开；原本停止的服务设置后直接启动。证书、原上限及新上限已经就绪时直接复用，不重复提权或重启。App 管理的 rclone/WinFsp 挂载不受该参数约束。
+
+第一次由此数据目录提高上限时记录原值；“恢复原文件上限”恢复原值，原先未设置该注册表值时删除此值，重新使用 Windows 默认值。恢复也需重启正在运行的 WebClient，但保留 HTTPS、证书信任、来源授权与目录。退出 App、关闭 HTTPS 不会自动修改全局上限；系统已有最大上限且并非由此 App 修改时不提供恢复入口。
+
+此入口使用 Bun 原生 TLS，复用同一 DAV 处理链路，不额外运行反向代理。管理页面、启动器身份和 App 管理的 rclone 挂载继续使用既有回环连接。Windows 默认 WebClient 只在 HTTPS 上使用 Basic 认证，故仅生成证书还不够，必须让 Windows 信任；不通过放宽全局 `BasicAuthLevel` 来解决。文件上限通过官方 `FileSizeLimitInBytes` 参数设置，不修改超时、目录属性上限或其他系统策略；更大文件使用 App 管理的挂载。[Microsoft WebDAV 说明](https://learn.microsoft.com/en-us/iis/publish/using-webdav/using-the-webdav-redirector)
 
 具体模块关系见[桌面挂载架构](architecture/desktop-mounts.md)，实际 Windows 结果见[限定验收记录](verification/p2-windows-mount.md)。
 

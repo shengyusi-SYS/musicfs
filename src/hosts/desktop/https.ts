@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -6,6 +5,7 @@ import { generate } from 'selfsigned';
 import { z } from 'zod';
 import type { DesktopHttps, DesktopHttpsView } from '../../contracts/desktop-https';
 import { writePrivateJson } from './rclone-control';
+import { createWindowsWebDav } from './windows-webdav';
 
 export class DesktopHttpsError extends Error {
   override readonly name = 'DesktopHttpsError';
@@ -13,28 +13,6 @@ export class DesktopHttpsError extends Error {
 }
 
 const stateSchema = z.object({ enabled: z.boolean(), port: z.number().int().min(0).max(65535) });
-const windowsSchema = z.object({ trusted: z.boolean(), webClient: z.enum(['running', 'stopped', 'missing']) });
-const psLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
-const encoded = (script: string) => Buffer.from(script, 'utf16le').toString('base64');
-const hashScript = `function Get-Sha256($certificate) {
-  $sha = [Security.Cryptography.SHA256]::Create()
-  try { return [BitConverter]::ToString($sha.ComputeHash($certificate.RawData)).Replace('-', '') }
-  finally { $sha.Dispose() }
-}`;
-const preamble = "$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false);";
-
-async function powershell(script: string): Promise<string> {
-  const executable = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  const child = spawn(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded(script)],
-    { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
-  let stdout = '';
-  child.stdout.setEncoding('utf8'); child.stdout.on('data', chunk => { stdout += chunk; });
-  const exitCode = await new Promise<number>((accept, reject) => {
-    child.once('error', reject); child.once('close', code => accept(code ?? -1));
-  });
-  if (exitCode !== 0) throw new DesktopHttpsError('trust_failed', 'Windows 证书操作未完成，请重试并确认系统提示。');
-  return stdout.trim().replace(/^\uFEFF/, '');
-}
 
 /** Optional loopback DAV listener; desktop management stays on its existing endpoint. */
 export async function createDesktopHttps(options: {
@@ -52,6 +30,7 @@ export async function createDesktopHttps(options: {
   let certificate: X509Certificate | undefined;
   let error: string | null = null;
   let windowsError: string | null = null;
+  const windows = createWindowsWebDav({ directory: options.directory, platform });
   let pending = Promise.resolve();
   const serialize = <T>(action: () => Promise<T>): Promise<T> => {
     const result = pending.then(action); pending = result.then(() => {}, () => {}); return result;
@@ -99,30 +78,13 @@ export async function createDesktopHttps(options: {
     state.port = server.port!;
   }
   async function inspect(): Promise<DesktopHttpsView> {
-    let trusted = false;
-    let webClient: DesktopHttpsView['webClient'] = null;
-    if (platform === 'win32') {
-      try {
-        const windows = windowsSchema.parse(JSON.parse(await powershell(`${preamble}\n${hashScript}
-$expected = ${psLiteral(certificate?.fingerprint256.replaceAll(':', '') ?? '')}
-function Test-Root {
-  $store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', 'LocalMachine')
-  try {
-    $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
-    foreach ($candidate in $store.Certificates) { if ((Get-Sha256 $candidate) -eq $expected) { return $true } }
-    return $false
-  } finally { $store.Close() }
-}
-$service = Get-Service -Name WebClient -ErrorAction SilentlyContinue
-$serviceState = if ($null -eq $service) { 'missing' } elseif ($service.Status -eq 'Running') { 'running' } else { 'stopped' }
-@{ trusted = (Test-Root); webClient = $serviceState } | ConvertTo-Json -Compress
-`)));
-        trusted = windows.trusted; webClient = windows.webClient; windowsError = null;
-      } catch { windowsError = '无法读取 Windows 连接设置，请检查 Windows PowerShell 后重新检测。'; }
-    }
+    let native: Awaited<ReturnType<typeof windows.inspect>> = { trusted: false, webClient: null,
+      fileSizeLimitBytes: null, originalFileSizeLimitBytes: null, canRestoreFileSizeLimit: false };
+    try { native = await windows.inspect(certificate?.fingerprint256); windowsError = null; }
+    catch { windowsError = '无法读取 Windows 连接设置，请检查 Windows PowerShell 后重新检测。'; }
     return { platform, enabled: state.enabled, davUrl: server ? `https://127.0.0.1:${state.port}/dav/` : null,
       certificate: certificate ? { fingerprintSha256: certificate.fingerprint256, expiresAt: new Date(certificate.validTo).toISOString() } : null,
-      trusted, webClient, error: error ?? windowsError };
+      ...native, error: error ?? windowsError };
   }
   try {
     await readCertificate();
@@ -140,30 +102,16 @@ $serviceState = if ($null -eq $service) { 'missing' } elseif ($service.Status -e
     trust: () => serialize(async () => {
       if (platform !== 'win32') throw new DesktopHttpsError('unsupported_platform', '自动信任证书仅用于 Windows。');
       if (!state.enabled || !server || !certificate) throw new DesktopHttpsError('trust_failed', '请先启用本机 HTTPS，再完成 Windows 连接设置。');
-      const current = await inspect();
-      if (current.webClient === null) throw new DesktopHttpsError('trust_failed', '无法检测 Windows WebClient，请重新检测后再完成连接设置。');
-      if (current.webClient === 'missing') throw new DesktopHttpsError('trust_failed', '此 Windows 未提供 WebClient 服务，无法使用原生 WebDAV 映射；可使用 App 的本机挂载。');
-      if (current.trusted && current.webClient === 'running') return current;
-      const installation = `${preamble}\n${hashScript}
-$certificate = New-Object Security.Cryptography.X509Certificates.X509Certificate2(${psLiteral(certificatePath)})
-if ((Get-Sha256 $certificate) -ne ${psLiteral(certificate.fingerprint256.replaceAll(':', ''))}) { throw 'Certificate changed' }
-$store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', 'LocalMachine')
-try { $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite); $store.Add($certificate) }
-finally { $store.Close(); $certificate.Dispose() }
-$service = Get-Service -Name WebClient -ErrorAction SilentlyContinue
-if ($null -eq $service) { throw 'WebClient service is not installed' }
-if ($service.Status -ne 'Running') { Start-Service -Name WebClient }
-`;
       try {
-        await powershell(`${preamble}
-$child = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe') -Verb RunAs -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', '${encoded(installation)}') -Wait -PassThru
-if ($child.ExitCode -ne 0) { throw 'Certificate installation failed' }
-`);
+        await windows.prepare({ path: certificatePath, fingerprint: certificate.fingerprint256 });
         error = null;
-        const view = await inspect();
-        if (!view.trusted || view.webClient !== 'running') throw new Error('Windows connection setup was not completed');
-        return view;
-      } catch { throw new DesktopHttpsError('trust_failed', 'Windows 连接设置未完成；请确认系统权限提示后重试。'); }
+        return inspect();
+      } catch (cause) { throw new DesktopHttpsError('trust_failed', cause instanceof Error ? cause.message : 'Windows 连接设置未完成，请重试。'); }
+    }),
+    restoreFileSizeLimit: () => serialize(async () => {
+      if (platform !== 'win32') throw new DesktopHttpsError('unsupported_platform', '恢复原生 WebDAV 设置仅用于 Windows。');
+      try { await windows.restoreFileSizeLimit(); return inspect(); }
+      catch (cause) { throw new DesktopHttpsError('trust_failed', cause instanceof Error ? cause.message : '恢复原文件上限未完成，请重试。'); }
     }),
     disable: () => serialize(async () => {
       if (server) { await server.stop(true); server = undefined; }

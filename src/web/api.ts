@@ -62,6 +62,7 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     desktopHttps: (signal: AbortSignal) => request<DesktopHttpsView>('/desktop/https', { signal }),
     enableDesktopHttps: () => request<DesktopHttpsView>('/desktop/https/enable', { method: 'POST' }),
     trustDesktopHttps: () => request<DesktopHttpsView>('/desktop/https/trust', { method: 'POST' }),
+    restoreWebDavFileSizeLimit: () => request<DesktopHttpsView>('/desktop/https/file-size-limit', { method: 'DELETE' }),
     disableDesktopHttps: () => request<DesktopHttpsView>('/desktop/https', { method: 'DELETE' }),
     quitDesktop: () => request<{ stopping: true }>('/desktop/quit', { method: 'POST' }),
     desktopNetwork: (signal: AbortSignal) => request<DesktopNetworkView>('/desktop/network', { signal }),

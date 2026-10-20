@@ -40,6 +40,8 @@ Windows 桌面程序的“本机挂载”使用随包 rclone 和系统 WinFsp，
 
 dev.2 的桌面 App 另提供“本机 HTTPS WebDAV”：启用后点击“完成 Windows 连接设置”，由 App 经正常系统权限确认安装专用本机证书信任、启动现有 WebClient，再复制 HTTPS 地址映射。这不要求放宽 `BasicAuthLevel`，也不改变局域网或云端服务。Windows 原生客户端默认文件传输上限为 50,000,000 字节；较大音乐文件优先使用 App 的 rclone/WinFsp 挂载。
 
+dev.3 起，“完成 Windows 连接设置”可一并将单文件上限提高到 4GiB−1，并提供“恢复原文件上限”。此值影响本机所有原生 WebDAV 连接，应用或恢复会重启正在运行的 WebClient；请在方便重连时点击。已有最大值会复用，App 退出不会自动恢复；恢复按钮仅针对本 App 保存过的原值。更大的文件继续使用 App 的挂载。
+
 ## 其他播放器
 
 支持 WebDAV 的播放器可使用同一读取连接。也可以打开某个已准备音频文件的 DAV URL，并使用播放器提供的 HTTP 认证或自定义请求头功能。通过 OpenList 打开时，使用它生成的代理下载链接，由 OpenList 保存读取凭据。

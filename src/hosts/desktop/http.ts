@@ -38,6 +38,7 @@ export function createDesktopHttp(input: {
   app.get('/api/desktop/https', async c => c.json(await input.https.inspect()));
   app.post('/api/desktop/https/enable', async c => c.json(await input.https.enable()));
   app.post('/api/desktop/https/trust', async c => c.json(await input.https.trust()));
+  app.delete('/api/desktop/https/file-size-limit', async c => c.json(await input.https.restoreFileSizeLimit()));
   app.delete('/api/desktop/https', async c => c.json(await input.https.disable()));
   app.post('/api/desktop/quit', async c => {
     try { await input.mounts.close(); }
