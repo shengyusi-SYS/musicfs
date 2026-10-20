@@ -38,19 +38,16 @@ bun scripts/build-worker.ts dist/plugins/org.musicfs.sample.zip
 
 1. 创建 D1 数据库，将实际 database ID 填入 `wrangler.jsonc`；设置 `CF_ACCOUNT_ID`，并使 `CF_WORKER_NAME` 与模板的 `name` 相同。
 2. 执行 D1 migrations。迁移必须先于新入口请求，服务不会在每次请求中自动修改 schema。
-3. 配置 `ADMIN_TOKEN`、`DAV_USERNAME`、`DAV_PASSWORD` 和发布用例使用的 `CF_API_TOKEN` Secrets。
-4. 部署模板；WebUI 在根路径、管理 API 在 `/api/`、DAV 在 `/dav`。
+3. 在本机准备一个私有JSON文件，包含`ADMIN_TOKEN`、`DAV_USERNAME`、`DAV_PASSWORD`和`CF_API_TOKEN`四项，文件放在发行目录之外。CF_API_TOKEN用于云端自行发布插件，只需首次配置；Wrangler登录用于本机部署，不会自动成为Worker的运行凭据。
+4. 用`--secrets-file`一次设置这些Secrets并部署，无需逐项secret put或多次发布。WebUI在根路径、管理API在`/api/`、DAV在`/dav`。
 
 ```bash
 cd dist/worker
 bunx wrangler d1 create musicfs
 # 编辑 wrangler.jsonc 中的 D1 ID 和账号信息。
 bunx wrangler d1 migrations apply musicfs --remote
-bunx wrangler secret put ADMIN_TOKEN
-bunx wrangler secret put DAV_USERNAME
-bunx wrangler secret put DAV_PASSWORD
-bunx wrangler secret put CF_API_TOKEN
-bunx wrangler deploy
+# 本机私有JSON文件的键为上述四项，值使用自己的凭据。
+bunx wrangler deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 ```
 
 运行时配置按职责分别设置：
@@ -64,7 +61,7 @@ bunx wrangler deploy
 | `ADMIN_TOKEN` | Secret | 用户访问受保护管理 API，WebUI 使用用户输入的该令牌 |
 | `DAV_USERNAME`、`DAV_PASSWORD` | Secrets | DAV 读取凭据；受保护的连接信息 API 会向管理用户提供连接信息 |
 
-发布 Token 需要有权读取目标 Worker 的当前模块及写入代码。官方 Content API 列出接受的写权限，账号与资源范围应按真实部署校验。[Cloudflare Content API 权限与合同](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/)
+发布Token需要有权读取目标Worker的当前模块及写入代码，可使用目标账号的Workers Scripts Edit权限；不是每次安装插件都重新申请。此配置方式已由本轮真实部署和后台发布验证。官方Content API列出接受的写权限。[Cloudflare Content API 权限与合同](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/)
 
 插件变更只发送代码模块和主模块名，使用不修改配置的Content API。真实云端sample生命周期已直接对比平台设置，并通过后续发布/管理/DAV及静态JS摘要验证D1、Secrets、ASSETS和设置保留；其他在途切换及失败恢复范围仍见[限定证据](verification/p4-worker-cloud.md)。发布Token不下发WebUI，也不写入插件包或模块源码。
 
