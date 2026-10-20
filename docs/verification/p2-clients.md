@@ -74,3 +74,5 @@ MusicFS日志包含`bytes=3001007-`后退至`bytes=122047-`，以及后续`bytes
 两次均使用既有`probe-player.ts`，关闭主缓存、限制demuxer缓冲并静音播放；不把每次seek机械等同于一次新的上游HTTP请求，没有主观听音结论。OpenList启动时默认离线下载工具连接等待曾延迟HTTP监听，最终跟踪同一客户端进程完成启动；这是第三方客户端初始化，不作为MusicFS接口故障或新产品需求。
 
 去敏合并结果保存在`/tmp/musicfs-flac-client-result.json`。正式临时service与OpenList均正常退出，两个指定PID已不存在；Cookie数据库、客户端Token、选中URL/path和私有配置已删除，仅保留去敏结果。原8787后台未操作。此切片完成Linux本地代表性FLAC的正式DAV→OpenList/mpv读取、解码和双向拖动；真实云端、其他目标系统与跨公网仍待对应环境验证。本轮无产品实现变更，不重建发行物或重复全部测试。
+
+后续真实Worker的代表性MP3已完成OpenList原生代理、独立mpv/Pulse解码及五次前后定位，见[云端记录](p4-worker-cloud.md#云端openlist与普通播放器)。该结果采用一次性WSL音频流保留配置，默认Pulse暂停恢复及实际数秒延迟均在记录中保留，不替代其他原生OS验收。
