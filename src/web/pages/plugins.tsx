@@ -6,7 +6,7 @@ import type { Api } from '../api';
 import { Failure } from '../components/feedback';
 import type { PluginChange } from '../../contracts/plugin-changes';
 
-const changeLabels: Record<PluginChange['status'], string> = { queued: '等待发布', uploading: '正在上传代码', deploying: '正在发布', verifying: '核对发布结果', completed: '已完成', failed: '未完成' };
+const changeLabels: Record<PluginChange['status'], string> = { queued: '等待处理', preparing: '准备升级', uploading: '正在上传代码', deploying: '正在发布', verifying: '核对发布结果', migrating: '准备实例数据', completed: '已完成', failed: '未完成' };
 
 export default function Plugins({ api }: { api: Api }) {
   const client = useQueryClient(); const { modal, message } = App.useApp();
@@ -17,7 +17,7 @@ export default function Plugins({ api }: { api: Api }) {
     queryFn: ({ signal }) => api.pluginChange(operationId!, signal),
     refetchInterval: query => query.state.data?.status === 'completed' || query.state.data?.status === 'failed' ? false : 1500 });
   async function invalidate() {
-    await Promise.all(['plugins', 'configuration', 'roots', 'library', 'directory-status'].map(key => client.invalidateQueries({ queryKey: [key] })));
+    await Promise.all(['plugins', 'instances', 'configuration', 'authentication', 'refresh-current', 'roots', 'library', 'directory-status'].map(key => client.invalidateQueries({ queryKey: [key] })));
   }
   function follow(value: PluginChange) { setChangeError(''); sessionStorage.setItem('musicfs.pluginChange', value.operationId); setOperationId(value.operationId); }
   useEffect(() => {
@@ -45,7 +45,7 @@ export default function Plugins({ api }: { api: Api }) {
   const active = plugins.data?.filter(value => value.status === 'active').length ?? 0;
   return <>
     <div className="page-actions"><span>{active} 个已启用插件</span><Button type="primary" disabled={!!operationId} icon={<PlusOutlined />} onClick={() => { install.reset(); setChangeError(''); setInstalling(true); }}>安装插件</Button></div>
-    {operationId && <Alert type="info" showIcon title={change.data ? changeLabels[change.data.status] : '正在查询插件变更'} description="Worker 发布由后台继续执行，页面重新打开后会恢复查询。" />}
+    {operationId && <Alert type="info" showIcon title={change.data ? changeLabels[change.data.status] : '正在查询插件变更'} description="插件变更由后台继续处理，页面重新打开后会恢复查询。" />}
     {changeError && <Alert type="error" showIcon title="插件变更未完成" description={changeError} closable onClose={() => setChangeError('')} />}
     <Failure error={change.error} retry={() => void change.refetch()} />
     <Failure error={plugins.error} retry={() => void plugins.refetch()} /><Failure error={remove.error} />

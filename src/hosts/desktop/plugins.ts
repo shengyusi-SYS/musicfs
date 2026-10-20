@@ -1,7 +1,7 @@
 import { mkdir, rename, rm } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { SourcePlugin } from '@musicfs/plugin-api';
+import type { PluginManifest, SourcePlugin } from '@musicfs/plugin-api';
 import {
   assertPluginModule, ExtensionError, type InstallationStore, type LoadedPlugin, type PluginRegistry, type PreparedPackage
 } from '../../core/extensions';
@@ -36,6 +36,11 @@ export function createDesktopPlugins(directory: string, store: InstallationStore
 
   return {
     registry,
+    async candidate(manifest: PluginManifest, revision: string) {
+      const entry = manifest.hosts.desktop;
+      if (!entry) throw new ExtensionError('incompatible', 'Plugin does not support desktop');
+      return load(revision, entry);
+    },
     async prepare(prepared: PreparedPackage) {
       const entry = prepared.manifest.hosts.desktop;
       if (!entry) throw new ExtensionError('incompatible', 'Plugin does not support desktop');

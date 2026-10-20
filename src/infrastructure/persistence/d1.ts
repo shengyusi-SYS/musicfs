@@ -4,6 +4,9 @@ import { ExtensionError, type Installation, type InstallationStore } from '../..
 import type { AuthenticationRecord, Instance, InstanceStore, SourceStamp } from '../../core/sources';
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
 import type { RefreshStore } from '../../core/library/refresh-types';
+import type { PluginChangeStore } from '../../application/change-plugin';
+import { changeFromRow, changeLeaseFromRow, changeInputFromRow, changeRecordSQL, nextChangeInstanceSQL, readyChangesSQL,
+  createChangeStatement, claimChangeStatement, releaseChangeStatement, commitChangePlan, type ChangeRow, type ChangeInputRow } from './plugin-change-sql';
 import { cancelRefreshPlan, claimRefreshStatement, commitRefreshPlan, createdRefresh, createRefreshPlan, currentRefreshSQL,
   readyRefreshesSQL, refreshFromRow, refreshRecordSQL, snapshotEntriesSQL, snapshotFromRows, snapshotHeaderFromRow, snapshotHeaderSQL,
   type RefreshDocumentRow, type RefreshOutcome, type SnapshotEntryRow, type SnapshotHeaderRow, type SqlStatement } from './refresh-sql';
@@ -110,6 +113,16 @@ export function createD1Store(db: D1Database) {
         .bind(instanceId).all<{ ref: string }>();
       return rows.results.map(row => row.ref);
     },
+    async createChange(record) { return await prepare(createChangeStatement(record)).first() !== null; },
+    async changeRecord(operationId) { return changeFromRow(await db.prepare(changeRecordSQL).bind(operationId).first<{ document: string }>()); },
+    async claimChange(operationId, token, now, until) { return changeLeaseFromRow(await prepare(claimChangeStatement(operationId, token, now, until)).first<ChangeRow>()); },
+    async commitChange(expected, next, mutation, now) {
+      const results = await db.batch<ChangeRow>(commitChangePlan(expected, next, mutation, now).map(prepare));
+      return changeLeaseFromRow(results.at(-1)?.results[0]);
+    },
+    async nextChangeInstance(operationId) { return changeInputFromRow(await db.prepare(nextChangeInstanceSQL).bind(operationId).first<ChangeInputRow>()); },
+    async releaseChange(operationId, token) { await prepare(releaseChangeStatement(operationId, token)).run(); },
+    async readyChanges(now, limit) { const rows = await db.prepare(readyChangesSQL).bind(now, limit).all<{ operation_id: string }>(); return rows.results.map(row => row.operation_id); },
     async createRefresh(record, replace) {
       const results = await db.batch<RefreshDocumentRow>(createRefreshPlan(record, replace).map(prepare));
       return createdRefresh(results.at(-1)!.results);
@@ -132,5 +145,5 @@ export function createD1Store(db: D1Database) {
       const rows = await db.prepare(readyRefreshesSQL).bind(now, limit).all<{ operation_id: string }>();
       return rows.results.map(row => row.operation_id);
     }
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore;
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore;
 }

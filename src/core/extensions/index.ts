@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { valid, validRange, satisfies } from 'semver';
 import type { HostKind, PluginManifest, SourcePlugin } from '@musicfs/plugin-api';
 
-export const PLUGIN_API_VERSION = '0.1.3';
+export const PLUGIN_API_VERSION = '0.1.4';
 
 export class ExtensionError extends Error {
   constructor(public readonly code: 'invalid_package' | 'incompatible' | 'revision_conflict' | 'missing_plugin' | 'host_not_configured' | 'change_in_progress', message: string) {
@@ -62,9 +62,6 @@ export function assertInstallationCandidate(previous: Installation | undefined, 
   if (previous?.manifest.version === prepared.manifest.version && previous.revision !== prepared.digest) {
     throw new ExtensionError('revision_conflict', 'A different package already uses this plugin version');
   }
-  if (previous && (previous.manifest.stateVersion !== prepared.manifest.stateVersion || previous.manifest.configVersion !== prepared.manifest.configVersion)) {
-    throw new ExtensionError('incompatible', 'State/config migrations must be prepared before installing this update');
-  }
 }
 
 export interface InstallationStore {
@@ -86,6 +83,9 @@ export function createExtensions(store: InstallationStore, prepare: (prepared: P
     async install(prepared: PreparedPackage): Promise<Installation> {
       const previous = await store.installation(prepared.manifest.id);
       assertInstallationCandidate(previous, prepared);
+      if (previous && (previous.manifest.stateVersion !== prepared.manifest.stateVersion || previous.manifest.configVersion !== prepared.manifest.configVersion)) {
+        throw new ExtensionError('incompatible', 'Use the coordinated installation path for schema migrations');
+      }
       await prepare(prepared);
       return store.activate(prepared.manifest, prepared.digest, previous?.generation ?? null);
     },
@@ -107,6 +107,11 @@ export function assertPluginModule(value: unknown): asserts value is SourcePlugi
   const methods = ['validateConfig', 'roots', 'list', 'stat', 'open'] as const;
   if (methods.some(key => !(key in value) || typeof Reflect.get(value, key) !== 'function')) {
     throw new ExtensionError('invalid_package', 'Plugin does not implement the public contract');
+  }
+  for (const key of ['migrateConfig', 'migrateState', 'validateState']) {
+    if (key in value && Reflect.get(value, key) !== undefined && typeof Reflect.get(value, key) !== 'function') {
+      throw new ExtensionError('invalid_package', 'Optional plugin methods must be callable');
+    }
   }
   if ('statistics' in value && value.statistics !== undefined) {
     const labels = z.record(z.string().min(1).max(64), z.string().min(1).max(80)).safeParse(value.statistics);

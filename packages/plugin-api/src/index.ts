@@ -82,5 +82,9 @@ export interface SourcePlugin {
   stat(ctx: Context, file: string): Promise<Outcome<FileInfo>>;
   open(ctx: Context, file: string, request: ReadRequest): Promise<Outcome<ReadResult>>;
   authenticate?(ctx: Context, action: AuthAction): Promise<Outcome<AuthStep>>;
-  migrateState?(input: { fromVersion: number; state: Json }): Json;
+  /** Pure candidate conversions; the host validates and atomically activates their outputs. */
+  migrateConfig?(input: { fromVersion: number; config: Json; state: Json }): Json;
+  migrateState?(input: { fromVersion: number; state: Json; config: Json }): Json;
+  /** Pure validation of the target state against its candidate configuration. */
+  validateState?(input: { config: Json; state: Json }): boolean;
 }

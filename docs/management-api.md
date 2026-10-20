@@ -9,10 +9,10 @@
 | `GET /api/status` | 宿主和应用版本 |
 | `GET /api/connection` | 受管理认证保护的 DAV 地址路径、用户名及读取密码；宿主未提供时返回 404 |
 | `GET /api/plugins` | 安装清单、版本与 active/missing 状态 |
-| `POST /api/plugins` | 请求正文为预构建 ZIP；桌面成功返回 201 安装记录；Worker 返回 202 持久变更操作 |
+| `POST /api/plugins` | 正文为预构建ZIP；桌面首次安装/同结构更新返回201，结构升级返回202持久变更；Worker均返回202 |
 | `POST /api/plugins/from-url` | `{url}`，下载有大小/超时限制的 HTTP(S) 发布包并安装 |
 | `DELETE /api/plugins/:id` | 桌面完成返回 204；Worker 返回 202 持久变更操作；完成后停止该插件的新调用，保留实例与布局引用 |
-| `GET /api/plugin-changes/:operationId` | Worker 查询持久安装/更新/移除进度；未结束操作继续安排核对，不存在返回 404 |
+| `GET /api/plugin-changes/:operationId` | 双宿主查询持久变更进度；未结束操作继续安排后台步骤，不存在返回404 |
 | `GET /api/plugins/:id/configuration` | JSON Schema/UI 提示与是否声明认证，供通用界面使用 |
 | `GET /api/instances` | 实例身份、名称和配置；不包含 privateState |
 | `POST /api/instances` | `{pluginId,name,config}`，由插件校验后创建 |
@@ -35,7 +35,7 @@
 | `DELETE /api/mounts/:id` | 正常卸载指定挂载；占用失败保留可操作状态 |
 | `POST /api/desktop/quit` | 仅正式桌面后台，正常卸载后返回 202 `{stopping:true}`，随后结束在途读取并退出；挂载占用返回 409 并继续运行 |
 
-Worker 的 `PluginChange` 包含 `operationId/kind/pluginId/status/createdAt/updatedAt` 和可选安装结果/错误；status 为 queued、uploading、deploying、verifying、completed 或 failed。202 仅表示受理，页面持续查询到终态；刷新页面可用保存的 operationId 恢复。发布凭据缺失返回 503，有未结束变更返回 409。执行与恢复边界见[Worker 指南](worker.md)。
+`PluginChange`包含 `operationId/kind/pluginId/status/createdAt/updatedAt` 和可选安装结果/错误；status为queued、preparing、uploading、deploying、verifying、migrating、completed或failed。202仅表示受理，页面持续查询到终态，重新打开插件页可用保存的operationId恢复。结构升级只有全部实例候选与安装整体切换才completed，失败保留旧安装和全部活动数据；不返回候选配置或私有状态。未结束变更返回409，Worker发布凭据缺失返回503。恢复边界见[迁移验证](verification/p2-plugin-migration.md)及[Worker指南](worker.md)。
 
 结构错误与坏 JSON 返回 400；配置/认证语义错误返回 422 及插件字段错误。来源失败保留结构化 `sourceError`，包括需认证、限流或临时错误。配置及认证的公开结果过滤 `nextPrivateState`，管理响应统一 `Cache-Control: no-store`。认证绑定、取消/过期和恢复语义见[验证记录](verification/p1-authentication.md)。真实来源的支持范围查[台账](verification.md)，尚未交付的部署和挂载不返回伪成功。
 

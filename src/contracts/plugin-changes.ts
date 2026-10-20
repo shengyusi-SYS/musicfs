@@ -5,7 +5,7 @@ export type PluginChange = {
   operationId: string;
   kind: 'install' | 'remove';
   pluginId: string;
-  status: 'queued' | 'uploading' | 'deploying' | 'verifying' | 'completed' | 'failed';
+  status: 'queued' | 'preparing' | 'uploading' | 'deploying' | 'verifying' | 'migrating' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;
   installation?: PluginInstallation;

@@ -15,6 +15,7 @@ bun install --frozen-lockfile --ignore-scripts
 | 命令 | 验证内容 |
 |---|---|
 | `bun run check` | 构建最小/QQ/网易云插件、严格类型检查、导入图检查、自动化测试；任一步失败即停止 |
+| `bun test tests/plugin-migration-source.test.ts tests/plugin-change-persistence.test.ts tests/plugin-migration-desktop.test.ts tests/worker-publishing.test.ts tests/migrations.test.ts` | 迁移转换、SQLite/D1原子激活、正式桌面更新/重启、Worker新调用接棒及旧数据库升级；使用独立临时数据 |
 | `bun run build:sample` | 同一 JSON Schema 生成 Ajv standalone 校验，构建浏览器兼容 ESM 并生成 ZIP |
 | `bun run build:qq` | 构建 QQ 开发预览与必要许可，生成固定 SDK 原始读取入口、固定日志设置以消除 process 依赖；生成 dist/plugins/org.musicfs.qq.zip |
 | `bun run probe:worker:qq` | 将实际 QQ 打包模块放入本地 workerd/D1，无 Node 兼容开关；检查状态隔离，可显式选择真实开发会话 |
@@ -75,6 +76,7 @@ bun scripts/probe-player.ts --url-file /tmp/selected-audio-url.txt --output /tmp
 |---|---|
 | 独立公开类型 | [plugin-api](../packages/plugin-api/src/index.ts) |
 | 包清单/兼容与基础安装策略 | [extensions](../src/core/extensions/index.ts) |
+| 共用插件迁移激活 / 候选转换 / 两驱动共同SQL | [application](../src/application/change-plugin.ts)、[sources migration](../src/core/sources/migration.ts)、[SQL计划](../src/infrastructure/persistence/plugin-change-sql.ts) |
 | 实例调用、配置及状态条件写入协调 | [sources](../src/core/sources/index.ts) |
 | 完整快照、布局、路径与内容核对 | [library](../src/core/library/index.ts) |
 | 管理 API / 共用只读 DAV | [HTTP](../src/transport/http/index.ts)、[DAV](../src/transport/dav/index.ts)、[接口说明](management-api.md) |

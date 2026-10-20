@@ -7,8 +7,12 @@ import librarySchema from './migrations/0002.sql' with { type: 'text' };
 import authenticationSchema from './migrations/0003.sql' with { type: 'text' };
 import workerChangesSchema from './migrations/0004.sql' with { type: 'text' };
 import refreshSchema from './migrations/0005.sql' with { type: 'text' };
+import pluginChangesSchema from './migrations/0006.sql' with { type: 'text' };
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
 import type { RefreshStore } from '../../core/library/refresh-types';
+import type { PluginChangeStore } from '../../application/change-plugin';
+import { changeFromRow, changeLeaseFromRow, changeInputFromRow, changeRecordSQL, nextChangeInstanceSQL, readyChangesSQL,
+  createChangeStatement, claimChangeStatement, releaseChangeStatement, commitChangePlan, type ChangeRow, type ChangeInputRow } from './plugin-change-sql';
 import { cancelRefreshPlan, claimRefreshStatement, commitRefreshPlan, createdRefresh, createRefreshPlan, currentRefreshSQL,
   readyRefreshesSQL, refreshFromRow, refreshRecordSQL, snapshotEntriesSQL, snapshotFromRows, snapshotHeaderFromRow, snapshotHeaderSQL,
   type RefreshDocumentRow, type RefreshOutcome, type SnapshotEntryRow, type SnapshotHeaderRow, type SqlStatement, type SqlValue } from './refresh-sql';
@@ -25,13 +29,14 @@ export function openSqlite(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = db.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version;
-  if (version === undefined || version < 0 || version > 5) { db.close(); throw new Error('Unsupported MusicFS database version'); }
-  if (version < 5) db.transaction(() => {
+  if (version === undefined || version < 0 || version > 6) { db.close(); throw new Error('Unsupported MusicFS database version'); }
+  if (version < 6) db.transaction(() => {
     if (version === 0) db.exec(initialSchema);
     if (version < 2) db.exec(librarySchema);
     if (version < 3) db.exec(authenticationSchema);
     if (version < 4) db.exec(workerChangesSchema);
-    db.exec(refreshSchema); db.exec('PRAGMA user_version = 5');
+    if (version < 5) db.exec(refreshSchema);
+    db.exec(pluginChangesSchema); db.exec('PRAGMA user_version = 6');
   })();
 
   const installation = (id: string): Installation | undefined => {
@@ -114,6 +119,13 @@ export function openSqlite(path: string) {
       return db.query<{ ref: string }, [string]>("SELECT ref FROM directory_snapshots WHERE instance_id = ? AND kind = 'directory'")
         .all(instanceId).map(row => row.ref);
     },
+    createChange(record) { return execute(createChangeStatement(record)).length === 1; },
+    changeRecord(operationId) { return changeFromRow(db.query<{ document: string }, [string]>(changeRecordSQL).get(operationId)); },
+    claimChange(operationId, token, now, until) { return changeLeaseFromRow(execute<ChangeRow>(claimChangeStatement(operationId, token, now, until))[0]); },
+    commitChange(expected, next, mutation, now) { return changeLeaseFromRow(batch<ChangeRow>(commitChangePlan(expected, next, mutation, now)).at(-1)?.[0]); },
+    nextChangeInstance(operationId) { return changeInputFromRow(db.query<ChangeInputRow, [string]>(nextChangeInstanceSQL).get(operationId)); },
+    releaseChange(operationId, token) { execute(releaseChangeStatement(operationId, token)); },
+    readyChanges(now, limit) { return db.query<{ operation_id: string }, [number, number]>(readyChangesSQL).all(now, limit).map(row => row.operation_id); },
     createRefresh(record, replace) {
       const results = batch<RefreshDocumentRow>(createRefreshPlan(record, replace));
       return createdRefresh(results.at(-1)!);
@@ -134,6 +146,15 @@ export function openSqlite(path: string) {
     readyRefreshes(now, limit) {
       return db.query<{ operation_id: string }, [number, number]>(readyRefreshesSQL).all(now, limit).map(row => row.operation_id);
     },
+    nextBackgroundWorkAt() {
+      // Reuse the ready predicates with an unbounded lease horizon, including
+      // the refresh source fence. No timer is needed when only stale jobs remain.
+      return db.query<{ instant: number | null }, [number, number, number, number]>(`SELECT MIN(instant) AS instant FROM (
+        SELECT CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END AS instant FROM plugin_changes
+          WHERE operation_id IN (${readyChangesSQL})
+        UNION ALL SELECT CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END FROM library_refresh_jobs
+          WHERE operation_id IN (${readyRefreshesSQL}))`).get(Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1)?.instant ?? null;
+    },
     close: () => db.close()
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & { close(): void };
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & { close(): void; nextBackgroundWorkAt(): number | null };
 }

@@ -6,19 +6,25 @@
 
 构建物为薄 `worker.mjs`、固定 `core.mjs`、可重组的 `registry.mjs` 和 `plugins/<修订摘要>/…`。核心导出 `createWorker(registrations)` 与 `assertPluginModule`，不导入注册表；注册表静态导入核心检查和插件，并在模块初始化时校验导出。这样可以替换注册表与新增插件模块而无需重新编译核心，也能在平台加载候选代码时拒绝坏插件，没有 core/registry 循环。
 
-注册表表达该发布版本可执行的代码，D1 安装记录表达当前激活的插件。后台先持久化变更、候选模块和操作身份，通过 SQL 条件控制同一部署的变更与恢复；发布后重读平台注册表，核对与持久候选相同，再条件激活 D1。候选保留旧 active 修订直到确认，使代码先行更新时仍能解析旧安装。移除只将安装标为 missing，保留实例及布局，后续发布重组再回收不再使用的修订。
+注册表表达该发布版本可执行的代码，D1安装记录表达当前激活的插件。后台先持久化操作、完整候选模块及暂存就绪标记；保存上传意图后发布，再重读平台注册表核对。候选保留旧active修订直到D1激活，使代码先行时仍能服务旧安装。移除只将安装标为missing，保留实例/布局，后续发布再回收不再使用的修订。
+
+配置/私有状态结构升级复用桌面的 `application/change-plugin.ts`：发布前一次冻结完整实例集合及各自数据修订，上传核对只证明代码就绪，**不能证明旧调用已取得新模块**。只有注册了目标 `(pluginId, revision)` 的后续调用可以准备迁移；每次至多一个实例，下一独立调用再整体激活。候选由 `sources` 纯转换、目标状态验证及可取消配置校验产生。安装代际、完整实例集合及各自epoch/stateRevision仍一致时，同一D1 batch切换安装、全部候选及操作终态；失败保留全部活动数据。零实例的升级也等待精确候选模块，避免在不可执行集合下报告完成。
 
 ```mermaid
 flowchart LR
   UI[WebUI 提交 ZIP 或移除] --> Op[D1 持久变更与候选]
   Op --> CF[普通 Worker 代码发布]
   CF --> Check[重读并核对 registry]
-  Check --> Active[D1 条件激活或标记 missing]
+  Check -->|结构升级| Candidate[新调用持精确模块，逐实例准备候选]
+  Candidate --> Active[D1 同批条件切换安装、全部实例与终态]
+  Check -->|结构不变或移除| Active
   Check --> Wait[结果不明：保留旧安装]
   Wait -->|查询 operationId 恢复| Check
 ```
 
 上传响应丢失时保留 verifying，后续查询核对实际注册表，匹配即可完成，避免重复上传。明确的客户端错误立即失败；长期无法核对则在后续恢复执行时失败并保留旧安装。此协议处理已知的外部结果不明，不提供代码发布与 D1 之间的分布式事务，也不承诺更新零中断。
+
+共用操作头由schema迁移 `0006.sql` 从旧Worker表更名，原JSON检查点不重写。旧版可能先激活安装再留下verifying；仅精确目标修订、清单、状态及预期代际+1全部匹配时允许完成原操作，不再次递增。代码块未暂存完成前禁止发布；中断超过两分钟后由后续有租约的调用失败清理，没有新增定时器或通用队列。
 
 ## 采用 Content API 与官方 SDK
 
@@ -32,4 +38,4 @@ flowchart LR
 
 Dynamic Workers 当前有付费计划前提，本路线使用普通 Worker 发布，不采用其运行时 Loader。避免该前提不等于本项目已通过免费计划的包体、CPU、D1 或请求额度验证。[官方 Dynamic Workers 定价](https://developers.cloudflare.com/dynamic-workers/pricing/)
 
-本地 [正式入口探针](../../scripts/probe-worker-service.ts) 已运行实际 core/registry/插件模块、ASSETS、管理 API、DAV 与 D1；[发布集成测试](../../tests/worker-publishing.test.ts) 使用真实本地 D1 和官方 SDK，仅控制平台网络响应，验证 multipart、安装/移除和恢复分支。它们不能证明真实云端部署、完整配置保留、权限、传播时序、免费额度或在途播放行为。部署与当前验收边界见 [Worker 指南](../worker.md)。
+本地[正式入口探针](../../scripts/probe-worker-service.ts)运行实际core/registry/插件模块、ASSETS、管理API、DAV与D1；[发布集成测试](../../tests/worker-publishing.test.ts)使用真实本地D1和官方SDK，仅控制平台网络，覆盖multipart、安装/移除、响应丢失、精确新调用逐实例迁移/激活和失败保留；[共同持久化测试](../../tests/plugin-change-persistence.test.ts)覆盖两驱动条件事务及重启。它们不能证明真实云端部署、配置保留、权限、传播时序、免费额度或在途播放。部署边界见[Worker指南](../worker.md)，迁移证据见[记录](../verification/p2-plugin-migration.md)。

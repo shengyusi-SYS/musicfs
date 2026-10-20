@@ -13,10 +13,13 @@ flowchart LR
   Web[React / Vite 共用 WebUI] --> DTO[独立管理 DTO / HTTP 客户端]
   DTO --> Manage[HTTP 管理调用]
   Manage --> Auth[Bearer 管理认证]
-  Auth --> E[extensions 安装/移除]
+  Auth --> CH[宿主插件变更]
+  CH --> E[extensions 包与安装策略]
+  CH --> UC[共用迁移激活用例]
+  UC --> S
   Auth --> S[sources 实例/配置/交互认证]
   Auth --> L[library 布局/刷新]
-  E --> Host[桌面外置加载 / Worker 发布后精确注册]
+  CH --> Host[桌面外置加载 / Worker 发布后精确注册]
   L --> S
   S --> Host
   Host --> Plugin[独立最小插件 / QQ / 网易云]
@@ -25,11 +28,12 @@ flowchart LR
   L --> Store[SQLite / D1 快照与布局]
   S --> Store
   E --> Store
+  UC --> Store
 ```
 
 ## 当前 Worker 插件发布
 
-仅此图描述已接线的发布实现；SDK 网络编码与恢复测试使用受控平台响应，真实云端仍待验。完整迁移激活目标见后文“插件变更”。
+发布及迁移已接线；SDK网络使用受控平台响应，D1为本地真实workerd，真实云端仍待验。宿主差异与共用激活见后文“插件变更”。
 
 ```mermaid
 sequenceDiagram
@@ -37,14 +41,28 @@ sequenceDiagram
   participant H as Worker changes
   participant D as D1
   participant C as Cloudflare Content API
+  participant N as 含精确候选模块的新调用
   U->>H: 安装 ZIP / 移除
-  H->>D: 保存操作、期望代际与候选模块
+  H->>D: 保存操作与完整候选代码，标记暂存就绪
   H-->>U: 202 + operationId
+  opt 配置或状态结构升级
+    H->>D: 一次冻结完整实例集合及状态修订
+  end
   H->>C: 读取当前 core / registry / modules
+  H->>D: 保存候选registry及上传意图
   H->>C: 上传候选代码集合，保留旧 active 修订
   H->>C: 重读实际 registry
   alt 标记匹配
-    H->>D: 条件激活 / 标记 missing，操作完成
+    H->>D: 代码就绪
+    alt 结构升级
+      Note over H,N: 旧调用没有候选模块，不能转换或激活
+      loop 每个独立调用至多一个实例
+        N->>D: 读取未准备实例，保存转换及验证后的候选
+      end
+      N->>D: 另一步条件切换安装、全部实例及completed
+    else 首次安装、同结构更新或移除
+      H->>D: 条件激活 / missing 与completed
+    end
   else 响应丢失或暂时无法核对
     H->>D: verifying，保留旧安装
     U->>H: 查询原 operationId
@@ -234,7 +252,7 @@ flowchart TD
   Entry --> DAV[DAV Adapter]
   Entry --> Infra[SQLite/D1 与宿主 Adapter]
   Entry --> Mounts[仅桌面的 mounts]
-  HTTP --> UC[插件变更用例]
+  Infra --> UC[共用迁移激活用例]
   HTTP --> L[library]
   HTTP --> S[sources]
   HTTP --> E[extensions]
@@ -248,6 +266,8 @@ flowchart TD
   L --> API
   P[示例 / 第三方插件] --> API
   Infra --> Ports[领域 Module 声明的存储和执行 Interface]
+  Infra --> ChangeStore[变更用例声明的条件提交 Interface]
+  UC --> ChangeStore
   E --> Ports
   S --> Ports
   L --> Ports
@@ -277,44 +297,45 @@ erDiagram
 
 ## 插件变更
 
-这是跨领域用例，`extensions` 解释包，`sources` 准备实例状态，宿主执行代码变化。数据库条件提交不跨 Cloudflare 发布请求；外部结果不明时由同一操作核对。
+当前跨领域用例：`extensions` 解释包/安装策略，`sources` 只准备候选数据，宿主取得精确代码，持久化执行共同SQL计划。迁移验证见[记录](../verification/p2-plugin-migration.md)。数据库条件提交不跨Cloudflare请求，外部结果不明仍由原操作核对。
 
 ```mermaid
 sequenceDiagram
   autonumber
   participant U as WebUI
-  participant C as 插件变更用例
+  participant H as 桌面或Worker变更控制器
+  participant C as 共用迁移激活用例
   participant E as extensions
   participant S as sources
-  participant H as 桌面加载或 Worker SDK Adapter
   participant DB as 持久化 Adapter
-  U->>C: 上传包 / 地址 / 更新或移除
-  C->>E: 检查包、兼容并准备变更计划
-  E->>DB: 记录操作与期望安装代际
-  C->>S: 准备候选迁移，保留当前状态
-  S-->>C: 候选状态与期望实例版本
-  C->>E: 执行候选发布
-  E->>H: 暂存代码或上传并部署候选集合
-  H-->>E: 实际运行修订或待核对结果
-  alt 代码确认就绪
-    C->>DB: 条件发布安装记录与候选实例状态
-    DB-->>C: 成功或版本冲突
-    alt 数据库提交成功
-      C-->>U: 成功与实际版本
-    else 状态在发布期间已变化
-      C->>E: 核对当前安装与候选清理
-      C-->>U: 冲突，未报告业务成功
-    end
-  else 外部结果不明
-    C->>E: 查询并核对原操作
-    C-->>U: 仍在核对，保留当前可用事实
-  else 明确失败或状态已变化
-    C->>E: 结束候选，保留可用版本
-    C-->>U: 具体失败 / 冲突
+  U->>H: 上传包 / 地址
+  H->>E: 校验包、版本与宿主兼容
+  H->>DB: 记录持久操作和期望安装代际
+  H-->>U: 202与原operationId
+  H->>C: 捕获升级输入
+  C->>DB: 一次冻结完整实例集合及各自epoch/stateRevision
+  H->>H: 桌面加载候选；Worker发布并核对新旧代码集合
+  Note over H,C: Worker后续调用必须含精确候选修订
+  loop 每步一个实例，事务外转换/验证
+    H->>C: 当前租约与候选模块
+    C->>DB: 读取一个未准备输入
+    C->>S: preparePluginMigration
+    S-->>C: 规范化配置与目标私有状态
+    C->>DB: 条件暂存候选，当前活动数据不变
   end
+  H->>C: 所有候选已就绪，另一步激活
+  alt 安装代际、完整实例集合与各自版本仍匹配
+    C->>DB: 同事务切换安装、全部实例、completed并清候选
+    C-->>H: 成功
+  else 转换失败或版本冲突
+    C->>DB: failed并清候选，保留原安装和全部活动数据
+    C-->>H: 固定错误码与公开说明
+  end
+  U->>H: 恢复查询原操作
+  H-->>U: 持久进度或终态
 ```
 
-操作状态可描述为准备中、发布中、核对中、完成或失败，不是先引入通用工作流引擎。移除也走此用例，使新调用失效并保留实例/布局引用。新旧注册集合、回退、Secrets/D1/静态资源保留和在途读取须 P0 实测。
+结构不变的桌面安装仍立即完成，移除保留实例/布局；Worker所有变更都异步发布。迁移与目录刷新复用桌面同一后台循环，Worker每次后台/定时调用有界续步。`preparing`、`migrating` 是原变更记录的阶段，不引入通用工作流引擎。真实云端Secrets/D1/静态资源保留与在途播放影响仍待验。
 
 ## 内容刷新
 

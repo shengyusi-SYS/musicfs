@@ -15,6 +15,8 @@ module.exports = {
       from: { path: '^src/core/extensions/' }, to: { path: '^src/core/(sources|library)/|^src/application/' } },
     { name: 'sources-own-no-library', severity: 'error',
       from: { path: '^src/core/sources/' }, to: { path: '^src/core/library/|^src/application/' } },
+    { name: 'application-stays-host-independent', severity: 'error',
+      from: { path: '^src/application/' }, to: { path: '^src/(hosts|transport|infrastructure|web)/|^plugins/|^(node:|bun:)' } },
     { name: 'worker-has-no-desktop-dependencies', severity: 'error',
       from: { path: '^src/(worker\\.ts|hosts/worker/)' },
       to: { path: '^src/hosts/desktop/|^src/infrastructure/persistence/sqlite', reachable: true } },

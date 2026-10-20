@@ -10,6 +10,7 @@
 | [实现与验收台账](verification.md) | FR01—FR25、目标环境与交付物的实现/验证状态及证据 | 尚未覆盖环境已通过 |
 | [连接OpenList与播放器](clients.md) | 准备、代理配置及客户端缓存刷新步骤 | 所有客户端/宿主已经验收 |
 | [客户端真实验收](verification/p2-clients.md) | 两来源本地OpenList、MP3播放/双向seek及Linux mpv | 全部格式、跨平台、云端或主观听音 |
+| [插件结构升级](verification/p2-plugin-migration.md) | API0.1.4、整体候选激活、正式桌面重启与Worker新调用接棒 | 真实Cloudflare传播/配额或示例会话续期 |
 | [开发与验证入口](development.md) | 工程命令、实现入口和探针运行方法 | 完整用户版应用 |
 | [P0 插件基础验证](verification/p0-plugin-foundation.md) | 实际依赖、双宿主本地结果、状态及归档边界 | 真实云部署、音乐账号与全部目标系统 |
 | [P0 目录/DAV/管理验证](verification/p0-library-dav.md) | 快照、布局、HTTP 字节、workerd 与真实 rclone | 平台实播、系统挂载和全量交付 |

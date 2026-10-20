@@ -57,7 +57,7 @@ bunx wrangler deploy
 
 | 配置 | 方式 | 用途 |
 |---|---|---|
-| `DB` | D1 binding | 实例、布局、快照、分页刷新与插件变更；需要包含 `0005.sql` 的全部迁移 |
+| `DB` | D1 binding | 实例、布局、快照、分页刷新与插件变更；需要包含 `0006.sql` 的全部迁移 |
 | `ASSETS` | 静态资源 binding | 根页面和 `/assets/*`，与管理 API/DAV 共用一个 Worker |
 | `CF_ACCOUNT_ID`、`CF_WORKER_NAME` | 模板 vars | 定位当前部署；Worker 名称必须与实际目标一致 |
 | `CF_API_TOKEN` | Secret | 后台读取当前代码集合、发布替换代码；仅宿主使用 |
@@ -74,7 +74,7 @@ bunx wrangler deploy
 
 目录刷新使用[持久分页接口](management-api.md)。一次 POST step 最多执行一页插件读取，D1 保存暂存条目和下一游标，末页后才切换完整快照。操作 ID 可跨页面重载、Worker isolate 重建和进程重启恢复；GET 只查询。已有成功目录在刷新期间继续可读，冷读取返回带 Retry-After 的 503，由页面或客户端重试。
 
-开始刷新及冷读取响应可以经 `waitUntil` 安排一页；它不会在同一次调用中循环。WebUI 后续逐次 POST step；模板另配置每分钟 Cron，正式 scheduled 入口最多推进一个就绪任务的一页，供页面关闭后的慢速续跑。Cron 不保证精确完成时间，大集合应在页面中推进；平台配置保留的真实验收也应覆盖此触发器。
+开始刷新及冷读取响应可以经 `waitUntil` 安排一页；它不会在同一次调用中循环。WebUI后续逐次POST step；模板另配置每分钟Cron，scheduled优先推进一次插件变更，否则推进一页目录刷新，供页面关闭后的慢速续跑。Cron不保证精确完成时间，大集合应在页面中推进；平台配置保留的真实验收也应覆盖此触发器。
 
 单页预算与完整集合预算仍需分开测量。分页化不证明加密 CPU、插件内部请求、CDN 出口或逐文件 DAV 元数据满足免费额度；当前没有真实 Cloudflare 测试账号，继续本地验证，云端项保持待验。设计与已测边界见 [ADR 0007](adr/0007-durable-paged-refresh.md)和[分页记录](verification/p2-durable-refresh.md)。
 
@@ -92,6 +92,8 @@ WebUI 上传已构建 ZIP 或填写发布地址后，Worker 把变更及候选�
 `202` 表示操作已受理，完成以 `status: "completed"` 为准；`failed` 带有可显示的错误码与说明。返回的 `operationId` 用于后续查询，控制器重建后也能读取同一记录。管理请求仍使用 Bearer 认证；未配置发布账号/Token 的安装和移除返回 `503 host_not_configured`，其他读取、页面和 DAV 可继续使用。另有变更尚未结束时返回 `409 change_in_progress`，不存在的操作返回 `404`。
 
 安装过程先读取平台当前模块，保留固定核心和仍在使用的修订，生成带操作身份的候选 `registry.mjs`。平台模块初始化时会调用核心已有的 `assertPluginModule`；随后发布器重新读取实际注册表，与 D1 中保存的候选内容核对，匹配后才条件激活插件安装。加载代码不会自动激活安装，数据库确认也不能由一次上传响应替代。
+
+结构升级先冻结全部实例输入，核对代码后由含精确候选模块的新调用接棒。每次最多转换/验证一个实例，全部就绪后另一步在同一D1 batch中切换安装、所有实例及completed。阶段可见 `preparing` / `migrating`；任一转换失败或实例在准备期间变化均保留旧安装和全部活动数据。没有界面时Cron继续原操作；临时进度不是部分实例已生效。见[合同](architecture/plugin-interface.md#配置与私有状态迁移)及[本地证据](verification/p2-plugin-migration.md)。
 
 上传已被平台接受但响应丢失时，操作保留为 `verifying`，下一次查询安排重新读取注册表；内容已匹配即可完成 D1 激活，**不会盲目再上传一次**。明确的 4xx 拒绝（408 除外）立即标记失败。结果仍不明确且自尝试已超过两分钟时，后续核对执行会将操作标记为 `deployment_unconfirmed`；这是查询触发的恢复边界，不是一个保证准时触发的独立定时器。
 
@@ -113,5 +115,5 @@ bun test tests/worker-publishing.test.ts
 | 证据 | 已覆盖 | 尚未证明 |
 |---|---|---|
 | [正式入口探针](../scripts/probe-worker-service.ts) | 实际产品 core/薄入口/注册表在本地 workerd 的接线、页面、D1 与 DAV | Cloudflare 控制面接受实际上传及真实流量行为 |
-| [3 项发布集成测试](../tests/worker-publishing.test.ts) | 真实 Miniflare D1 + 官方 SDK；仅平台 Fetch 受控。覆盖正确 multipart、安装激活、移除保留数据、响应丢失后核对、明确拒绝保留旧安装 | 真平台的配置保留、权限范围、传播时序与资源额度 |
+| [6项发布集成测试](../tests/worker-publishing.test.ts) | 真实Miniflare D1 +官方SDK，仅平台Fetch受控；multipart、安装/移除、响应丢失、精确新调用迁移/原子激活、失败保留及暂存中断 | 真平台配置保留、权限、传播时序与资源额度 |
 | 真实云端验收 | 当前尚无 | 普通 Worker 免费计划可用范围、Secrets/D1/ASSETS 保留、更新/失败恢复、在途播放影响及真实来源兼容 |

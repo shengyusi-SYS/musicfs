@@ -21,11 +21,14 @@ export default function createWorker(registrations: RegisteredPlugin[]) {
       return service.app.fetch(request);
     },
     async scheduled(_event: unknown, env: WorkerBindings) {
-      const changes = createWorkerChanges({ db: env.DB, registrations, waitUntil: () => {} });
+      const changes = createWorkerChanges({ db: env.DB, registrations, waitUntil: () => {},
+        accountId: env.CF_ACCOUNT_ID, scriptName: env.CF_WORKER_NAME, apiToken: env.CF_API_TOKEN });
+      const signal = AbortSignal.timeout(60_000);
+      if (await changes.stepNext(signal)) return;
       const service = createWorkerService({ db: env.DB, registrations, adminToken: env.ADMIN_TOKEN,
         dav: { username: env.DAV_USERNAME, password: env.DAV_PASSWORD }, changes });
       // The native scheduler is a slow fallback when no management page is open.
-      await service.library.refreshes.stepNext(AbortSignal.timeout(60_000));
+      await service.library.refreshes.stepNext(signal);
     }
   };
 }

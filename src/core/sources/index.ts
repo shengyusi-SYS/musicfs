@@ -224,3 +224,4 @@ export function createSources(store: InstanceStore, registry: PluginRegistry, re
 }
 
 export type Sources = ReturnType<typeof createSources>;
+export { preparePluginMigration, type MigrationInput, type PreparedMigration } from './migration';

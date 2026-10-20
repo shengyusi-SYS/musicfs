@@ -2,11 +2,11 @@
 
 日期：2026-10-20。状态：P0 草案，尚未发布稳定插件 SDK。依据：[领域与模块设计](README.md)、[术语](../../outputs/GLOSSARY.md)、[插件决定](../adr/0001-installable-source-plugins.md)。本文负责调用与数据合同，不重复管理路由、用户需求或宿主实现。
 
-首轮可类型检查的精确定义见 [plugin-api 源码](../../packages/plugin-api/src/index.ts)，预构建包见[最小插件构建入口](../../scripts/build-sample.ts)，实际覆盖见[P0 记录](../verification/p0-plugin-foundation.md)及[通用认证记录](../verification/p1-authentication.md)。下文保留职责与语义；真实来源、续期合并和候选迁移不因类型已声明而视为完成。
+首轮可类型检查的精确定义见 [plugin-api 源码](../../packages/plugin-api/src/index.ts)，预构建包见[最小插件构建入口](../../scripts/build-sample.ts)，实际覆盖见[P0 记录](../verification/p0-plugin-foundation.md)、[通用认证](../verification/p1-authentication.md)及[候选迁移](../verification/p2-plugin-migration.md)。公开类型不替代真实来源、续期及云端验收。
 
 ## 包与版本
 
-当前宿主合同版本为 **0.1.3**；新增文件条目的可选完整 `info`。依赖它提供大目录批量文件属性的插件声明 `apiRange >=0.1.3 <0.2.0`，旧宿主按兼容检查拒绝安装。0.1.1 的通用二维码图片、0.1.2 的目录计数与显示标签仍有效；未提供 info 的旧插件保持原 stat 行为，不自动获得大目录的请求预算保证。
+当前宿主合同版本为 **0.1.4**；新增配置转换、目标私有状态验证和迁移整体激活语义。使用迁移能力的插件声明 `apiRange >=0.1.4 <0.2.0`。0.1.3 的文件条目完整 `info`、0.1.2 的目录计数和0.1.1的二维码图片仍有效；旧插件未提供 info 时保持原 stat 行为，不自动获得大目录的请求预算保证。
 
 首轮验证 ZIP 插件包，采用现成归档库解析。包内有一份 manifest、预构建 ESM 入口及依赖模块、JSON 配置 Schema、UI 提示和必要只读资产/许可；模块和资产路径在 manifest 中明确列出，不运行安装脚本或在线安装 npm 依赖。
 
@@ -82,8 +82,10 @@ interface SourcePlugin {
   open(ctx: Context, file: Ref, request: ReadRequest): Promise<Outcome<ReadResult>>;
   // 声明认证的插件提供；action/step 是下文约定的判别联合 DTO
   authenticate?(ctx: Context, action: Json): Promise<Outcome<Json>>;
-  // 无 I/O 的候选状态转换；宿主决定何时提交
-  migrateState?(input: { fromVersion: number; state: Json }): Json;
+  // 无 I/O 的候选转换和验证；宿主决定何时提交
+  migrateConfig?(input: { fromVersion: number; config: Json; state: Json }): Json;
+  migrateState?(input: { fromVersion: number; state: Json; config: Json }): Json;
+  validateState?(input: { config: Json; state: Json }): boolean;
 }
 ```
 
@@ -135,7 +137,15 @@ DAV 从已发布信息批量描述条目，来源有效性按同一来源戳在�
 
 这份私有状态用于必要授权与来源流程状态，不承载整份公共目录或音频缓存。超大来源状态、必要批量缓存等真实需求出现时，在宿主存储 seam 扩展有明确所有者的操作，不直接暴露数据库或通用任意写入能力。
 
-`migrateState` 只能产生候选状态；是否兼容、是否保存旧状态以及何时与插件版本激活，由安装操作与实例保存 Interface 协调。插件不得在迁移入口修改当前持久数据或启动后台守护任务。
+## 配置与私有状态迁移
+
+`configVersion`、`stateVersion` 分别描述配置和私有状态的数据结构版本，与插件包的 SemVer 区分。只有对应结构版本变化才调用其转换：`migrateConfig` 接收旧配置/旧状态，`migrateState` 接收旧状态和已转换配置。转换为同步纯函数，返回完整 JSON 候选；不执行 I/O、修改当前持久数据或启动后台任务。
+
+有受影响实例的结构升级必须提供相应转换函数和 `validateState`。宿主复制并校验 JSON，先检查目标状态，再以候选配置/状态调用可取消的 `validateConfig`，接受其规范化配置及可选 `nextPrivateState`，最后再次验证目标状态。任何一步拒绝、抛错或返回非 JSON 都使整个更新失败。结构版本不变的兼容更新不运行这些钩子，也不强制已有插件新增它们；没有实例时无需转换数据。
+
+安装用例一次冻结当前实例集合及每个实例的配置、状态、代际和状态修订，逐实例保存候选。最后在同一个 SQLite 事务或 D1 batch 中，条件切换安装记录、**全部**实例候选及操作终态；任何实例被新增、删除、配置/授权变化或安装代际改变，均拒绝整体切换。成功后实例 ID、名称和布局保留，实例代际/状态修订递增并清除旧交互认证记录；旧请求及旧目录快照不能写回。
+
+桌面端先加载不可变候选修订，后台可跨重启继续。Worker 先冻结输入再发布包含新旧代码的集合；核对上传成功后，必须由确实包含目标 `(pluginId, revision)` 模块的后续调用执行迁移与激活，旧调用不会拿旧模块迁移。失败保留旧安装和全部活动数据；终态清理暂存候选，不提供任意回滚图或跨代码发布/数据库的事务。实测范围见[迁移验证](../verification/p2-plugin-migration.md)。
 
 ## 错误与生命周期
 
