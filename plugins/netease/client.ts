@@ -37,10 +37,14 @@ export class NeteaseClient {
   }
   update(next: NeteaseState) { this.state = next; this.changed = true; }
   requireSession() {
-    if (!this.state.accountId) fail('needs_auth', '请先为此网易云实例扫码授权。');
     if (!this.jar.getCookiesSync(site).some(cookie => cookie.key === 'MUSIC_U' && cookie.value)) this.loseSession();
   }
   loseSession(): never {
+    // Each invocation uses tough-cookie's default synchronous in-memory store.
+    this.jar.store.getAllCookies((error, cookies) => {
+      if (error) throw error;
+      for (const cookie of cookies ?? []) if (cookie.key === 'MUSIC_U') this.jar.store.removeCookie(cookie.domain, cookie.path, cookie.key, error => { if (error) throw error; });
+    });
     this.update({ ...this.state, cookies: JSON.stringify(this.jar.serializeSync()), accountId: null, accountName: null });
     return fail('needs_auth', '网易云授权已失效，请重新扫码。');
   }
@@ -93,7 +97,9 @@ export class NeteaseClient {
     const profile = object(data.profile);
     const id = String(profile.userId ?? '');
     if (!/^[1-9]\d*$/.test(id) || typeof profile.userId === 'number' && !Number.isSafeInteger(profile.userId)) fail('temporary', '网易云暂未返回有效账号信息，请稍后重试。');
-    return { id, name: typeof profile.nickname === 'string' ? profile.nickname.slice(0, 500) : '网易云账号' };
+    const name = typeof profile.nickname === 'string' ? profile.nickname.slice(0, 500) : '网易云账号';
+    if (this.state.accountId !== id || this.state.accountName !== name) this.update({ ...this.state, accountId: id, accountName: name });
+    return { id, name };
   }
 }
 

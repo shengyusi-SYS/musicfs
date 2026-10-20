@@ -173,9 +173,10 @@ sequenceDiagram
   alt 继续认证
     W->>S: poll / submit（操作 ID 与挑战 ID）
     S->>P: 仅传插件挑战与输入
-    P-->>S: 下一步 / complete / 错误
+    P-->>S: 下一步 / 凭据就绪即 complete / 错误
     S->>D: 条件接受步骤与私有状态；终态增加代际
     S-->>W: 公开结果
+    Note over P: 账号资料由后续内容读取按需补齐
   else 取消
     W->>S: cancel（操作 ID）
     S->>D: 先写 cancelled 并增加代际
@@ -215,7 +216,7 @@ sequenceDiagram
 
 ## 当前 QQ 插件内部链路
 
-描述 alpha.8 的已接线责任。自建/收藏、推荐、完整分页、实例音质/回退/去重已接入；SDK续期已通过本地包验证，真实自然到期/失效重登及部分认证facade取消仍待收口。没有把 SDK 的整个路由服务暴露成 MusicFS API。
+描述 alpha.9 的已接线责任。自建/收藏、推荐、完整分页、实例音质/回退/去重已接入；SDK续期及凭据就绪即完成授权已通过本地包验证，真实自然到期/失效重登及部分认证facade取消仍待收口。没有把 SDK 的整个路由服务暴露成 MusicFS API。
 
 ```mermaid
 flowchart LR

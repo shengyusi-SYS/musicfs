@@ -126,18 +126,18 @@ test('QQ renewal aborts its actual SDK fetch and does not return a state candida
   expect(f.ctx.privateState).toEqual(f.state as Json);
 });
 
-test('QQ resumes a confirmed credential after the consumed QR expires', async () => {
+test('QQ plugin locally restores a confirmed sealed credential without consuming its QR or inheriting an old account name', async () => {
   const f = await fixture(); const calls: string[] = [];
   f.ctx.privateState = { ...f.state, pending: { id: 'confirmed', key: 'private-consumed-qr', channel: 'qq',
     expiresAt: new Date(Date.now() - 1).toISOString(), qrImage: 'data:image/png;base64,AA==', confirmed: true } };
-  const plugin = createQqPlugin(async request => { calls.push(new URL(request.url).pathname); return json({ data: { profile: { nickname: '恢复账号' } } }); });
+  const plugin = createQqPlugin(async request => { calls.push(new URL(request.url).pathname); return json({}, 502); });
   expect(await plugin.authenticate!(f.ctx, { kind: 'poll', challengeId: 'confirmed' })).toMatchObject({ ok: true,
-    value: { kind: 'complete', accountName: '恢复账号' }, nextPrivateState: { pending: null, token: f.state.token } });
-  expect(calls).toEqual(['/login/status']);
+    value: { kind: 'complete' }, nextPrivateState: { pending: null, token: f.state.token, accountName: null } });
+  expect(calls).toEqual([]);
   f.ctx.privateState = { ...(f.ctx.privateState as QqState), token: null };
   expect(await plugin.authenticate!(f.ctx, { kind: 'poll', challengeId: 'confirmed' })).toMatchObject({ ok: false,
     error: { kind: 'needs_auth' }, nextPrivateState: { token: null, pending: null } });
-  expect(calls).toEqual(['/login/status']);
+  expect(calls).toEqual([]);
 });
 
 test('QQ recommendation client forwards caller cancellation independently of the catalogue wrapper', async () => {

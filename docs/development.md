@@ -16,9 +16,10 @@ bun install --frozen-lockfile --ignore-scripts
 |---|---|
 | `bun run check` | 构建最小/QQ/网易云插件、严格类型检查、导入图检查、自动化测试；任一步失败即停止 |
 | `bun test tests/plugin-migration-source.test.ts tests/plugin-change-persistence.test.ts tests/plugin-migration-desktop.test.ts tests/worker-publishing.test.ts tests/migrations.test.ts` | 迁移转换、SQLite/D1原子激活、正式桌面更新/重启、Worker新调用接棒及旧数据库升级；使用独立临时数据 |
+| `bun test tests/source-authentication-completion.test.ts` | 两个真实示例经正式管理认证入口完成授权，资料请求临时失败独立重试、旧QR期限不使已完成操作退回过期；使用受控上游 |
 | `bun run build:sample` | 同一 JSON Schema 生成 Ajv standalone 校验，构建浏览器兼容 ESM 并生成 ZIP |
 | `bun run build:qq` | 构建 QQ 开发预览与必要许可，生成固定 SDK 原始读取入口、固定日志设置以消除 process 依赖；生成 dist/plugins/org.musicfs.qq.zip |
-| `bun run probe:worker:qq` | 实际 QQ 打包模块在本地 workerd/D1、无 Node 兼容开关；检查状态隔离、受控上游的SDK续期/双控制器合并/密文跨运行时恢复；可显式选择真实开发会话 |
+| `bun run probe:worker:qq` | 实际 QQ 打包模块在本地 workerd/D1、无 Node 兼容开关；状态隔离、受控SDK续期/双控制器合并/密文跨运行时恢复及正式管理路由完成认证；可显式选择真实开发会话 |
 | `bun run build:netease` | 固定 4.32.0 必要 SDK 模块、原样加密及 Ajv standalone，输出 dist/netease/org.musicfs.netease.zip |
 | `bun run probe:worker:netease` | 实际网易云 ESM 在 Bun/workerd 请求真实二维码；可显式选取已授权实例验证 D1 会话恢复和每日目录；需要网络 |
 | `bun run build:worker` | 组装正式 Worker core/薄入口/独立 registry、WebUI、模板及迁移；可附已有插件 ZIP 路径 |

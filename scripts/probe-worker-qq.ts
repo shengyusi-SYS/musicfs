@@ -55,6 +55,21 @@ try {
   assert.equal(renewalRequests, 1);
   console.log(JSON.stringify({ runtime: 'local workerd', packedSdkRenewal: true, controlledUpstream: true,
     concurrentControllers: 2, renewalRequests, persistedTokenCrossRuntime: true, epochPreserved: true, realVendorRenewalTested: false }));
+  const expiresAt = new Date(Date.now() + 120_000).toISOString();
+  const challengeId = 'fixture-confirmed'; const operationId = crypto.randomUUID();
+  await db.prepare('UPDATE instances SET private_state = ?, authentication = ? WHERE id = ?').bind(
+    JSON.stringify({ ...JSON.parse(after.private_state), pending: { id: challengeId, key: 'fixture-consumed-key', channel: 'qq',
+      expiresAt, confirmed: true, qrImage: 'data:image/png;base64,AA==' } }),
+    JSON.stringify({ operationId, revision: 0, stamp: { id: instanceIds[1], pluginId: 'org.musicfs.qq', epoch: after.epoch,
+      pluginRevision: 'd'.repeat(64), pluginGeneration: 1 }, step: { kind: 'waiting', challengeId, expiresAt, message: 'Fixture approval confirmed' } }), instanceIds[1]!).run();
+  const authenticated = await mf.dispatchFetch(`http://probe/api/instances/${instanceIds[1]}/authentication`, { method: 'POST', headers,
+    body: JSON.stringify({ kind: 'poll', operationId, challengeId }) });
+  assert.equal(authenticated.status, 200);
+  assert.deepEqual(await authenticated.json(), { ok: true, value: { operationId, step: { kind: 'complete' } } });
+  const completedState = await db.prepare('SELECT private_state FROM instances WHERE id = ?').bind(instanceIds[1]!).first<{ private_state: string }>();
+  assert(completedState); assert.equal(JSON.parse(completedState.private_state).pending, null); assert.equal(JSON.parse(completedState.private_state).token, renewed.token);
+  console.log(JSON.stringify({ runtime: 'local workerd', packedAuthenticationCompletion: true, formalManagementRoute: true,
+    restoredConfirmedCredential: true, privateStatePreserved: true, realQrScanTested: false }));
   const { MUSICFS_QQ_TEST_STATE_DB, MUSICFS_QQ_TEST_INSTANCE_ID } = process.env;
   if (MUSICFS_QQ_TEST_STATE_DB || MUSICFS_QQ_TEST_INSTANCE_ID) {
     assert(MUSICFS_QQ_TEST_STATE_DB && MUSICFS_QQ_TEST_INSTANCE_ID, 'Set both real-session probe selectors');

@@ -61,10 +61,11 @@ function fixture() {
     setPlaybackRows(transform: typeof playbackRows) { playbackRows = transform; },
     setMissingPlayback(state: boolean) { missingPlayback = state; }, cancelledBody: () => cancelledBody };
 }
-async function authorize(f: ReturnType<typeof fixture>) {
+async function authorize(f: ReturnType<typeof fixture>, resolveIdentity = true) {
   const started = await plugin.authenticate!(f.ctx, { kind: 'start' }); f.ctx.privateState = started.nextPrivateState!;
   const qr = waiting(value(started)); const completed = await plugin.authenticate!(f.ctx, { kind: 'poll', challengeId: qr.challengeId });
   expect(value(completed).kind).toBe('complete'); f.ctx.privateState = completed.nextPrivateState!;
+  if (resolveIdentity) { const roots = await plugin.roots(f.ctx); value(roots); f.ctx.privateState = roots.nextPrivateState ?? f.ctx.privateState; }
 }
 const audio = (qualities: string[], missingQuality = 'hide', mode = qualities.length > 1 ? 'multiple' : 'single'): Json => ({ quality: qualities[0] ?? 'standard', audio: { mode, qualities, missingQuality } });
 async function qualityFixture() {
@@ -98,13 +99,30 @@ test('NetEase real SDK callbacks exchange QR and restore correctly scoped, expir
   expect(step.challengeId).not.toBe('upstream-qr-key'); expect(JSON.stringify(step)).not.toContain('private-session');
 });
 
-test('NetEase confirmed credentials survive a temporary profile failure without consuming the QR again', async () => {
-  const f = fixture(); const start = await plugin.authenticate!(f.ctx, { kind: 'start' }); const qr = waiting(value(start)); f.ctx.privateState = start.nextPrivateState!;
-  f.setStatusUnavailable(true); const failure = await plugin.authenticate!(f.ctx, { kind: 'poll', challengeId: qr.challengeId });
-  expect(failure).toMatchObject({ ok: false, error: { kind: 'temporary' } }); expect(JSON.stringify(failure.nextPrivateState)).toContain('private-session');
-  f.ctx.privateState = failure.nextPrivateState!; f.setStatusUnavailable(false);
-  expect(value(await plugin.authenticate!(f.ctx, { kind: 'poll', challengeId: qr.challengeId })).kind).toBe('complete');
+test('NetEase QR authorization completes before optional profile lookup and content can retry without scanning again', async () => {
+  const f = fixture(); f.setStatusUnavailable(true); await authorize(f, false);
+  expect(f.ctx.privateState).toMatchObject({ accountId: null, accountName: null, pending: null });
+  expect(f.calls.some(call => call.path.includes('/nuser/account/get'))).toBe(false);
+  expect(await plugin.roots(f.ctx)).toMatchObject({ ok: false, error: { kind: 'temporary' } });
+  expect(JSON.stringify(f.ctx.privateState)).toContain('private-session');
+  const profileCalls = f.calls.filter(call => call.path.includes('/nuser/account/get')).length;
+  const daily = value(await plugin.list(f.ctx, 'daily')); const file = daily.items[0]!; if (file.kind !== 'file') throw new Error('Expected file');
+  const info = value(await plugin.stat(f.ctx, file.fileRef));
+  const opened = value(await plugin.open(f.ctx, file.fileRef, { expectedContentId: info.contentId })); await opened.body.cancel();
+  expect(f.calls.filter(call => call.path.includes('/nuser/account/get'))).toHaveLength(profileCalls);
+  f.setStatusUnavailable(false); const roots = await plugin.roots(f.ctx);
+  expect(value(roots).items).toHaveLength(5); expect(roots.nextPrivateState).toMatchObject({ accountId: '42', accountName: '测试账号' });
   expect(f.calls.filter(call => call.path.includes('qrcode/client/login'))).toHaveLength(1);
+});
+
+test('NetEase a new QR session clears the previous identity and resolves the current owner when personal playlists need it', async () => {
+  const f = fixture(); await authorize(f); expect(f.ctx.privateState).toMatchObject({ accountId: '42' });
+  f.setStatusBody({ code: 200, profile: { userId: 52, nickname: '切换后的账号' } }); await authorize(f, false);
+  expect(f.ctx.privateState).toMatchObject({ accountId: null, accountName: null, pending: null });
+  const created = await plugin.list(f.ctx, 'created'); expect(value(created).items.map(item => item.entryId)).toEqual(['10']);
+  expect(created.nextPrivateState).toMatchObject({ accountId: '52', accountName: '切换后的账号' });
+  f.ctx.privateState = created.nextPrivateState!;
+  expect(value(await plugin.list(f.ctx, 'favorites')).items.map(item => item.entryId)).toEqual(['9']);
 });
 
 test('NetEase missing or expired session cookies require reauthorization before making a protected request', async () => {
@@ -136,12 +154,17 @@ test('NetEase malformed account responses remain temporary and preserve the auth
   expect(value(await plugin.roots(f.ctx)).items).toHaveLength(5);
 });
 
-test('NetEase an explicit logged-out account response clears the session identity and allows a fresh QR login', async () => {
-  const f = fixture(); await authorize(f); f.setStatusBody({ code: 200, account: null, profile: null });
+test('NetEase an explicit logged-out account removes the rejected credential while preserving its device and independent QR challenge', async () => {
+  const f = fixture(); await authorize(f);
+  const started = await plugin.authenticate!(f.ctx, { kind: 'start' }); const qr = waiting(value(started)); f.ctx.privateState = started.nextPrivateState!;
+  f.setStatusBody({ code: 200, account: null, profile: null });
   const failure = await plugin.roots(f.ctx);
-  expect(failure).toMatchObject({ ok: false, error: { kind: 'needs_auth' }, nextPrivateState: { accountId: null, accountName: null } });
+  expect(failure).toMatchObject({ ok: false, error: { kind: 'needs_auth' }, nextPrivateState: { accountId: null, accountName: null, pending: { id: qr.challengeId } } });
+  expect(JSON.stringify(failure.nextPrivateState)).not.toContain('private-session'); expect(JSON.stringify(failure.nextPrivateState)).toContain('deviceId');
   f.ctx.privateState = failure.nextPrivateState!;
-  f.setStatusBody({ code: 200, profile: { userId: 42, nickname: '测试账号' } }); await authorize(f);
+  const before = f.calls.length; expect(await plugin.roots(f.ctx)).toMatchObject({ ok: false, error: { kind: 'needs_auth' } }); expect(f.calls).toHaveLength(before);
+  f.setStatusBody({ code: 200, profile: { userId: 42, nickname: '测试账号' } });
+  const completed = await plugin.authenticate!(f.ctx, { kind: 'poll', challengeId: qr.challengeId }); expect(value(completed).kind).toBe('complete'); f.ctx.privateState = completed.nextPrivateState!;
   expect(value(await plugin.list(f.ctx, 'created')).items.map(item => item.name)).toEqual(['自建歌单']);
 });
 

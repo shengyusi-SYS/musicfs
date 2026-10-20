@@ -28,6 +28,7 @@ const directoryEntry = (value: unknown): Entry => {
   return { kind: 'directory', entryId: playlistId, name: label(item.name), directoryRef: JSON.stringify({ kind: 'playlist', id: playlistId }) };
 };
 async function playlists(client: NeteaseClient, offset: number) {
+  if (!client.state.accountId) await client.profile();
   const result = await client.call(endpoints.userPlaylists, { uid: client.state.accountId, limit: 100, offset });
   if (!Array.isArray(result.playlist) || typeof result.more !== 'boolean') fail('temporary', '网易云未返回完整歌单分页信息。');
   if (result.more && !result.playlist.length) fail('temporary', '网易云歌单分页提前结束。');

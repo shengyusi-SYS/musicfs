@@ -2,6 +2,8 @@
 
 此插件通过与第三方相同的公开合同安装、配置、认证和访问文件。核心、WebUI 与宿主不需要网易云分支。平台协议来自固定 `NeteaseCloudMusicApi@4.32.0` 的必要模块与原样密码实现，不启动另一个 API 服务，不修改 SDK 源文件。
 
+当前候选为alpha.7，配置/私有状态版本仍为1。扫码得到有效MUSIC_U即完成授权，不再把额外账号资料查询放在二维码步骤内。昵称不是登录条件；个人歌单首次需要UID时查询并保存，根入口已有的账号查询也会更新身份。换号先清旧UID/昵称，避免后续内容误用旧账号。
+
 ## 当前入口
 
 在仓库根目录运行：
@@ -12,13 +14,13 @@ bun test tests/netease-plugin.test.ts
 bun run scripts/probe-worker-netease.ts
 ```
 
-作者构建输出 `dist/netease/org.musicfs.netease.zip`，安装到桌面服务后新建网易云实例，选择“来源授权”并开始扫码。二维码由共用界面呈现，使用网易云音乐 App 扫描并确认。实例 Cookie 只存为插件私有状态；确认后的会话会先经过账号状态接口核实。每次调用持有自己的 CookieJar、Fetch 与 AbortSignal，取消/旧结果写入由宿主公开合同控制。
+作者构建输出 `dist/netease/org.musicfs.netease.zip`，安装到桌面服务后新建网易云实例，选择“来源授权”并开始扫码。二维码由共用界面呈现，使用网易云音乐 App 扫描并确认。实例 Cookie 只存为插件私有状态；后续内容读取独立处理账号状态。每次调用持有自己的 CookieJar、Fetch 与 AbortSignal，取消/旧结果写入由宿主公开合同控制。
 
 Worker 产物保留静态 `node:crypto`、`node:zlib` 导入，部署需要适当的 Node 兼容日期/开关。作者构建用静态导入桥接上游 CommonJS 内置模块调用，不替换密码算法。`tough-cookie` 负责 Cookie 的域名、路径、过期和持久化，Fetch 的 `Headers.getSetCookie()` 提供独立响应头；没有自行按逗号拆 Cookie。
 
 会话恢复与失效遵循扫码登录的实际能力。固定 [4.32.0 随包文档](https://unpkg.com/NeteaseCloudMusicApi@4.32.0/public/docs/home.md)的“刷新登录”段明确 `login/refresh` 不支持二维码登录的 Cookie，因此插件不定时调用此接口，也不承诺永久免扫码。有效 `MUSIC_U` 缺失或到期时，在请求受保护内容前返回“需要重新认证”；来源明确返回未登录状态或账号状态中的 `profile: null` 时，也回到共用扫码流程。账号响应缺字段、编号损坏、网络或服务暂时失败均保留原会话，避免把临时故障当成授权失效。
 
-同次调用的 Cookie 更新由独立 CookieJar 合并，即使后续业务失败，也通过 `nextPrivateState` 提议保存；宿主仍按实例版本条件提交，旧调用不能覆盖新授权。认证确认后的临时账号查询失败会保留已收到的凭据，后续重试不重复消费二维码。
+同次调用的 Cookie 更新由独立 CookieJar 合并，即使后续业务失败，也通过 `nextPrivateState` 提议保存；宿主仍按实例版本条件提交，旧调用不能覆盖新授权。后续账号查询失败不回退已经完成的扫码；内容可重试，无须重复消费二维码。明确失效时通过tough-cookie移除MUSIC_U，保留设备Cookie和另行进行的扫码挑战。
 
 ## 当前能力与缺口
 

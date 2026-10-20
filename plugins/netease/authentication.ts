@@ -2,10 +2,10 @@ import type { AuthAction, AuthStep } from '@musicfs/plugin-api';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
 
-async function complete(client: NeteaseClient): Promise<AuthStep> {
-  const profile = await client.profile();
-  client.update({ ...client.state, accountId: profile.id, accountName: profile.name, pending: null });
-  return { kind: 'complete', accountName: profile.name };
+function complete(client: NeteaseClient): AuthStep {
+  if (!client.jar.getCookiesSync('https://music.163.com').some(cookie => cookie.key === 'MUSIC_U' && cookie.value)) fail('temporary', '网易云已确认扫码，但尚未返回有效会话。');
+  client.update({ ...client.state, accountId: null, accountName: null, pending: null });
+  return { kind: 'complete' };
 }
 function waiting(client: NeteaseClient, scanned = false): AuthStep {
   const pending = client.state.pending!;
@@ -28,11 +28,7 @@ export async function authenticate(client: NeteaseClient, action: AuthAction): P
   if (pending.confirmed) return complete(client);
   if (Date.parse(pending.expiresAt) <= Date.now()) { client.update({ ...client.state, pending: null }); return { kind: 'expired', message: '网易云二维码已过期，请重新开始。' }; }
   const checked = await client.call(endpoints.qrCheck, { key: pending.key });
-  if (checked.code === 803) {
-    if (!client.jar.getCookiesSync('https://music.163.com').some(cookie => cookie.key === 'MUSIC_U' && cookie.value)) fail('temporary', '网易云已确认扫码，但尚未返回有效会话。');
-    client.update({ ...client.state, pending: { ...pending, confirmed: true } });
-    return complete(client);
-  }
+  if (checked.code === 803) return complete(client);
   if (checked.code === 800) { client.update({ ...client.state, pending: null }); return { kind: 'expired', message: '网易云二维码已过期，请重新开始。' }; }
   if (checked.code !== 801 && checked.code !== 802) fail('temporary', '网易云返回了无法识别的授权状态。');
   return waiting(client, checked.code === 802);

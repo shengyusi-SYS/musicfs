@@ -1,5 +1,6 @@
 import type { AuthAction, AuthStep } from '@musicfs/plugin-api';
 import { fail, object, QqFailure, type QqClient, type QqState } from './client';
+import { createSealedSessionResolver } from './generated-upstream.mjs';
 
 async function qrImage(client: QqClient, value: unknown): Promise<string> {
   if (typeof value !== 'string') fail('temporary', 'QQ 未返回有效二维码。');
@@ -20,10 +21,11 @@ async function qrImage(client: QqClient, value: unknown): Promise<string> {
 }
 
 async function complete(client: QqClient): Promise<AuthStep> {
-  const status = await client.call('/login/status');
-  const profile = object(object(status.data).profile);
-  if (!Object.keys(profile).length) { client.update({ ...client.state, pending: null }); return client.needsAuthentication(); }
-  const name = [profile.nickname, profile.nick, profile.name].find(value => typeof value === 'string' && value.length > 0);
+  // The SDK has already exchanged and validated the credential. Profile availability is a separate read.
+  const session = await createSealedSessionResolver({ secrets: { current: client.state.secret } }).resolve(client.state.token ?? undefined);
+  client.ctx.signal.throwIfAborted();
+  if (!session) { client.update({ ...client.state, pending: null }); return client.needsAuthentication(); }
+  const name = [session.credential.nickname, session.credential.nick].find(value => typeof value === 'string' && value.length > 0);
   client.update({ ...client.state, pending: null, accountName: typeof name === 'string' ? name.slice(0, 500) : null });
   return { kind: 'complete', ...(client.state.accountName ? { accountName: client.state.accountName } : {}) };
 }

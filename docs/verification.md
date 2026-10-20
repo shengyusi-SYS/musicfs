@@ -4,9 +4,9 @@
 
 ## 当前事实
 
-已有开发alpha，核心/协议/共用页面已接线，QQ/微信与网易云真实扫码、目录和音频已有证据。QQ完整音质策略见[音质/统计](verification/p2-qq-quality.md)；网易云完整喜欢 **4,158曲/4,657个多版本文件**、每日30曲/35个多版本文件和真实128k/320k MP3见[来源记录](verification/p2-netease-source.md)。正式桌面点击启动/挂载管理、Worker入口/持久后台发布已接线；**209项测试、2,489次断言**、三组类型及151模块/527依赖边界通过，现有页面构建继续复用；[持久分页刷新](verification/p2-durable-refresh.md)已有核心、SQLite/D1、正式workerd与真实网易云/浏览器证据。目标系统、其余客户端范围、真实云端及完整示例仍未完成。
+已有开发alpha，核心/协议/共用页面已接线，QQ/微信与网易云真实扫码、目录和音频已有证据。QQ完整音质策略见[音质/统计](verification/p2-qq-quality.md)；网易云完整喜欢 **4,158曲/4,657个多版本文件**、每日30曲/35个多版本文件和真实128k/320k MP3见[来源记录](verification/p2-netease-source.md)。正式桌面点击启动/挂载管理、Worker入口/持久后台发布已接线；**212项测试、2,546次断言**、三组类型及152模块/541依赖边界通过，现有页面构建继续复用；[持久分页刷新](verification/p2-durable-refresh.md)已有核心、SQLite/D1、正式workerd与真实网易云/浏览器证据。目标系统、其余客户端范围、真实云端及完整示例仍未完成。
 
-三个正式交付包已并行接线。持久分步已完成本地链路，真实网易云无损+标准多目标42页发布4,657文件，并取得真实FLAC字节；[目录描述批量读取](verification/p2-listing-metadata.md)已落地，4,158文件正式D1 allprop为15条SQL、0来源stat/外部请求；[OpenList/独立mpv](verification/p2-clients.md)的双来源本地MP3播放/双向seek已验；[插件结构迁移](verification/p2-plugin-migration.md)已通过正式桌面与真实本地D1/Worker接棒；[按需会话续期](verification/p2-session-lifecycle.md)已有两驱动/实际QQ包的本地证据。下一主线是认证完成/资料读取的边界、剩余取消与CPU，目标系统按环境收口。一次只推进一页仍不等于真实免费Worker已验。真实自然续期/失效重登继续独立保留。用户确认暂时没有Cloudflare测试账号，先继续本地开发；云端验收保留待验。具体出口与约15—28有效人日估算见[计划](../outputs/musicfs-implementation-plan.md)和[复盘](../outputs/musicfs-effort-risk-roi-assessment.md)。
+三个正式交付包已并行接线。持久分步已完成本地链路，真实网易云无损+标准多目标42页发布4,657文件，并取得真实FLAC字节；[目录描述批量读取](verification/p2-listing-metadata.md)已落地，4,158文件正式D1 allprop为15条SQL、0来源stat/外部请求；[OpenList/独立mpv](verification/p2-clients.md)的双来源本地MP3播放/双向seek已验；[插件结构迁移](verification/p2-plugin-migration.md)已通过正式桌面与真实本地D1/Worker接棒；[按需续期及认证完成边界](verification/p2-session-lifecycle.md)已有两驱动/实际QQ包和正式管理入口证据。下一主线是Worker剩余CPU，QQ认证facade取消独立推进，目标系统按环境收口。一次只推进一页仍不等于真实免费Worker已验。真实自然续期/失效重登继续独立保留。用户确认暂时没有Cloudflare测试账号，先继续本地开发；云端验收保留待验。具体出口与约15—28有效人日估算见[计划](../outputs/musicfs-implementation-plan.md)和[复盘](../outputs/musicfs-effort-risk-roi-assessment.md)。
 
 ## 正式宿主与第二来源检查点
 
@@ -40,7 +40,7 @@
 | 需求 | 功能 | 实现 | 验证 | 代码/产物/证据与剩余缺口 |
 |---|---|---|---|---|
 | FR01 | WebUI 认证 | 进行中 | 部分通过 | 通用步骤、QQ/微信及[网易云真实扫码](verification/p2-netease-source.md)通过；真实云端、授权链接及失效重登待验 |
-| FR02 | 会话保存 | 进行中 | 部分通过 | SQLite/D1交互步骤/重启、按需续期合并与失败保存已验；QQ实际包受控SDK轮换和两实例v1→v2保留账号通过；网易云到期/临时响应分类已回归；真实自然续期、失效重登及认证步骤边界待收口 |
+| FR02 | 会话保存 | 进行中 | 部分通过 | SQLite/D1交互步骤/重启、按需续期合并与失败保存已验；QQ实际包受控SDK轮换和两实例v1→v2保留账号通过；两示例凭据就绪即完成、资料故障独立重试已验；真实自然续期/失效重登待收口 |
 | FR03 | 示例歌单分类 | 进行中 | 部分通过 | QQ 原始角色分别读取、收藏分页/同 ID 双角色及系统目录回归通过；微信非空自建及其 owner 内容已验，非空收藏、私有/大集合及网易云待验 |
 | FR04 | 示例喜欢的音乐 | 进行中 | 部分通过 | QQ分页与计数、微信1曲/0文件；网易云真实4158曲/1913文件完整42页通过；真实云端大集合/其余配置待验 |
 | FR05 | 示例发现 | 进行中 | 部分通过 | QQ每日30曲多版本10文件、推荐25张/102曲通过；网易云每日30曲/18文件，Bun和workerd通过；完整推荐歌单/真云待验 |
