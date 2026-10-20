@@ -2,6 +2,7 @@ import { cp, mkdir, readdir, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import type { PluginManifest } from '@musicfs/plugin-api';
 import { readPackage } from '../src/infrastructure/archives';
+import { workerModuleType } from '../src/hosts/worker/publisher';
 import { createReleaseIdentity, type ReleaseIdentity } from './helpers/release-identity';
 import { writeBundleLicenses } from './helpers/bundle-licenses';
 
@@ -39,8 +40,7 @@ export async function buildWorker(input: { directory?: string; pluginArchives?: 
       const moduleName = prefix + name; const destination = join(directory, moduleName);
       await mkdir(dirname(destination), { recursive: true });
       await Bun.write(destination, bytes);
-      bundle.modules.push({ name: moduleName, file: moduleName,
-        type: /\.(?:m?js)$/.test(name) ? 'esm' : /\.(?:json|txt|md)$/.test(name) ? 'text' : 'data' });
+      bundle.modules.push({ name: moduleName, file: moduleName, type: workerModuleType(name) });
     }
   }
   await Bun.write(join(directory, 'worker.mjs'), "import createWorker from './core.mjs';\nimport {registrations} from './registry.mjs';\nexport default createWorker(registrations);\n");

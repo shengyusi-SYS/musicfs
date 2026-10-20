@@ -3,6 +3,7 @@ import { BaseContent } from 'cloudflare/resources/workers/scripts/content';
 
 export type WorkerModule = { name: string; type: 'esm' | 'text' | 'data'; bytes: Uint8Array };
 export type WorkerArtifact = { mainModule: string; modules: WorkerModule[] };
+export const workerModuleType = (name: string): WorkerModule['type'] => /\.m?js$/i.test(name) ? 'esm' : /\.(json|txt|md)$/i.test(name) ? 'text' : 'data';
 const mediaType = (type: WorkerModule['type']) => type === 'esm' ? 'application/javascript+module' : type === 'text' ? 'text/plain' : 'application/octet-stream';
 
 /** Code-only updates leave bindings, secrets, assets and script settings with Cloudflare. */
@@ -28,8 +29,11 @@ export function createWorkerPublisher(input: { accountId: string; scriptName: st
           if (metadata && typeof metadata === 'object' && 'main_module' in metadata && typeof metadata.main_module === 'string') mainModule = metadata.main_module;
           continue;
         }
-        if (typeof part === 'string') { modules.push({ name, type: 'text', bytes: new TextEncoder().encode(part) }); continue; }
-        const type = /javascript/.test(part.type) ? 'esm' : part.type.startsWith('text/') ? 'text' : 'data';
+        // MusicFS builders/publishers assign module types by package filename.
+        // Bun's formData() rewrites Blob.type from the filename (e.g. JSON text
+        // becomes application/json), so its MIME value cannot recover that type.
+        const type = workerModuleType(name);
+        if (typeof part === 'string') { modules.push({ name, type, bytes: new TextEncoder().encode(part) }); continue; }
         modules.push({ name, type, bytes: new Uint8Array(await part.arrayBuffer()) });
       }
       if (!modules.some(module => module.name === mainModule) || !modules.some(module => module.name === 'registry.mjs') || !modules.some(module => module.name === 'core.mjs')) throw new Error('The deployed Worker is not a MusicFS module bundle');

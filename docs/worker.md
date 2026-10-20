@@ -67,6 +67,29 @@ bunx wrangler deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 
 模板开启 `nodejs_compat` 供控制面依赖使用；QQ 预构建插件已有独立的无此开关探测。这一开关既不是插件公共合同，也不证明免费计划的 CPU、包体或请求额度足够。
 
+## 升级核心与 WebUI，保留云端插件
+
+已有 Worker 通过后台安装过插件后，云端注册表与最初的本机构建物可能不同。不要直接把重新构建的空插件发布物部署到原 Worker，也不要用本地同名 ZIP 近似替换云端的精确修订。
+
+先等待已有插件安装、更新或移除操作结束；从组装到部署完成期间停止并行插件变更。构建新页面后，使用现有目标的 `wrangler.jsonc` 和一个独立输出目录：
+
+```bash
+bun run build:web
+# CF_API_TOKEN 或 CLOUDFLARE_API_TOKEN 使用已有发布 Token，通过环境提供，不写入配置或命令参数。
+bun scripts/build-worker-upgrade.ts \
+  --config /absolute/path/to/existing/wrangler.jsonc \
+  --out /absolute/path/to/musicfs-upgrade
+bunx wrangler@4.119.0 deploy \
+  --config /absolute/path/to/musicfs-upgrade/wrangler.jsonc \
+  --keep-vars --autoconfig=false
+```
+
+组装工具仅支持本项目的 `worker.mjs`、`core.mjs`、`registry.mjs` 和 `plugins/<修订>/…` 模块布局。它调用官方 SDK 读取一次当前云端模块，构建新入口、核心和已准备的 WebUI，原样保留注册表及其余模块的名称、类型和字节；它不执行插件，也不自行部署或迁移数据库。模块类型沿用本项目构建/发布的命名规则：`js`/`mjs` 为 ESM，`json`/`txt`/`md` 为文本，其余为二进制；不提供任意 Worker 的克隆能力。`bundle.json` 和发布身份列出保留的全部插件 manifest 与修订，包括平台注册表中仍保留的旧修订；这份代码清单不代表 D1 中全部处于激活状态。
+
+输出配置保留输入中的实际 Worker、D1、其他绑定、变量、兼容设置、触发器、限额及观测设置，ASSETS 改为新目录的 `web/`，模块规则由真实 `esm`、`text`、`data` 清单生成。升级目录必须与输入配置目录分离。若新版本有 D1 迁移，仍由操作者在部署前按首次部署说明对原数据库执行；没有新增迁移的版本无需重复执行。
+
+Wrangler 负责上传静态资源并部署组合后的模块。显式 `--keep-vars` 保留现有变量与 Secrets，无需再次提供私有 Secrets 文件；固定 Wrangler 4.119.0 的普通 `deploy` 路径在设置此参数后保留 `plain_text`、`json`、`secret_text` 和 `secret_key`。实例、授权及布局仍位于原 D1，升级工具不会修改它们。部署后核对新页面、插件精确修订与已有实例/布局，并用一个已缓存 DAV 文件检查读取即可，无需重新扫码或刷新平台目录。
+
 ## 目录准备与跨请求续步
 
 目录刷新使用[持久分页接口](management-api.md)。一次 POST step 最多执行一页插件读取，D1 保存暂存条目和下一游标，末页后才切换完整快照。操作 ID 可跨页面重载、Worker isolate 重建和进程重启恢复；GET 只查询。已有成功目录在刷新期间继续可读，冷读取返回带 Retry-After 的 503，由页面或客户端重试。

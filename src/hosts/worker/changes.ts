@@ -7,11 +7,10 @@ import { createPluginActivation, needsMigration, terminalChange, type ChangeLeas
 import { readPackage } from '../../infrastructure/archives';
 import { createD1Store } from '../../infrastructure/persistence/d1';
 import type { RegisteredPlugin } from './plugins';
-import { createWorkerPublisher, type WorkerArtifact, type WorkerModule } from './publisher';
+import { createWorkerPublisher, workerModuleType, type WorkerArtifact, type WorkerModule } from './publisher';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const moduleType = (name: string): WorkerModule['type'] => /\.m?js$/i.test(name) ? 'esm' : /\.(json|txt|md)$/i.test(name) ? 'text' : 'data';
 
 /** Serializes changes to one deployed code collection; account state stays in D1. */
 export function createWorkerChanges(input: { db: D1Database; registrations: RegisteredPlugin[]; waitUntil: (work: Promise<unknown>) => void;
@@ -30,7 +29,7 @@ export function createWorkerChanges(input: { db: D1Database; registrations: Regi
     return [...groups].map(([name, chunks]) => {
       const bytes = new Uint8Array(chunks.reduce((size, chunk) => size + chunk.length, 0)); let offset = 0;
       for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-      return { name, bytes, type: moduleType(name) };
+      return { name, bytes, type: workerModuleType(name) };
     });
   }
   async function candidate(operation: PluginChangeRecord, current: WorkerArtifact): Promise<{ artifact: WorkerArtifact; registry: string }> {

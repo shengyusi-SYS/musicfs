@@ -1,5 +1,20 @@
 # MusicFS 架构与流程图
 
+## 核心与共用页面升级
+
+核心/WebUI升级保留云端实际代码集合；插件安装仍沿既有后台发布流程。具体操作见[Worker升级说明](../worker.md#升级核心与-webui保留云端插件)。
+
+```mermaid
+flowchart LR
+  Config[现有目标配置] --> Prepare[升级组装工具]
+  Live[SDK读取实际registry及插件模块] --> Prepare
+  Build[新core及共用WebUI] --> Prepare
+  Prepare --> Output[独立目录及准确模块清单]
+  Output --> Wrangler[Wrangler上传资源并部署 keep-vars]
+  Wrangler --> Worker[同一Worker与实际插件修订]
+  Wrangler --> State[原D1 Secrets与配置保留]
+```
+
 日期：2026-10-20。「当前链路」对应正式代码与本地验证；明确注明设计目标的流程仍含未实现部分，不表示已完成真实云端或目标系统验收。Mermaid 源码在本页维护；模块定义见 [架构设计](README.md)，调用与字节合同见 [插件 Interface](plugin-interface.md)。关系图描述逻辑身份，不等同于 SQL 表结构。
 
 当前已有共用页面、认证、插件/实例、目录快照/布局、管理 HTTP 和 Fetch DAV；QQ 与[网易云](../verification/p2-netease-source.md)有真实来源证据。正式桌面启动/挂载和 Worker 后台发布已接线，完整范围见[台账](../verification.md)。

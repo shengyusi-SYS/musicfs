@@ -1,6 +1,6 @@
 # 普通 Worker 通过代码发布安装插件
 
-日期：2026-10-20。状态：已采用并有本地证据，真实云端验收待完成。延续 [ADR 0002](0002-worker-plugin-installation-by-deployment.md)：用户接受在 WebUI 安装、更新或移除插件时后台重新发布普通 Worker；我们保留这条避免额外付费产品前提的路线，采用固定核心、独立注册表和预构建插件模块，并把外部发布与 D1 安装激活分开确认。
+日期：2026-10-20。状态：已采用；本地与[真实云端插件生命周期及作者接入](../verification/p4-worker-cloud.md)已有证据，在途切换与免费计划额度仍独立待验。延续 [ADR 0002](0002-worker-plugin-installation-by-deployment.md)：用户接受在 WebUI 安装、更新或移除插件时后台重新发布普通 Worker；我们保留这条避免额外付费产品前提的路线，采用固定核心、独立注册表和预构建插件模块，并把外部发布与 D1 安装激活分开确认。
 
 ## 发布集合与激活边界
 
@@ -28,7 +28,9 @@ flowchart LR
 
 ## 采用 Content API 与官方 SDK
 
-采用 `GET …/content/v2` 读取实际模块、`PUT …/content` 替换代码。官方把后者定义为不修改 config/metadata 的接口，因此本项目无需在插件变更时读取并手工重建 Secrets、D1 或 ASSETS 配置；仅发送主模块名和命名模块文件。这是采用该接口的依据，真平台对本部署组合的保留行为仍待实测。[官方 Content API](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/)、[固定 SDK 7.3.0 的 Content 实现](https://raw.githubusercontent.com/cloudflare/cloudflare-typescript/v7.3.0/src/resources/workers/scripts/content.ts)
+采用 `GET …/content/v2` 读取实际模块、`PUT …/content` 替换代码。官方把后者定义为不修改 config/metadata 的接口，因此本项目无需在插件变更时读取并手工重建 Secrets、D1 或 ASSETS 配置；仅发送主模块名和命名模块文件。真平台的D1/Secrets/ASSETS及设置保留已由有限生命周期验证。[官方 Content API](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/)、[固定 SDK 7.3.0 的 Content 实现](https://raw.githubusercontent.com/cloudflare/cloudflare-typescript/v7.3.0/src/resources/workers/scripts/content.ts)
+
+MusicFS构建、变更发布和下载恢复共用模块命名规则：js/mjs为ESM，json/txt/md为Text，其余为Data。Bun的`Response.formData()`会按文件名重写Blob MIME，JSON文本因此可能变成application/json；下载端不能据此把它误判为Data。现由同一`workerModuleType`恢复本项目模块类型，升级集成测试覆盖JSON文本和二进制保留；不增加multipart解析器或任意Worker克隆能力。核心/WebUI升级另由[组装工具与Wrangler](../worker.md#升级核心与-webui保留云端插件)更新静态资源，保留云端实际注册表，而不是重建为空安装集合。
 
 继续使用官方 `cloudflare` SDK 的认证、Fetch、超时和错误处理，并用 tree-shakable 的 `BaseContent` 缩减控制面代码。上传通过 SDK 公开 `client.put` 传入原生 `FormData`，而非直接调用锁定 7.3.0 的生成式 `content.update`：该版本通用 multipart 编码器把对象递归展开为 `metadata[main_module]`，而 Content API 要求一个 JSON 编码的 `metadata` part。原生 FormData 保留该 JSON part 和每个模块的文件名，修正限制在发布 Adapter；没有复制 SDK 或修改 node_modules。[官方公开请求方法](https://github.com/cloudflare/cloudflare-typescript#making-customundocumented-requests)、[7.3.0 multipart 编码源码](https://raw.githubusercontent.com/cloudflare/cloudflare-typescript/v7.3.0/src/internal/uploads.ts)
 
