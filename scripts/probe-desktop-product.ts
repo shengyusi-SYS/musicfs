@@ -7,8 +7,9 @@ import { requestReady } from './helpers/refresh-http';
 import type { ContentSources, PluginInspection, Result, SourceInstance } from '../src/contracts/management';
 
 // Runs a generated native release, rather than src/desktop.ts or the dev service.
-const { values } = parseArgs({ args: Bun.argv.slice(2), options: { directory: { type: 'string' }, 'keep-running': { type: 'boolean' }, mount: { type: 'boolean' },
+const { values } = parseArgs({ args: Bun.argv.slice(2), options: { directory: { type: 'string' }, 'keep-running': { type: 'boolean' }, mount: { type: 'boolean' }, 'crash-recovery': { type: 'boolean' },
   'plugin-archive': { type: 'string' }, 'plugin-id': { type: 'string' } } });
+assert(!values['crash-recovery'] || values.mount, '--crash-recovery requires --mount');
 assert.equal(values['plugin-archive'] !== undefined, values['plugin-id'] !== undefined, 'Provide --plugin-archive and --plugin-id together');
 const authorPlugin = values['plugin-archive'] !== undefined;
 if (authorPlugin) assert(values['plugin-archive']!.trim() && values['plugin-id']!.trim(), 'Provide a nonempty plugin archive path and plugin ID');
@@ -29,7 +30,7 @@ const launch = async () => {
 };
 try {
   const frontPid = await launch();
-  const runtime = JSON.parse(await readFile(join(directory, 'runtime.json'), 'utf8')) as { pid: number; origin: string };
+  let runtime = JSON.parse(await readFile(join(directory, 'runtime.json'), 'utf8')) as { pid: number; origin: string };
   const credentials = JSON.parse(await readFile(join(directory, 'credentials.json'), 'utf8')) as { adminToken: string; username: string; password: string };
   origin = runtime.origin; token = credentials.adminToken;
   assert.notEqual(frontPid, runtime.pid);
@@ -92,6 +93,7 @@ try {
     dependencyFailureTested = true;
   }
   let systemMountTested = false;
+  const crashRecoveries: Array<{ portRetained: boolean; recoveryMs: number }> = [];
   if (values.mount) {
     assert.equal(process.platform, 'linux', 'This opt-in fixture mounts a temporary Linux directory');
     const mountPoint = join(directory, 'mount-local'); await mkdir(mountPoint);
@@ -110,6 +112,63 @@ try {
         assert.equal(read.bytesRead, width); assert.deepEqual(new Uint8Array(buffer), full.slice(position, position + width));
       }
     } finally { await handle.close(); }
+    if (values['crash-recovery']) {
+      const control = JSON.parse(await readFile(join(directory, 'mounts', 'rclone-runtime.json'), 'utf8')) as { pid: number; port: number; password: string };
+      const rc = async <T>(method: string, parameters: Record<string, unknown> = {}) => {
+        const response = await fetch(`http://127.0.0.1:${control.port}/${method}`, { method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Basic ' + btoa(`musicfs:${control.password}`) },
+          body: JSON.stringify(parameters), signal: AbortSignal.timeout(3_000) });
+        assert.equal(response.status, 200); return await response.json() as T;
+      };
+      const configuredUrl = async () => {
+        const active = await rc<{ mountPoints: Array<{ MountPoint: string; Fs: string }> }>('mount/listmounts');
+        const point = active.mountPoints.find(item => item.MountPoint === mountPoint); assert(point);
+        return (await rc<{ url: string }>('config/get', { name: point.Fs.replace(/:$/, '') })).url;
+      };
+      for (const occupyPort of [false, true]) {
+        const previous = runtime;
+        const identity = await fetch(origin + '/__musicfs/identity', { headers: admin });
+        assert.equal(identity.status, 200); assert.equal((await identity.json() as { pid: number }).pid, previous.pid);
+        process.kill(previous.pid, 'SIGKILL');
+        for (let attempt = 0; attempt < 100; attempt++) {
+          try { await fetch(origin, { signal: AbortSignal.timeout(200) }); }
+          catch { break; }
+          assert(attempt < 99, 'The temporary backend must stop before restarting');
+          await Bun.sleep(20);
+        }
+        assert.equal((await rc<{ pid: number }>('core/pid')).pid, control.pid, 'The original rclone must survive the backend crash');
+        let blocker: ReturnType<typeof Bun.serve> | undefined;
+        try {
+          if (occupyPort) blocker = Bun.serve({ hostname: '127.0.0.1', port: Number(new URL(previous.origin).port), fetch: () => new Response(null, { status: 503 }) });
+          console.log(JSON.stringify({ recoveryStarted: occupyPort ? 'occupied-port' : 'same-port' }));
+          const started = performance.now();
+          await launch();
+          runtime = JSON.parse(await readFile(join(directory, 'runtime.json'), 'utf8')) as typeof runtime;
+          origin = runtime.origin;
+          assert.notEqual(runtime.pid, previous.pid);
+          assert.equal(origin === previous.origin, !occupyPort);
+          assert.deepEqual(JSON.parse(await readFile(join(directory, 'credentials.json'), 'utf8')), credentials);
+          assert.equal((await rc<{ pid: number }>('core/pid')).pid, control.pid);
+          assert.equal(await configuredUrl(), previous.origin + '/dav/');
+          const status = await fetch(origin + '/api/mounts', { headers: admin }); assert.equal(status.status, 200);
+          const recovered = (await status.json() as Array<{ id: string; state: string; error?: { code: string } }>).find(item => item.id === state.id); assert(recovered);
+          if (occupyPort) {
+            assert.equal(recovered.state, 'error'); assert.equal(recovered.error?.code, 'remount_required');
+            const stopped = await fetch(origin + '/api/mounts/' + state.id, { method: 'DELETE', headers: admin });
+            assert.equal(stopped.status, 200); assert.equal((await stopped.json() as { state: string }).state, 'stopped');
+            const remounted = await fetch(origin + '/api/mounts', { method: 'POST', headers: json,
+              body: JSON.stringify({ mountPoint, source: { kind: 'local' } }) });
+            assert.equal(remounted.status, 201);
+            const restored = await remounted.json() as { id: string; state: string; error?: unknown };
+            assert.equal(restored.id, state.id); assert.equal(restored.state, 'mounted', JSON.stringify(restored.error));
+            assert.equal(await configuredUrl(), origin + '/dav/');
+          } else assert.equal(recovered.state, 'mounted');
+          assert.deepEqual(new Uint8Array(await readFile(path)), full);
+          const result = { portRetained: !occupyPort, recoveryMs: Math.round(performance.now() - started) };
+          crashRecoveries.push(result); console.log(JSON.stringify({ recoveryCompleted: result }));
+        } finally { await blocker?.stop(true); }
+      }
+    }
     const held = await open(path, 'r');
     try {
       const busy = await fetch(origin + '/api/mounts/' + state.id, { method: 'DELETE', headers: admin });
@@ -126,6 +185,7 @@ try {
     compatibilityInspection: true, externalPluginInstalled: true, davHead: 16044, exactRange: 'RIFF', repeatedLaunchReused: true,
     ...(authorPlugin ? { authorPluginId: pluginId, independentInstances: 2 } : {}),
     mountsEndpoint: true, dependencyFailureTested, systemMountTested, ...(systemMountTested ? { mountedBytes: 16044, mountedRanges: 5 } : {}),
+    ...(values['crash-recovery'] ? { originalRcloneRetained: true, credentialsRetained: true, crashRecoveries } : {}),
     ...(values['keep-running'] ? { origin, keptForBrowserVerification: true } : {}) }));
 } finally {
   if (!keptForBrowser) {

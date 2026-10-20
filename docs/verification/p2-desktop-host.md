@@ -39,11 +39,11 @@ bun test tests/desktop-launcher.test.ts tests/desktop-mounts.test.ts
 | 忙卸载和缺依赖 | 受控忙卸载保持挂载进程，后台关闭被拒绝；缺依赖可诊断，未真正挂载时仍能退出 | 不是 Windows/Unix 实际文件占用或系统驱动测试 |
 | 真实 rclone RC | 实际 RC 进程在协调器重建后保持同一 PID，`mount/types`、空挂载表、remote 创建／`config/get` 与删除、正常退出通过 | 没有调用实际 `mount/mount`，也没有音频或目标系统挂载 |
 
-## 发行构建当前状态
+## 历史发行构建检查点
 
-主线已用 `bun run build:desktop -- --all` 最终构建四个目标。本次纳入持久分页刷新、第五版迁移、API0.1.3批量描述及异常退出锁等待修正；Linux最新二进制已重验冷准备/FUSE/忙卸载及退出。每个目录包含程序、共用页面、校验后的对应 rclone、三个插件ZIP、依赖锁与许可；macOS为`.app`。`release.json` 保持 `targetRuntimeVerified: false`，表示完整原生验收尚未全部收口。
+以下表格保留API0.1.3/schema5时的四目标检查点，不作为当前发行身份。当前版本、字节数及摘要以`dist/releases/release-manifest.json`和各目录`release.json`为准，统一归档证据见[发行记录](p4-release-artifacts.md)。每个目录包含程序、共用页面、校验后的对应rclone、三个插件ZIP、依赖锁与许可；macOS为`.app`。`targetRuntimeVerified: false`表示完整原生验收尚未全部收口。
 
-| 目标 | 最终程序字节数 | SHA-256 | 原生结果 |
+| 目标 | 当时程序字节数 | 当时SHA-256 | 当时原生结果 |
 |---|---:|---|---|
 | Linux x64 | 91,297,760 | `614d1a0a4b9810a25a105c21476fdfaba84309537360f14d699dee0da9ea1df8` | 正式程序、页面、外置插件、重复启动、FUSE本地/独立远程DAV及正常退出已有证据 |
 | Windows x64 | 96,883,712 | `72bb911999d4e52740d01212c32c6b9ebe44eeb6b2688f2a118a991f5ac91235` | 交叉编译，原生运行/挂载待验 |
@@ -64,10 +64,25 @@ bun test tests/desktop-launcher.test.ts tests/desktop-mounts.test.ts
 
 2026-10-20 启动恢复补充：已修复后台只试一次锁、前台仅等15秒却需30秒才判陈旧的窗口。锁仍由 proper-lockfile 维护与判定；宿主最多32秒协调接管，前台统一47秒等待上限，竞争启动发现健康后台后尽快退出。源码启动的真实临时后台经 SIGKILL 后立即重开，约32.27秒恢复，保留原凭据/端口、更新PID；健康重复后台3秒内退出。定向3项/35断言通过。此结果没有实际挂载或Windows/macOS运行，也不把“可恢复”描述为即时重启。
 
-1. 验证文件管理器双击、系统默认浏览器和启动错误可见性；必要发行压缩包和干净机器旅程仍需收口。
+2026-10-20 发行物活动挂载补充：在Linux实际FUSE宿主执行以下命令，使用独立临时目录和随包sample，不读取开发账号：
+
+```sh
+bun scripts/probe-desktop-product.ts --directory dist/desktop/linux-x64 --mount --crash-recovery
+```
+
+运行的应用SHA-256为`c3dbf7130e2786423e3b176c06b1b2965215e27e8a814340f60e7f899385c224`。探针通过正式管理入口安装/配置/准备sample，FUSE全文16,044字节与五次偏移一致。随后只SIGKILL该临时后台：
+
+| 实际路径 | 结果 |
+|---|---|
+| 原端口可用，立即重新启动 | 29,957ms完成锁接管；后台PID更新，凭据不变；原rclone经私有RC身份核对仍是同一PID，原挂载仍为mounted且全文一致 |
+| 再次SIGKILL，临时占用原端口后重开 | 30,679ms完成恢复及重挂；后台改用新端口，原rclone和旧DAV URL保留；正式状态为remount_required；正常卸载并以同一定义重挂后URL更新、全文一致 |
+| 后续忙路径与正常退出 | 打开真实文件时正常卸载返回409 mount_busy；关闭句柄后退出返回202，实际HTTP停止并清理临时目录，探针exit0 |
+
+锁接管仍按proper-lockfile的30秒陈旧规则，恢复不是即时的。端口变化时不拿内核可能缓存的字节判断连接已恢复，而核对真实RC配置与管理状态；新连接在正常重挂后验证。此证据仅覆盖Linux本地活动挂载，不替代其他OS、真实云端或桌面图形启动。
+
+1. 验证文件管理器双击、系统默认浏览器和启动错误可见性；统一ZIP系统解压运行已有证据，干净机器旅程仍需收口。
 2. Windows x64、Linux x64、macOS Intel 与 Apple Silicon 原生运行，以及本地／远程 DAV 的实际挂载、播放、拖动、正常卸载与忙路径。
-3. 异常退出后的挂载恢复；锁的陈旧窗口和真实SIGKILL重开已有上述源码证据，最终发行物与目标系统仍按相应旅程验收。
+3. Windows/macOS异常退出后的活动挂载恢复；Linux正式发行物两种端口恢复路径已有上述证据。
 4. 实际 Windows PowerShell／macOS AppleScript／Linux 图形工具的错误弹窗；没有可用图形设施时的日志回退。
-5. 实际异常退出后的`remount_required`卸载后重挂；当前已验正常本地/远程、忙时保留和退出，不宣称崩溃恢复已验。
 
 来源规则、示例插件完整性、真实 Worker、OpenList 与普通播放器的其他验收继续按[总台账](../verification.md)推进，本记录不增加产品范围。

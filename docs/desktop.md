@@ -70,6 +70,7 @@ bun run scripts/build-desktop.ts --target windows-x64
 bun run scripts/build-desktop.ts --all
 bun test tests/desktop-launcher.test.ts tests/desktop-mounts.test.ts
 bun scripts/probe-desktop-product.ts --mount
+bun scripts/probe-desktop-product.ts --mount --crash-recovery
 ```
 
 构建先产出共享 WebUI 和示例插件，再按目标编译。输出在 `dist/desktop/<target>/`，含应用、页面、固定 `rclone v1.75.2`、校验与版本记录、示例插件 ZIP、依赖锁文件与许可。rclone 从官方固定版本下载，核对该发布的 SHA-256；已有缓存复用前核对二进制摘要。`--skip-web` 仅用于复用已构建的页面。跨系统编译不能替代运行验收，`release.json` 保持 `targetRuntimeVerified: false`，实际证据记入验收台账。[Bun 独立可执行程序](https://bun.sh/docs/bundler/executables)
@@ -86,8 +87,8 @@ bun src/desktop.ts --resources dist/desktop/linux-x64/resources
 
 2026-10-20定向测试7项/52断言通过，包含真实后台/RC、端口复用与回退及受控挂载。随后已构建四目标产物，并从实际Linux发行物验证分离后台、外置sample安装、页面、DAV、重复启动和真实FUSE本地挂载；16,044字节WAV全文/前后偏移一致。通过发行物页面又挂载独立HTTP服务，读取网易云真实7,734,765字节MP3及前后五个偏移，与DAV下载逐字节相同。
 
-端口恢复测试重建异常退出后的持久记录，不替代真实挂载恢复验收。后续已统一文件锁过期、重试和前台等待时间，并以实际 SIGKILL 后立即重开验证：约32秒恢复、原端口及凭据保留；仍未覆盖崩溃时的活动挂载恢复，详见[桌面记录](verification/p2-desktop-host.md)。
+源码端口恢复先验证了持久记录与锁等待。随后实际Linux发行物在活动FUSE挂载时SIGKILL后台并立即重开：原端口可用时约30秒恢复，保留凭据、原rclone及可读挂载；原端口被占用时切换新端口，明确显示remount_required，正常卸载再挂载后恢复读取。`--crash-recovery`需同时提供`--mount`，两次终止仅作用于探针独立临时后台。详见[桌面记录](verification/p2-desktop-host.md)。
 
 实际浏览器验证了远程表单、两种挂载状态、失败保留表单，以及退出流程：真实打开文件时拒绝正常卸载并保持后台，关闭句柄后可正常退出。真实忙卸载还发现rclone错误含fusermount名称，原映射误报缺依赖；已优先识别busy，并让页面按具体错误显示而非把所有409都提示重新载入。最终原生探针对此作实际回归。
 
-此前“缺少/dev/fuse”的判断来自受限环境视图；允许本地进程的宿主实际具备FUSE，已补做上述挂载。Windows/macOS仍只有交叉编译产物，默认浏览器打开、平台弹窗、异常退出恢复和播放器仍待各自验收。完整证据见[桌面记录](verification/p2-desktop-host.md)和[总台账](verification.md)。
+此前“缺少/dev/fuse”的判断来自受限环境视图；允许本地进程的宿主实际具备FUSE，已补做上述挂载。Windows/macOS仍只有交叉编译产物；默认浏览器打开、平台弹窗及这些系统的异常退出恢复仍待各自验收。完整证据见[桌面记录](verification/p2-desktop-host.md)和[总台账](verification.md)。
