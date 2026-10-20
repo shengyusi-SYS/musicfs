@@ -2,6 +2,8 @@
 
 日期：2026-10-20。环境：Linux x86_64、Bun1.4.3、Node24.19.0。前半记录`9a7c80b`统一归档首检查点，后续GPL/source包结果见文末。范围是开发预览归档、作者交付和本地运行，不代表四系统、真实Cloudflare或完整许可已验收。
 
+最新发行为[2026-10-21 的 dev.1](#最新发行音乐资料与windows修复dev1)，当前文件身份以发行清单为准；下文各旧检查点的版本和数量保留历史含义。
+
 ## 变更与责任
 
 - `build-sample.ts`复用现有`build-plugin.ts`，不再单独维护ZIP算法；生成Ajv原许可。sample因此升为0.1.2，QQ仍alpha.9、网易云仍alpha.7，API0.1.5、数据库schema7不变。
@@ -151,3 +153,27 @@ Worker构建新增复制`docs/worker.md`为随包`WORKER.md`，用户无需从�
 四个桌面可执行文件及Worker核心的摘要与上一检查点完全相同，页面与插件也相同；因此沿用既有运行证据，没有重复启动、媒体、挂载或原生系统验证。Linux程序SHA-256仍为`801d92b2c08ad7fd55cc58b3b83760009be8530e202de58b90a6e6dcafc4c738`。一次构建误用了另一缓存目录，固定Windows运行时下载中断；改回已有完整缓存后续建其余三个目标成功，未变更工具链。去敏打包收据与对比保存在本机忽略目录`.musicfs/final-release-*.json`。
 
 GPL项目正文、独立项目源码、实际打包npm依赖声明、WebUI许可、随包rclone原始说明以及既有固定Bun原始材料均保留；Bun索引仍为`complete:false`。本次未进行音乐平台请求、Cloudflare部署/资源变更、Windows宿主调用或新的测试矩阵。版本化归档与完整摘要以[最终清单](../../dist/releases/release-manifest.json)为准，本次开发预览发行收口完成。
+
+## 最新发行：音乐资料与Windows修复（dev.1）
+
+2026-10-21，按用户要求打包最新实现，版本为 **0.1.0-dev.1 / API 0.1.6 / schema 8**。包含 QQ alpha.11、网易云 alpha.9 的可选音乐资料补全、通用插件缓存及 Windows 盘符/根路径修复，sample 保持 0.1.3。冻结构建输入为 `a8e392f0a5a1e1214348af0d11ee0f05630b0d92`，dirty=false，源码摘要 `105c2fa598634115f898d2a80e8f6b4c080c6719995e7783af8d012ab497d58b`，页面摘要 `f82e940ed795405b38aecaeed5d35cf9c58b18afadf74af8e58fedd494d06734`。
+
+在 WSL 复用固定 Bun 1.4.3 和已有四平台 rclone 缓存，执行既有桌面、三插件 Worker、作者包和统一打包入口；没有调用物理 Windows 宿主、下载上游源码、部署云端或重复音乐平台验证。旧 dev.0 归档保留，新文件使用 dev.1 名称。
+
+| 归档后缀 | 字节数 |
+|---|---:|
+| linux-x64.zip | 75,741,680 |
+| windows-x64.zip | 78,676,575 |
+| macos-x64.zip | 70,306,896 |
+| macos-arm64.zip | 66,100,222 |
+| worker.zip | 3,419,578 |
+| plugin-author-kit.zip | 56,040 |
+| source.zip | 1,420,718 |
+
+文件名前缀均为 `musicfs-0.1.0-dev.1-`，路径见[当前交付物](../release.md)。四桌面、Worker、独立插件的来源/页面/插件修订一致；Worker 为正式 `src/worker.ts`、19 个模块和 8 份迁移。作者包的 API 为 0.1.6，内部文档链接全部存在；源码包含可选音频工具和新增迁移，未包含本机状态或依赖安装目录。对应的三个插件 ZIP 为 16,352 / 647,196 / 574,557 字节。
+
+必要检查结果：三组类型检查通过；依赖图 193 模块/730 依赖无违规；管理回归 6 项/91 次断言通过。归档后 `sha256sum -c SHA256SUMS` 的 11 项全部通过，逐包核对版本、源码身份、Unix 执行权限、Worker 迁移和作者接口。Linux ZIP 经系统 unzip 解压，无额外 chmod，实际程序版本为 dev.1；页面、外置 sample 安装、16,044 字节 HEAD、RIFF 范围、后台复用及正常退出通过。没有重做 FUSE、Windows VM、macOS 或真实账号旅程，既有结果保留原版本边界。
+
+本轮管理回归会重建 sample ZIP；测试进程的时区使 ZIP 内 DOS 时间戳从本机构建的 08:00 变为 00:00，包内文件摘要完全相同，但 ZIP 修订不同。统一打包检查因此第一次拒绝 Worker/桌面的 sample 修订不一致。恢复桌面构建时的同一份 sample ZIP 后重新组装 Worker，再打包通过；没有修改插件代码/清单、四个桌面程序或跳过身份检查。后续需要重建插件的检查应安排在最终构建输入归一之前。
+
+去敏回执为本机忽略目录 `.musicfs/latest-release-receipt.json`。已知云端续步与格式/播放器验证边界见[交付说明](../release.md)，本次打包未改变这些结论。
