@@ -107,9 +107,18 @@ export function createManagementApi(input: {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
     return c.json(await input.mounts.mount(await json(c) as MountInput), 201);
   });
-  app.delete('/api/mounts/:id', async c => {
+  app.post('/api/mounts/:id/mount', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    return c.json(await input.mounts.remount(c.req.param('id')));
+  });
+  app.post('/api/mounts/:id/unmount', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
     return c.json(await input.mounts.unmount(c.req.param('id')));
+  });
+  app.delete('/api/mounts/:id', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    await input.mounts.remove(c.req.param('id'));
+    return c.body(null, 204);
   });
   app.get('/api/plugins/:id/configuration', async c => c.json((await sources.configuration(c.req.param('id'))) satisfies SourceConfiguration));
   app.get('/api/instances', async c => c.json((await sources.instances()) satisfies SourceInstance[]));

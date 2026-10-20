@@ -4,6 +4,8 @@ import type { PluginChange } from '../contracts/plugin-changes';
 import type { MountInput, MountView } from '../contracts/mounts';
 import type { RefreshScope, RefreshView } from '../contracts/refreshes';
 import type { DesktopNetworkSettings, DesktopNetworkView } from '../contracts/desktop';
+import type { MountPrerequisitesView } from '../contracts/mount-prerequisites';
+import type { DesktopHttpsView } from '../contracts/desktop-https';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -52,7 +54,15 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     pluginChange: (id: string, signal: AbortSignal) => request<PluginChange>(`/plugin-changes/${encodeURIComponent(id)}`, { signal }),
     mounts: (signal: AbortSignal) => request<MountView[]>('/mounts', { signal }),
     mount: (input: MountInput) => request<MountView>('/mounts', json('POST', input)),
-    unmount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    remount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/mount`, { method: 'POST' }),
+    unmount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/unmount`, { method: 'POST' }),
+    removeMount: (id: string) => request<void>(`/mounts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    mountPrerequisites: (signal: AbortSignal) => request<MountPrerequisitesView>('/desktop/mount-prerequisites', { signal }),
+    installWinFsp: () => request<MountPrerequisitesView>('/desktop/mount-prerequisites/install', { method: 'POST' }),
+    desktopHttps: (signal: AbortSignal) => request<DesktopHttpsView>('/desktop/https', { signal }),
+    enableDesktopHttps: () => request<DesktopHttpsView>('/desktop/https/enable', { method: 'POST' }),
+    trustDesktopHttps: (scope: 'current-user' | 'local-machine') => request<DesktopHttpsView>('/desktop/https/trust', json('POST', { scope })),
+    disableDesktopHttps: () => request<DesktopHttpsView>('/desktop/https', { method: 'DELETE' }),
     quitDesktop: () => request<{ stopping: true }>('/desktop/quit', { method: 'POST' }),
     desktopNetwork: (signal: AbortSignal) => request<DesktopNetworkView>('/desktop/network', { signal }),
     saveDesktopNetwork: (settings: DesktopNetworkSettings) => request<DesktopNetworkView>('/desktop/network', json('PUT', settings)),

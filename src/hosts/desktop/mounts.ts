@@ -97,7 +97,7 @@ export async function createMountManager(options: {
             const configured = await control.call<{ url?: unknown }>('config/get', { name: remoteName(record) });
             if (typeof configured.url !== 'string' || new URL(configured.url).href !== new URL(options.localConnection().url).href) {
               record.view.state = 'error';
-              record.view.error = { code: 'remount_required', message: '本机后台地址已变化，此挂载仍连接旧地址。请先卸载，再重新挂载。' };
+              record.view.error = { code: 'remount_required', message: '本机后台地址已变化，此挂载仍连接旧地址。请点击重新挂载。' };
               continue;
             }
           } catch (error) { record.view.state = 'error'; record.view.error = errorView(error); continue; }
@@ -131,17 +131,63 @@ export async function createMountManager(options: {
     if ((await activePoints()).some(item => equalPoint(item.MountPoint, point))) throw new MountError('mount_busy', '挂载尚未退出，请关闭占用程序后重试。');
   }
   async function stop(record: RecordEntry) {
-    if (!record.mayBeMounted) { record.view.state = 'stopped'; delete record.view.error; await persist(); return view(record); }
-    const current = (await activePoints()).find(item => equalPoint(item.MountPoint, record.view.mountPoint));
-    if (current && current.Fs !== `${remoteName(record)}:`) throw new MountError('mount_busy', '此路径的实际挂载身份已变化，未执行卸载；请核对系统挂载状态。');
-    const live = !!current;
-    if (!live) { record.mayBeMounted = false; record.view.state = 'stopped'; delete record.view.error; await persist(); return view(record); }
-    record.view.state = 'unmounting'; delete record.view.error; await persist();
-    try {
-      await normalUnmount(record); record.mayBeMounted = false; record.view.state = 'stopped'; delete record.view.error;
-      await control.call('config/delete', { name: remoteName(record) });
-    } catch (error) { record.view.state = 'error'; record.view.error = errorView(error); await persist(); throw error; }
+    if (record.mayBeMounted) {
+      const current = (await activePoints()).find(item => equalPoint(item.MountPoint, record.view.mountPoint));
+      if (current && current.Fs !== `${remoteName(record)}:`) throw new MountError('mount_busy', '此路径的实际挂载身份已变化，未执行卸载；请核对系统挂载状态。');
+      if (current) {
+        record.view.state = 'unmounting'; delete record.view.error; await persist();
+        try { await normalUnmount(record); }
+        catch (error) { record.view.state = 'error'; record.view.error = errorView(error); await persist(); throw error; }
+      }
+      record.mayBeMounted = false;
+    }
+    try { await control.removeRemote(remoteName(record)); }
+    catch (error) { record.view.state = 'error'; record.view.error = errorView(error); await persist(); throw error; }
+    record.view.state = 'stopped'; delete record.view.error;
     await persist(); return view(record);
+  }
+
+  async function start(record: RecordEntry, input: MountInput) {
+    record.input = input; record.view.state = 'starting'; delete record.view.error;
+    record.view.name = input.name ?? record.view.name;
+    record.view.source = input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url };
+    await persist();
+    try {
+      await dependencies(); await preparePoint(input.mountPoint);
+      const connection = input.source.kind === 'local' ? options.localConnection() : input.source;
+      await control.call('config/create', { name: remoteName(record), type: 'webdav',
+        parameters: { url: connection.url, vendor: 'other', user: connection.username, pass: connection.password }, opt: { obscure: true, nonInteractive: true } });
+      // Fail before creating a filesystem when the remote cannot be listed.
+      await control.call('operations/list', { fs: `${remoteName(record)}:`, remote: '', opt: { maxDepth: 1 } });
+      const types = await control.call<{ mountTypes: string[] }>('mount/types');
+      const mountType = platform === 'darwin' ? 'nfsmount' : platform === 'win32' ? 'cmount' : 'mount';
+      if (!types.mountTypes.includes(mountType)) throw new MountError('dependency_missing', `随包 rclone 不支持 ${mountType}，请使用对应平台的完整发行包。`);
+      record.mayBeMounted = true;
+      await persist();
+      const result = await control.call<{ mountPoint: string }>('mount/mount', { fs: `${remoteName(record)}:`, mountPoint: input.mountPoint, mountType,
+        mountOpt: { AllowOther: false, AllowNonEmpty: false }, vfsOpt: { ReadOnly: true, CacheMode: 'off', DirCacheTime: '5s' } });
+      record.view.mountPoint = result.mountPoint;
+      const mounted = (await activePoints()).some(point => equalPoint(point.MountPoint, result.mountPoint));
+      if (!mounted) throw new MountError('mount_failed', 'rclone 未确认挂载就绪。');
+      // Confirm the actual filesystem root can be opened, not merely that a process exists.
+      const root = platform === 'win32' && /^[a-z]:$/i.test(result.mountPoint) ? `${result.mountPoint}\\` : result.mountPoint;
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([readdir(root), new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new MountError('mount_failed', '挂载目录暂不可读，请检查网络与挂载状态。')), 8_000);
+        })]);
+      } finally { clearTimeout(timeout); }
+      record.view.state = 'mounted'; delete record.view.error;
+    } catch (error) {
+      // A failed readiness check must not report success. Retain the definition and any live residue for retry/unmount.
+      record.view.state = 'error'; record.view.error = errorView(error);
+    }
+    await persist(); return view(record);
+  }
+  function findRecord(id: string) {
+    const record = records.find(item => item.view.id === id);
+    if (!record) throw new MountError('not_found', '没有找到此挂载。');
+    return record;
   }
 
   return {
@@ -159,47 +205,22 @@ export async function createMountManager(options: {
         input, mayBeMounted: false, view: { id: crypto.randomUUID(), name: input.name ?? (input.source.kind === 'local' ? '本地 MusicFS' : new URL(input.source.url).host), mountPoint: input.mountPoint,
           source: input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url }, state: 'starting' }
       };
-      record.input = input; record.view.state = 'starting'; delete record.view.error;
-      record.view.name = input.name ?? record.view.name;
-      record.view.source = input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url };
       if (!previous) records.push(record);
-      await persist();
-      try {
-        await dependencies(); await preparePoint(input.mountPoint);
-        const connection = input.source.kind === 'local' ? options.localConnection() : input.source;
-        await control.call('config/create', { name: remoteName(record), type: 'webdav',
-          parameters: { url: connection.url, vendor: 'other', user: connection.username, pass: connection.password }, opt: { obscure: true, nonInteractive: true } });
-        // Fail before creating a filesystem when the remote cannot be listed.
-        await control.call('operations/list', { fs: `${remoteName(record)}:`, remote: '', opt: { maxDepth: 1 } });
-        const types = await control.call<{ mountTypes: string[] }>('mount/types');
-        const mountType = platform === 'darwin' ? 'nfsmount' : platform === 'win32' ? 'cmount' : 'mount';
-        if (!types.mountTypes.includes(mountType)) throw new MountError('dependency_missing', `随包 rclone 不支持 ${mountType}，请使用对应平台的完整发行包。`);
-        record.mayBeMounted = true;
-        await persist();
-        const result = await control.call<{ mountPoint: string }>('mount/mount', { fs: `${remoteName(record)}:`, mountPoint: input.mountPoint, mountType,
-          mountOpt: { AllowOther: false, AllowNonEmpty: false }, vfsOpt: { ReadOnly: true, CacheMode: 'off', DirCacheTime: '5s' } });
-        record.view.mountPoint = result.mountPoint;
-        const mounted = (await activePoints()).some(point => equalPoint(point.MountPoint, result.mountPoint));
-        if (!mounted) throw new MountError('mount_failed', 'rclone 未确认挂载就绪。');
-        // Confirm the actual filesystem root can be opened, not merely that a process exists.
-        const root = platform === 'win32' && /^[a-z]:$/i.test(result.mountPoint) ? `${result.mountPoint}\\` : result.mountPoint;
-        let timeout: ReturnType<typeof setTimeout> | undefined;
-        try {
-          await Promise.race([readdir(root), new Promise<never>((_, reject) => {
-            timeout = setTimeout(() => reject(new MountError('mount_failed', '挂载目录暂不可读，请检查网络与挂载状态。')), 8_000);
-          })]);
-        } finally { clearTimeout(timeout); }
-        record.view.state = 'mounted'; delete record.view.error;
-      } catch (error) {
-        // A failed readiness check must not report success. Retain the definition and any live residue for retry/unmount.
-        record.view.state = 'error'; record.view.error = errorView(error);
-      }
-      await persist(); return view(record);
+      return start(record, input);
+    }),
+    remount: id => serialize(async () => {
+      const record = findRecord(id);
+      await stop(record);
+      return start(record, normalizeInput(record.input));
     }),
     unmount: id => serialize(async () => {
-      const record = records.find(item => item.view.id === id);
-      if (!record) throw new MountError('not_found', '没有找到此挂载。');
-      return stop(record);
+      return stop(findRecord(id));
+    }),
+    remove: id => serialize(async () => {
+      const record = findRecord(id);
+      await stop(record);
+      records.splice(records.indexOf(record), 1);
+      await persist();
     }),
     close: () => serialize(async () => {
       for (const record of records) if (record.view.state !== 'stopped') await stop(record);

@@ -35,8 +35,11 @@ test('click launchers exit while one authenticated background survives; repeated
       expect(attempt.status).toBe(201);
       const failed = await attempt.json() as { id: string; state: string; error: { code: string } };
       expect(failed).toMatchObject({ state: 'error', error: { code: 'dependency_missing' } });
-      const unmounted = await fetch(`${origin}/api/mounts/${failed.id}`, { method: 'DELETE', headers: auth });
+      const unmounted = await fetch(`${origin}/api/mounts/${failed.id}/unmount`, { method: 'POST', headers: auth });
       expect(await unmounted.json()).toMatchObject({ state: 'stopped' });
+      const removed = await fetch(`${origin}/api/mounts/${failed.id}`, { method: 'DELETE', headers: auth });
+      expect(removed.status).toBe(204);
+      expect(await (await fetch(`${origin}/api/mounts`, { headers: auth })).json()).toEqual([]);
     }
     let opened = '';
     const reuse = await launchDesktop({ command: [process.execPath, resolve('src/desktop.ts')], directory: data, resourcesDirectory: resources,

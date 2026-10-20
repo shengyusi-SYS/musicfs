@@ -1,0 +1,30 @@
+# 桌面挂载与本机 HTTPS
+
+MusicFS 管理页面负责发起操作；实际挂载始终发生在运行桌面后台的系统中。来源插件和音乐目录不感知 WinFsp、盘符或证书。
+
+```mermaid
+flowchart LR
+  UI[共用管理页面] --> API[桌面 HTTP 操作]
+  API --> Mount[挂载定义与生命周期]
+  API --> Setup[Windows 组件检测与安装]
+  API --> TLS[可选本机 HTTPS]
+  Mount --> RC[随包 rclone RC]
+  RC --> Bridge[Windows WinFsp / Linux FUSE / macOS NFS]
+  Bridge --> Drive[盘符或目录]
+  Explorer[Windows 原生 WebClient] --> TLS
+  TLS --> DAV[共用只读 DAV]
+  RC --> DAV
+  DAV --> Library[音乐目录与来源插件]
+```
+
+| 模块 | 负责的状态与操作 |
+|---|---|
+| `contracts/mounts.ts`、`desktop/mounts.ts` | 保存定义和私有读取凭据；添加、重挂、卸载、移除；确认实际挂载，正常卸载后才移除 |
+| `desktop/rclone-control.ts` | 私有 rclone 进程、认证 RC 与配置清理；具体文件系统交互交给 rclone |
+| `desktop/mount-prerequisites.ts` | Windows WinFsp 检测、运行安装器、安装结果；不改变 WebDAV 全局认证策略 |
+| `desktop/https.ts` | 独立回环 DAV TLS、证书和端口持久化、Windows 证书信任；复用既有 DAV，不实现另一套文件协议 |
+| `desktop/http.ts`、`desktop/launcher.ts` | 桌面操作路由与进程/监听器组装；不拥有音乐来源语义 |
+
+`POST /api/mounts` 添加并挂载，`POST /api/mounts/:id/mount` 重挂，`POST /api/mounts/:id/unmount` 卸载，`DELETE /api/mounts/:id` 移除保存记录。重挂使用服务端保存的私有输入，页面无需取回密码。挂载变更复用现有串行操作机制；忙卸载仍保留条目和可读挂载，不强制终止进程。
+
+采用 `selfsigned` 生成 PEM 和 Bun 原生 TLS，避免自己构造 X.509 或引入反向代理。WinFsp 是系统文件系统桥接依赖，随 Windows 包提供固定官方运行时安装器；已有运行时复用，不为检测安装开发工具。HTTPS 证书是专用自签名叶证书，信任和实际 Windows 原生映射分别核验；Bun 客户端自身的信任行为不能代替 Windows Schannel 的结果。

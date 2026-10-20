@@ -5,6 +5,7 @@ import { ZipReader, Uint8ArrayReader, Uint8ArrayWriter } from '@zip.js/zip.js/in
 import { readPackage } from '../src/infrastructure/archives';
 import { createReleaseIdentity } from './helpers/release-identity';
 import { writeBundleLicenses } from './helpers/bundle-licenses';
+import { copyWinFspPrerequisite } from './helpers/winfsp';
 
 const targets = {
   'linux-x64': { compile: 'bun-linux-x64', rclone: 'linux-amd64', executable: 'musicfs' },
@@ -113,6 +114,7 @@ for (const selectedTarget of selected as Target[]) {
   await mkdir(dirname(executable), { recursive: true }); await mkdir(resources, { recursive: true });
   await cp('dist/web', join(resources, 'web'), { recursive: true });
   await rclone(target.rclone, resources);
+  if (selectedTarget === 'windows-x64') await copyWinFspPrerequisite(resources);
   const result = await Bun.build({ entrypoints: ['src/desktop.ts'], minify: true, metafile: true, define: { MUSICFS_COMPILED: 'true' },
     compile: { target: target.compile, outfile: executable, ...(runtimeExecutable ? { executablePath: runtimeExecutable } : {}),
       ...(selectedTarget === 'windows-x64' ? { windows: { hideConsole: true } } : {}) } });

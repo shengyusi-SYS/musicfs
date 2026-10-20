@@ -4,6 +4,7 @@ import type { Api } from '../api';
 import { Failure } from '../components/feedback';
 import Mounts from './mounts';
 import DesktopNetwork from '../components/desktop-network';
+import DesktopHttps from '../components/desktop-https';
 
 export default function Connection({ api, onStopped }: { api: Api; onStopped: () => void }) {
   const connection = useQuery({ queryKey: ['connection'], queryFn: ({ signal }) => api.connection(signal) });
@@ -17,5 +18,5 @@ export default function Connection({ api, onStopped }: { api: Api; onStopped: ()
       { key: 'password', label: '读取密码', children: <Input.Password value={value.password} readOnly autoComplete="off" aria-label="WebDAV 读取密码" /> }
     ]} />}
     <Alert type="info" showIcon title="目录以只读方式提供" description="读取凭据只用于访问文件。管理令牌用于当前管理页面，请分别保管。" />
-  </section>{status.data?.host === 'desktop' && <><DesktopNetwork api={api} /><Mounts api={api} onStopped={onStopped} /></>}</>;
+  </section>{status.data?.host === 'desktop' && <><DesktopNetwork api={api} /><DesktopHttps api={api} /><Mounts api={api} onStopped={onStopped} /></>}</>;
 }

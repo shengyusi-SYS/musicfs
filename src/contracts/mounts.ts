@@ -17,6 +17,8 @@ export type MountView = {
 export interface MountManager {
   list(): Promise<MountView[]>;
   mount(input: MountInput): Promise<MountView>;
+  remount(id: string): Promise<MountView>;
   unmount(id: string): Promise<MountView>;
+  remove(id: string): Promise<void>;
   close(): Promise<void>;
 }

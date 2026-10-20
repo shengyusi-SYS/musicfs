@@ -11,7 +11,10 @@ import { z } from 'zod';
 import { createDesktopService } from './service';
 import { createMountManager } from './mounts';
 import { writePrivateJson } from './rclone-control';
-import { desktopNetworkSchema, desktopNetworkView, readDesktopNetworkSettings } from './network';
+import { readDesktopNetworkSettings } from './network';
+import { createMountPrerequisites } from './mount-prerequisites';
+import { createDesktopHttps } from './https';
+import { createDesktopHttp } from './http';
 
 const credentialsSchema = z.object({ instanceId: z.uuid(), adminToken: z.string().min(32), username: z.literal('musicfs'), password: z.string().min(32) }).strict();
 const runtimeSchema = z.object({ pid: z.number().int().positive(), origin: z.string(), instanceId: z.uuid() }).strict();
@@ -104,6 +107,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
   const release: () => Promise<void> = acquired;
   let service: Awaited<ReturnType<typeof createDesktopService>> | undefined;
   let server: ReturnType<typeof Bun.serve> | undefined;
+  let https: Awaited<ReturnType<typeof createDesktopHttps>> | undefined;
   let closing: Promise<void> | undefined;
   const runtimePath = join(directory, 'runtime.json');
   try {
@@ -129,27 +133,17 @@ export async function startDesktopBackground(input: { directory?: string; resour
       }
     } catch { /* Missing or invalid crash metadata cannot choose a listening endpoint. */ }
     let origin = '';
+    const prerequisites = createMountPrerequisites({ resourcesDirectory: resources });
     const mounts = await createMountManager({ directory: join(directory, 'mounts'), binary: join(resources, process.platform === 'win32' ? 'rclone.exe' : 'rclone'),
-      localConnection: () => ({ url: `${origin}/dav/`, username: credentials.username, password: credentials.password }) });
+      localConnection: () => ({ url: `${origin}/dav/`, username: credentials.username, password: credentials.password }),
+      ...(process.platform === 'win32' ? { checkDependencies: () => prerequisites.check() } : {}) });
     service = await createDesktopService({ directory, adminToken: credentials.adminToken,
       dav: { username: credentials.username, password: credentials.password }, webRoot: join(resources, 'web'), mounts });
+    https = await createDesktopHttps({ directory: join(directory, 'https'), fetch: service.app.fetch });
     const app = new Hono();
     app.use('/__musicfs/*', bearerAuth({ token: credentials.adminToken }));
     app.get('/__musicfs/identity', c => c.json({ pid: process.pid, origin, instanceId: credentials.instanceId }));
-    app.use('/api/desktop/network', bearerAuth({ token: credentials.adminToken }));
-    app.get('/api/desktop/network', async c => c.json(desktopNetworkView(await readDesktopNetworkSettings(directory), network, server!.port!)));
-    app.put('/api/desktop/network', async c => {
-      const parsed = desktopNetworkSchema.safeParse(await c.req.json().catch(() => null));
-      if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: '请选择本机或局域网访问，端口须为 0—65535 的整数。' }, 422);
-      await writePrivateJson(join(directory, 'network.json'), parsed.data);
-      return c.json(desktopNetworkView(parsed.data, network, server!.port!));
-    });
-    app.post('/api/desktop/quit', bearerAuth({ token: credentials.adminToken }), async c => {
-      try { await mounts.close(); }
-      catch { return c.json({ error: 'mount_busy', message: '挂载未能正常卸载，后台仍在运行。请关闭占用程序后重试。' }, 409); }
-      setTimeout(() => { void close().catch(() => console.error('MusicFS background shutdown failed; private data was preserved.')); }, 100);
-      return c.json({ stopping: true }, 202);
-    });
+    app.route('/', createDesktopHttp({ directory, adminToken: credentials.adminToken, network, port: () => server!.port!, mounts, prerequisites, https, close }));
     app.route('/', service.app);
     const hostname = network.access === 'lan' ? '0.0.0.0' : '127.0.0.1';
     try { server = Bun.serve({ hostname, port: preferredPort, fetch: app.fetch, idleTimeout: 0 }); }
@@ -165,6 +159,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
       if (closing) return closing;
       closing = (async () => {
         await service!.close();
+        await https!.close();
         await server!.stop(false);
         await rm(runtimePath, { force: true });
         await release();
@@ -173,6 +168,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
     }
     return { origin, close };
   } catch (error) {
+    await https?.close();
     await server?.stop(true);
     await service?.close();
     await rm(runtimePath, { force: true });

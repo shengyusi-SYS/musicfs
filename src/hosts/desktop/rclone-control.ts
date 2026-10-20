@@ -11,6 +11,7 @@ export class MountError extends Error {
 
 export interface RcloneControl {
   call<T = Record<string, unknown>>(method: string, parameters?: Record<string, unknown>): Promise<T>;
+  removeRemote(name: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -119,15 +120,23 @@ export function createRcloneControl(input: { directory: string; binary: string; 
     } finally { starting = undefined; }
   }
 
+  async function call<T>(method: string, parameters: Record<string, unknown> = {}): Promise<T> {
+    const current = await ensure();
+    try { return await request<T>(current, method, parameters); }
+    catch (error) {
+      if (error instanceof MountError) throw error;
+      runtime = undefined;
+      throw new MountError('mount_failed', '与本地 rclone 的连接中断，请查看挂载状态后重试。');
+    }
+  }
+
   return {
-    async call<T>(method: string, parameters = {}) {
-      const current = await ensure();
-      try { return await request<T>(current, method, parameters); }
-      catch (error) {
-        if (error instanceof MountError) throw error;
-        runtime = undefined;
-        throw new MountError('mount_failed', '与本地 rclone 的连接中断，请查看挂载状态后重试。');
-      }
+    call,
+    async removeRemote(name) {
+      // A dependency check can fail before rclone creates any config. Removing that
+      // saved mount must not require starting a missing or unused rclone binary.
+      if (!await Bun.file(configPath).exists()) return;
+      await call('config/delete', { name });
     },
     async close() {
       if (child && child.exitCode !== null) { runtime = undefined; return; }

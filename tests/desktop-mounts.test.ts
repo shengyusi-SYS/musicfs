@@ -13,21 +13,24 @@ const localConnection = () => ({ url: 'http://127.0.0.1:12345/dav/', username: '
 function fakeControl() {
   const mounted = new Map<string, string>();
   const remotes = new Map<string, Record<string, unknown>>();
-  let mountCalls = 0; let closed = false; let busy = false;
+  let mountCalls = 0; let closed = false; let busy = false; let listFailure = false;
   const control: RcloneControl = {
     async call<T>(method: string, parameters: Record<string, unknown> = {}) {
       let value: unknown = {};
       if (method === 'config/create') remotes.set(String(parameters.name), parameters.parameters as Record<string, unknown>);
       if (method === 'config/get') value = remotes.get(String(parameters.name)) ?? {};
+      if (method === 'operations/list' && listFailure) throw new MountError('mount_failed', 'Cannot list remote');
       if (method === 'mount/types') value = { mountTypes: ['mount', 'cmount', 'nfsmount'] };
       if (method === 'mount/listmounts') value = { mountPoints: [...mounted].map(([MountPoint, Fs]) => ({ MountPoint, Fs })) };
       if (method === 'mount/mount') { mountCalls++; await Bun.sleep(20); mounted.set(String(parameters.mountPoint), String(parameters.fs)); value = { mountPoint: parameters.mountPoint }; }
       if (method === 'mount/unmount') { if (busy) throw new MountError('mount_busy', 'busy'); mounted.delete(String(parameters.mountPoint)); }
       return value as T;
     },
+    async removeRemote(name) { remotes.delete(name); },
     async close() { closed = true; }
   };
-  return { control, mountCalls: () => mountCalls, closed: () => closed, setBusy(value: boolean) { busy = value; } };
+  return { control, remotes, mountCalls: () => mountCalls, closed: () => closed,
+    setBusy(value: boolean) { busy = value; }, setListFailure(value: boolean) { listFailure = value; } };
 }
 
 test('concurrent mount requests reuse one filesystem; recovered state and responses exclude credentials', async () => {
@@ -68,9 +71,78 @@ test('HTTP LAN sources remain valid and a changed local DAV endpoint requires no
   expect(status.find(item => item.id === local.id)).toMatchObject({ state: 'error', error: { code: 'remount_required' } });
   expect(status.find(item => item.id === remote.id)?.state).toBe('mounted');
   await expect(recovered.mount(input)).rejects.toMatchObject({ code: 'mount_busy' });
-  expect((await recovered.unmount(local.id)).state).toBe('stopped');
-  expect((await recovered.mount(input)).state).toBe('mounted');
+  const restarted = await recovered.remount(local.id);
+  expect(restarted).toMatchObject({ id: local.id, name: local.name, state: 'mounted' });
+  expect([...fake.remotes.values()].find(remote => remote.url === localUrl)?.pass).toBe('local-secret');
   expect((await recovered.list()).find(item => item.id === local.id)?.state).toBe('mounted');
+});
+
+test('saved remote mounts reconnect with the same identity and private credentials, then can be removed', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-remount-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const options = { directory: join(directory, 'state'), binary: 'unused', localConnection,
+    control: fake.control, checkDependencies: async () => {} };
+  const manager = await createMountManager(options);
+  cleanup.push(() => manager.close());
+  const input = { name: 'My remote', mountPoint: join(directory, 'music'), source: {
+    kind: 'remote' as const, url: 'https://example.com/dav/', username: 'saved-user', password: 'saved-password'
+  } };
+  const first = await manager.mount(input);
+  await manager.unmount(first.id);
+  expect(fake.remotes.size).toBe(0);
+  const recovered = await createMountManager(options);
+  const restarted = await recovered.remount(first.id);
+  expect(restarted).toMatchObject({ id: first.id, name: 'My remote', mountPoint: input.mountPoint, state: 'mounted' });
+  expect([...fake.remotes.values()]).toEqual([{ url: input.source.url, vendor: 'other', user: 'saved-user', pass: 'saved-password' }]);
+  expect(JSON.stringify(restarted)).not.toContain('saved-user'); expect(JSON.stringify(restarted)).not.toContain('saved-password');
+  await recovered.remove(first.id);
+  expect(fake.remotes.size).toBe(0); expect(await recovered.list()).toEqual([]);
+  expect(await readFile(join(options.directory, 'mounts.json'), 'utf8')).toBe('[]');
+  expect((await stat(input.mountPoint)).isDirectory()).toBe(true);
+  expect(await (await createMountManager(options)).list()).toEqual([]);
+  await expect(recovered.remount(first.id)).rejects.toMatchObject({ code: 'not_found' });
+  await expect(recovered.remove(first.id)).rejects.toMatchObject({ code: 'not_found' });
+});
+
+test('stopped and failed definitions can be removed along with leftover remote configuration', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-remove-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const options = { directory: join(directory, 'state'), binary: 'unused', localConnection,
+    control: fake.control, checkDependencies: async () => {} };
+  const manager = await createMountManager(options);
+  cleanup.push(() => manager.close());
+  const stopped = await manager.mount({ mountPoint: join(directory, 'stopped'), source: { kind: 'local' } });
+  await manager.unmount(stopped.id);
+  await manager.remove(stopped.id);
+  fake.setListFailure(true);
+  const failed = await manager.mount({ mountPoint: join(directory, 'failed'), source: { kind: 'local' } });
+  expect(failed.state).toBe('error'); expect(fake.remotes.size).toBe(1);
+  fake.setListFailure(false);
+  const retried = await manager.remount(failed.id);
+  expect(retried).toMatchObject({ id: failed.id, state: 'mounted' });
+  await manager.unmount(failed.id);
+  fake.setListFailure(true);
+  const failedAgain = await manager.remount(failed.id);
+  expect(failedAgain.state).toBe('error'); expect(fake.remotes.size).toBe(1);
+  await manager.remove(failed.id);
+  expect(fake.remotes.size).toBe(0); expect(await manager.list()).toEqual([]);
+  expect(await readFile(join(options.directory, 'mounts.json'), 'utf8')).toBe('[]');
+});
+
+test('dependency failures can be removed without starting rclone or requiring its binary', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-remove-dependency-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const manager = await createMountManager({ directory, binary: join(directory, 'missing-rclone'), localConnection,
+    checkDependencies: async () => { throw new MountError('dependency_missing', 'WinFsp is not installed'); } });
+  cleanup.push(() => manager.close());
+  const failed = await manager.mount({ mountPoint: join(directory, 'music'), source: { kind: 'local' } });
+  expect(failed).toMatchObject({ state: 'error', error: { code: 'dependency_missing' } });
+  await manager.remove(failed.id);
+  expect(await manager.list()).toEqual([]);
+  expect(await readFile(join(directory, 'mounts.json'), 'utf8')).toBe('[]');
+  expect(await Bun.file(join(directory, 'rclone-runtime.json')).exists()).toBe(false);
 });
 
 test('busy normal unmount keeps the owned mount and prevents backend termination', async () => {
@@ -82,7 +154,10 @@ test('busy normal unmount keeps the owned mount and prevents backend termination
   const mounted = await manager.mount({ mountPoint: join(directory, 'music'), source: { kind: 'local' } });
   fake.setBusy(true);
   await expect(manager.unmount(mounted.id)).rejects.toMatchObject({ code: 'mount_busy' });
+  await expect(manager.remount(mounted.id)).rejects.toMatchObject({ code: 'mount_busy' });
+  await expect(manager.remove(mounted.id)).rejects.toMatchObject({ code: 'mount_busy' });
   await expect(manager.close()).rejects.toMatchObject({ code: 'mount_busy' });
+  expect(fake.mountCalls()).toBe(1); expect(fake.remotes.size).toBe(1);
   expect(fake.closed()).toBe(false);
   expect((await manager.list())[0]).toMatchObject({ state: 'error', error: { code: 'mount_busy' } });
 });
@@ -112,6 +187,7 @@ test('Windows mount requests keep drive letters and normalize Windows directory 
       }
       return fake.control.call<T>(method, parameters);
     },
+    removeRemote: name => fake.control.removeRemote(name),
     close: () => fake.control.close()
   };
   const manager = await createMountManager({ directory: join(directory, 'state'), binary: 'unused', localConnection,
@@ -186,6 +262,7 @@ test.skipIf(process.platform !== 'linux' || !await Bun.file(binary).exists())('t
     parameters: { url: 'http://192.168.1.100:8080/dav/', vendor: 'other', user: 'reader', pass: 'private-test-password' }, opt: { obscure: true, nonInteractive: true } });
   expect((await second.call<{ url: string }>('config/get', { name: 'endpoint_contract' })).url).toBe('http://192.168.1.100:8080/dav/');
   await second.call('config/delete', { name: 'endpoint_contract' });
+  await second.removeRemote('endpoint_contract');
   await second.close();
   expect(await Bun.file(join(directory, 'rclone-runtime.json')).exists()).toBe(false);
 });

@@ -1,6 +1,6 @@
 # MusicFS 当前交付物
 
-应用`0.1.0-dev.1`、插件API`0.1.6`、数据库schema8。2026-10-21按用户要求打包最新实现，包含可选音乐资料补全和Windows盘符修复。下面列出产物、使用入口及未验证范围；既有记录保留各自版本边界，本次不追加真实平台或跨系统验证。
+应用`0.1.0-dev.2`、插件API`0.1.6`、数据库schema8。2026-10-21按用户要求打包最新实现，包含可选音乐资料补全、挂载项管理、WinFsp安装引导和本机HTTPS WebDAV。下面列出产物、使用入口及未验证范围；既有记录保留各自版本边界，本次仅补现有Windows虚拟机的必要验收，不追加音乐平台请求。
 
 ## 本次发行范围
 
@@ -21,13 +21,13 @@
 
 | 用途 | 归档 | 解压后的入口 |
 |---|---|---|
-| Linux x64 | [Linux ZIP](../dist/releases/musicfs-0.1.0-dev.1-linux-x64.zip) | `musicfs` |
-| Windows x64 | [Windows ZIP](../dist/releases/musicfs-0.1.0-dev.1-windows-x64.zip) | `MusicFS.exe` |
-| macOS Intel | [macOS x64 ZIP](../dist/releases/musicfs-0.1.0-dev.1-macos-x64.zip) | `MusicFS.app` |
-| macOS Apple Silicon | [macOS arm64 ZIP](../dist/releases/musicfs-0.1.0-dev.1-macos-arm64.zip) | `MusicFS.app` |
-| 独立云端部署 | [Worker ZIP](../dist/releases/musicfs-0.1.0-dev.1-worker.zip) | `README.md`、`WORKER.md`、`wrangler.jsonc` |
-| 开发自己的来源插件 | [作者包 ZIP](../dist/releases/musicfs-0.1.0-dev.1-plugin-author-kit.zip) | 包内`README.md` |
-| 从源码构建 | [源码 ZIP](../dist/releases/musicfs-0.1.0-dev.1-source.zip) | `SOURCE.md` |
+| Linux x64 | [Linux ZIP](../dist/releases/musicfs-0.1.0-dev.2-linux-x64.zip) | `musicfs` |
+| Windows x64 | [Windows ZIP](../dist/releases/musicfs-0.1.0-dev.2-windows-x64.zip) | `MusicFS.exe` |
+| macOS Intel | [macOS x64 ZIP](../dist/releases/musicfs-0.1.0-dev.2-macos-x64.zip) | `MusicFS.app` |
+| macOS Apple Silicon | [macOS arm64 ZIP](../dist/releases/musicfs-0.1.0-dev.2-macos-arm64.zip) | `MusicFS.app` |
+| 独立云端部署 | [Worker ZIP](../dist/releases/musicfs-0.1.0-dev.2-worker.zip) | `README.md`、`WORKER.md`、`wrangler.jsonc` |
+| 开发自己的来源插件 | [作者包 ZIP](../dist/releases/musicfs-0.1.0-dev.2-plugin-author-kit.zip) | 包内`README.md` |
+| 从源码构建 | [源码 ZIP](../dist/releases/musicfs-0.1.0-dev.2-source.zip) | `SOURCE.md` |
 
 Linux发行程序在此前版本已有WSL解压运行、FUSE本地/远程挂载及恢复验证，本次只检查新归档与必要启动读取。其他系统与免费环境边界见上表。
 

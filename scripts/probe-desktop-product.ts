@@ -95,7 +95,7 @@ try {
     assert.equal(response.status, 201);
     const failed = await response.json() as { id: string; state: string; error?: { code: string } };
     assert.equal(failed.state, 'error'); assert.equal(failed.error?.code, 'dependency_missing');
-    const removed = await fetch(origin + '/api/mounts/' + failed.id, { method: 'DELETE', headers: admin });
+    const removed = await fetch(origin + '/api/mounts/' + failed.id + '/unmount', { method: 'POST', headers: admin });
     assert.equal(removed.status, 200); assert.equal((await removed.json() as { state: string }).state, 'stopped');
     dependencyFailureTested = true;
   }
@@ -161,7 +161,7 @@ try {
           const recovered = (await status.json() as Array<{ id: string; state: string; error?: { code: string } }>).find(item => item.id === state.id); assert(recovered);
           if (occupyPort) {
             assert.equal(recovered.state, 'error'); assert.equal(recovered.error?.code, 'remount_required');
-            const stopped = await fetch(origin + '/api/mounts/' + state.id, { method: 'DELETE', headers: admin });
+            const stopped = await fetch(origin + '/api/mounts/' + state.id + '/unmount', { method: 'POST', headers: admin });
             assert.equal(stopped.status, 200); assert.equal((await stopped.json() as { state: string }).state, 'stopped');
             const remounted = await fetch(origin + '/api/mounts', { method: 'POST', headers: json,
               body: JSON.stringify({ mountPoint, source: { kind: 'local' } }) });
@@ -178,7 +178,7 @@ try {
     }
     const held = await open(path, 'r');
     try {
-      const busy = await fetch(origin + '/api/mounts/' + state.id, { method: 'DELETE', headers: admin });
+      const busy = await fetch(origin + '/api/mounts/' + state.id + '/unmount', { method: 'POST', headers: admin });
       assert.equal(busy.status, 409); assert.equal((await busy.json() as { error: string }).error, 'mount_busy');
       const alive = await fetch(origin + '/api/status', { headers: admin }); assert.equal(alive.status, 200); await alive.body?.cancel();
     } finally { await held.close(); }
