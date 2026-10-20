@@ -1,0 +1,209 @@
+{
+  "measured": "Linux/Bun formal desktop service over HTTP; installed synthetic plugin and SQLite; upstream/client in a separate process",
+  "bun": "1.4.3",
+  "platform": "linux",
+  "arch": "x64",
+  "clientBytesPerSecond": 8388608,
+  "memoryPeak": "20ms sampling; not an instantaneous or Cloudflare memory peak",
+  "cloudCpuTested": false,
+  "cloudMemoryTested": false,
+  "results": [
+    {
+      "sizeMiB": 32,
+      "concurrency": 1,
+      "totalReceivedBytes": 33554432,
+      "elapsedMs": 4010.9837430000007,
+      "firstBytes": [
+        {
+          "elapsedMs": 13.643243000000439,
+          "upstreamBytesGenerated": 1310720
+        }
+      ],
+      "framing": [
+        {
+          "contentLength": null,
+          "transferEncoding": "chunked"
+        }
+      ],
+      "upstreamStreams": 1,
+      "maxActiveUpstreamStreams": 1,
+      "directory": {
+        "entries": 4657,
+        "pages": 24,
+        "coldUntilReadyMs": 8702.499414,
+        "pendingReads": 2,
+        "warmMs": 490.05467399999907,
+        "warmCatalogRequests": 0,
+        "xmlBytes": 2550348
+      },
+      "memory": {
+        "baseline": {
+          "rss": 215109632,
+          "heapTotal": 94325760,
+          "heapUsed": 34844936,
+          "external": 5108867,
+          "arrayBuffers": 1573
+        },
+        "after": {
+          "rss": 87048192,
+          "heapTotal": 6193152,
+          "heapUsed": 7622851,
+          "external": 4342371,
+          "arrayBuffers": 154
+        },
+        "sampledPeak": {
+          "rss": 223809536,
+          "heapTotal": 94325760,
+          "heapUsed": 54874977,
+          "external": 11082703,
+          "arrayBuffers": 279808
+        },
+        "samples": 200,
+        "sampleIntervalMs": 20,
+        "elapsedMs": 4012.367993,
+        "processCpuMs": 199.934
+      }
+    },
+    {
+      "sizeMiB": 256,
+      "concurrency": 1,
+      "totalReceivedBytes": 268435456,
+      "elapsedMs": 32038.204046999996,
+      "firstBytes": [
+        {
+          "elapsedMs": 11.409213999999338,
+          "upstreamBytesGenerated": 2818048
+        }
+      ],
+      "framing": [
+        {
+          "contentLength": null,
+          "transferEncoding": "chunked"
+        }
+      ],
+      "upstreamStreams": 1,
+      "maxActiveUpstreamStreams": 1,
+      "directory": {
+        "entries": 4657,
+        "pages": 24,
+        "coldUntilReadyMs": 8299.096109,
+        "pendingReads": 2,
+        "warmMs": 499.7144129999979,
+        "warmCatalogRequests": 0,
+        "xmlBytes": 2555005
+      },
+      "memory": {
+        "baseline": {
+          "rss": 169623552,
+          "heapTotal": 69439488,
+          "heapUsed": 39741578,
+          "external": 5238808,
+          "arrayBuffers": 1576
+        },
+        "after": {
+          "rss": 77705216,
+          "heapTotal": 5825536,
+          "heapUsed": 5386854,
+          "external": 2439430,
+          "arrayBuffers": 154
+        },
+        "sampledPeak": {
+          "rss": 181354496,
+          "heapTotal": 69439488,
+          "heapUsed": 55492155,
+          "external": 13191250,
+          "arrayBuffers": 2621434
+        },
+        "samples": 1591,
+        "sampleIntervalMs": 20,
+        "elapsedMs": 32039.492324000003,
+        "processCpuMs": 874.341
+      }
+    },
+    {
+      "sizeMiB": 256,
+      "concurrency": 4,
+      "totalReceivedBytes": 1073741824,
+      "elapsedMs": 32054.996402000004,
+      "firstBytes": [
+        {
+          "elapsedMs": 34.483344000000216,
+          "upstreamBytesGenerated": 5046272
+        },
+        {
+          "elapsedMs": 34.591145999998844,
+          "upstreamBytesGenerated": 5046272
+        },
+        {
+          "elapsedMs": 38.71851500000048,
+          "upstreamBytesGenerated": 9895936
+        },
+        {
+          "elapsedMs": 38.801007000001846,
+          "upstreamBytesGenerated": 9895936
+        }
+      ],
+      "framing": [
+        {
+          "contentLength": null,
+          "transferEncoding": "chunked"
+        },
+        {
+          "contentLength": null,
+          "transferEncoding": "chunked"
+        },
+        {
+          "contentLength": null,
+          "transferEncoding": "chunked"
+        },
+        {
+          "contentLength": null,
+          "transferEncoding": "chunked"
+        }
+      ],
+      "upstreamStreams": 4,
+      "maxActiveUpstreamStreams": 4,
+      "directory": {
+        "entries": 4657,
+        "pages": 24,
+        "coldUntilReadyMs": 8718.144573999998,
+        "pendingReads": 2,
+        "warmMs": 508.25600800000393,
+        "warmCatalogRequests": 0,
+        "xmlBytes": 2555005
+      },
+      "memory": {
+        "baseline": {
+          "rss": 216395776,
+          "heapTotal": 100677632,
+          "heapUsed": 45228414,
+          "external": 5364588,
+          "arrayBuffers": 1576
+        },
+        "after": {
+          "rss": 88334336,
+          "heapTotal": 6165504,
+          "heapUsed": 12623585,
+          "external": 9649089,
+          "arrayBuffers": 154
+        },
+        "sampledPeak": {
+          "rss": 238608384,
+          "heapTotal": 100677632,
+          "heapUsed": 60673249,
+          "external": 17210369,
+          "arrayBuffers": 4130968
+        },
+        "samples": 1590,
+        "sampleIntervalMs": 20,
+        "elapsedMs": 32056.224508,
+        "processCpuMs": 2515.338
+      }
+    }
+  ],
+  "source": {
+    "revision": "3a6e444e0a989a1f6d39e50c1bb6998478453f76",
+    "digest": "3d05e50b6d339e8c1eb3eda08dd992d650f3809cbc40dea390361601c9bddffe",
+    "dirty": false
+  }
+}
