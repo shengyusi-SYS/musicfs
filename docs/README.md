@@ -1,11 +1,12 @@
 # MusicFS 文档索引
 
-建议按需求 → 术语 → 架构与插件合同 → 实施计划阅读。`outputs/` 保留原有路径，避免破坏已分享的链接；当前架构集中在 `docs/architecture/`，有取舍的决定集中在 `docs/adr/`。不复制整份需求到其他文档。
+使用当前产物先读[交付物与使用入口](release.md)。开发接续按需求 → 术语 → 架构与插件合同 → 实施计划阅读。`outputs/`保留原路径；架构集中在`docs/architecture/`，取舍集中在`docs/adr/`，不复制整份需求。
 
 ## 当前设计与执行依据
 
 | 文档 | 保存的内容 | 不用于证明 |
 |---|---|---|
+| [当前交付物](release.md) | 七个归档、插件、启动/部署入口及当前验证范围 | 全部目标系统或免费计划已验收 |
 | [Codex 主线目标](codex-goal.md) | 持续执行范围、依据与全部完成判定 | 产品已经交付 |
 | [实现与验收台账](verification.md) | FR01—FR25、目标环境与交付物的实现/验证状态及证据 | 尚未覆盖环境已通过 |
 | [连接OpenList与播放器](clients.md) | 准备、代理配置及客户端缓存刷新步骤 | 所有客户端/宿主已经验收 |
@@ -25,7 +26,7 @@
 | [QQ 音质与目录统计](verification/p2-qq-quality.md) | 实例策略、实际版本、批量、通用计数、真实 MP3/M4A 与双会话 workerd | 全部真实档位、网易云、云端或播放器验收 |
 | [网易云真实来源](verification/p2-netease-source.md) | 真实扫码、4,158 曲完整喜欢、MP3/DAV/rclone、workerd恢复及多表示响应修正 | 全部音质/续期、完整分类、免费云端及播放器 |
 | [桌面宿主](desktop.md)与[限定验证](verification/p2-desktop-host.md) | 启动/后台复用、Linux挂载和活动挂载崩溃恢复、四目标构建 | 四目标原生运行及系统挂载均通过 |
-| [Worker 宿主与发布](worker.md) | 正式入口、模板、持久发布与核对恢复、本地证据 | 真云配置保留、免费配额及零中断 |
+| [Worker 宿主与发布](worker.md) | 首次部署、保留云端插件的核心升级、Cron续步与限定证据；随包WORKER.md | 免费配额、任意在途流或零中断 |
 | [实例刷新](verification/p1-instance-refresh.md)与[持久分页](verification/p2-durable-refresh.md) | 范围、完整发布、持久目录失败标记、跨请求续步及本地SQL预算 | 全树预读、DAV大目录预算或真实云端免费验收 |
 | [共用界面设计](architecture/web-ui.md) | 已确认视觉基线、页面责任、前后端合同与令牌边界 | 产品全部管理能力已完成 |
 | [管理 HTTP 接口](management-api.md) | WebUI 可调用的实际路由与凭据合同 | 尚未实现的认证/部署/挂载入口 |

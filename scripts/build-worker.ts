@@ -55,6 +55,7 @@ export async function buildWorker(input: { directory?: string; pluginArchives?: 
   }
   if (await Bun.file('dist/web/index.html').exists()) await cp('dist/web', join(directory, 'web'), { recursive: true });
   await cp('docs/user-guide.md', join(directory, 'README.md'));
+  await cp('docs/worker.md', join(directory, 'WORKER.md'));
   await cp('package.json', join(directory, 'dependencies.json')); await cp('bun.lock', join(directory, 'bun.lock'));
   if (await Bun.file('LICENSE').exists()) await cp('LICENSE', join(directory, 'LICENSE'));
   await writeBundleLicenses(build.metafile, join(directory, 'licenses', 'core'));

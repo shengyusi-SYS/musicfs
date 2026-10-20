@@ -1,6 +1,6 @@
 # Worker 构建与部署
 
-日期：2026-10-20。状态：正式入口与后台插件变更已接线；[真实云端](verification/p4-worker-cloud.md)的WebUI/API/DAV、插件自行发布/更新失败保留/移除重装及D1/Secrets/ASSETS保留通过。QQ/网易云真实扫码、完整每日目录和代表性音频读取，以及WSL发行物挂载该HTTPS DAV已通过；完整示例行为和免费计划额度仍待收口。架构取舍见 [ADR 0006](adr/0006-worker-code-publication.md)。
+日期：2026-10-20。状态：[真实云端](verification/p4-worker-cloud.md)的WebUI/API/DAV、后台插件生命周期、绑定保留、核心升级、双示例有限内容/音质、代表客户端及一次切换观察已有证据。真实失效重登、免费计划与大目录资源仍待收口。架构取舍见[ADR 0006](adr/0006-worker-code-publication.md)。本页也随Worker包保存为`WORKER.md`；代码/验收等相对链接对应项目源码包中的文档位置。
 
 正式入口是 [`src/worker.ts`](../src/worker.ts)，由 [`createWorkerService`](../src/hosts/worker/service.ts) 接线 D1、插件注册表、来源实例、目录快照、管理 API、只读 DAV 和静态 WebUI。它与桌面使用同一业务模块和协议实现；发布器通过安装/移除用例接入管理 API，安装不在运行时执行 `eval` 或动态导入未知源码。
 
@@ -27,6 +27,7 @@ bun scripts/build-worker.ts dist/plugins/org.musicfs.sample.zip
 | `web/` | 已构建的共用 WebUI，由 `ASSETS` 提供 |
 | `migrations/` | 当前 D1 schema 迁移 |
 | `wrangler.jsonc` | 普通 Worker 模块部署模板 |
+| `README.md` / `WORKER.md` | 共用使用说明 / 本页部署与升级操作 |
 
 `bundle.json` 的模块类型为 `esm`、`text` 或 `data`。注册表从核心导入已有的插件合同检查，并在模块初始化时验证插件导出，避免把坏模块激活为可用安装。发布用例可替换注册表并增减插件模块后上传新版本，核心模块无需重新编译；普通使用者通过 WebUI 上传 ZIP 或发布地址完成插件操作。作者构建工具仍负责预构建插件及其宿主入口。
 
@@ -63,7 +64,7 @@ bunx wrangler deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 
 发布Token需要有权读取目标Worker的当前模块及写入代码，可使用目标账号的Workers Scripts Edit权限；不是每次安装插件都重新申请。此配置方式已由本轮真实部署和后台发布验证。官方Content API列出接受的写权限。[Cloudflare Content API 权限与合同](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/)
 
-插件变更只发送代码模块和主模块名，使用不修改配置的Content API。真实云端sample生命周期已直接对比平台设置，并通过后续发布/管理/DAV及静态JS摘要验证D1、Secrets、ASSETS和设置保留；其他在途切换及失败恢复范围仍见[限定证据](verification/p4-worker-cloud.md)。发布Token不下发WebUI，也不写入插件包或模块源码。
+插件变更只发送代码模块和主模块名，使用不修改配置的Content API。真实云端已验证D1、Secrets、ASSETS与设置保留；一次实际切换中页面保持200，更新来源的合成音频两次503/Retry-After:2后恢复200，详见[限定证据](verification/p4-worker-cloud.md)。发布Token不下发WebUI，也不写入插件包或模块源码。
 
 模板开启 `nodejs_compat` 供控制面依赖使用；QQ 预构建插件已有独立的无此开关探测。这一开关既不是插件公共合同，也不证明免费计划的 CPU、包体或请求额度足够。
 
@@ -71,7 +72,7 @@ bunx wrangler deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 
 已有 Worker 通过后台安装过插件后，云端注册表与最初的本机构建物可能不同。不要直接把重新构建的空插件发布物部署到原 Worker，也不要用本地同名 ZIP 近似替换云端的精确修订。
 
-先等待已有插件安装、更新或移除操作结束；从组装到部署完成期间停止并行插件变更。构建新页面后，使用现有目标的 `wrangler.jsonc` 和一个独立输出目录：
+组装工具位于同版本项目源码包。先按其中`SOURCE.md`/开发说明准备锁定依赖，再从项目根目录执行以下命令；不是在仅含模块的Worker解压目录执行。先等待已有插件安装、更新或移除操作结束，从组装到部署完成期间停止并行插件变更。构建新页面后，使用现有目标的`wrangler.jsonc`和一个独立输出目录：
 
 ```bash
 bun run build:web
@@ -94,7 +95,7 @@ Wrangler 负责上传静态资源并部署组合后的模块。显式 `--keep-va
 
 目录刷新使用[持久分页接口](management-api.md)。一次 POST step 最多执行一页插件读取，D1 保存暂存条目和下一游标，末页后才切换完整快照。操作 ID 可跨页面重载、Worker isolate 重建和进程重启恢复；GET 只查询。已有成功目录在刷新期间继续可读，冷读取返回带 Retry-After 的 503，由页面或客户端重试。
 
-开始刷新及冷读取响应可以经 `waitUntil` 安排一页；它不会在同一次调用中循环。WebUI后续逐次POST step；模板另配置每分钟Cron，scheduled优先推进一次插件变更，否则推进一页目录刷新，供页面关闭后的慢速续跑。Cron不保证精确完成时间，大集合应在页面中推进；平台配置保留的真实验收也应覆盖此触发器。
+开始刷新及冷读取响应可以经`waitUntil`安排一页；它不会在同一次调用中循环。WebUI后续逐次POST step；模板默认每分钟Cron，scheduled优先推进一次插件变更，否则推进一页目录刷新，供页面关闭后的慢速续跑。Cron不保证精确完成时间，大集合应在页面中推进。无需关页续跑时可把`triggers.crons`设为`[]`，已安排的一页结束后由重新打开的页面继续原操作。当前付费云端验收使用关闭Cron的配置，核心升级保留其原设置。
 
 单页预算与完整集合预算仍需分开测量。分页化不证明加密CPU、插件内部请求、CDN出口或逐文件DAV元数据满足免费额度；付费账号的部署及双示例有限每日集合已成功，不扩展压测或对照矩阵。真实云端大集合跨页及免费额度仍待验。设计与已测边界见 [ADR 0007](adr/0007-durable-paged-refresh.md)和[分页记录](verification/p2-durable-refresh.md)。
 
@@ -119,11 +120,11 @@ WebUI 上传已构建 ZIP 或填写发布地址后，Worker 把变更及候选�
 
 安装过程先读取平台当前模块，保留固定核心和仍在使用的修订，生成带操作身份的候选 `registry.mjs`。平台模块初始化时会调用核心已有的 `assertPluginModule`；随后发布器重新读取实际注册表，与 D1 中保存的候选内容核对，匹配后才条件激活插件安装。加载代码不会自动激活安装，数据库确认也不能由一次上传响应替代。
 
-结构升级先冻结全部实例输入，核对代码后由含精确候选模块的新调用接棒。每次最多转换/验证一个实例，全部就绪后另一步在同一D1 batch中切换安装、所有实例及completed。阶段可见 `preparing` / `migrating`；任一转换失败或实例在准备期间变化均保留旧安装和全部活动数据。没有界面时Cron继续原操作；临时进度不是部分实例已生效。见[合同](architecture/plugin-interface.md#配置与私有状态迁移)及[本地证据](verification/p2-plugin-migration.md)。
+结构升级先冻结全部实例输入，核对代码后由含精确候选模块的新调用接棒。每次最多转换/验证一个实例，全部就绪后另一步在同一D1 batch中切换安装、所有实例及completed。阶段可见`preparing`/`migrating`；任一转换失败或实例在准备期间变化均保留旧安装和全部活动数据。启用Cron时可在关页后继续，关闭时重新打开页面继续原操作；临时进度不是部分实例已生效。见[合同](architecture/plugin-interface.md#配置与私有状态迁移)及[本地证据](verification/p2-plugin-migration.md)。
 
 上传已被平台接受但响应丢失时，操作保留为 `verifying`，下一次查询安排重新读取注册表；内容已匹配即可完成 D1 激活，**不会盲目再上传一次**。明确的 4xx 拒绝（408 除外）立即标记失败。结果仍不明确且自尝试已超过两分钟时，后续核对执行会将操作标记为 `deployment_unconfirmed`；这是查询触发的恢复边界，不是一个保证准时触发的独立定时器。
 
-移除完成后安装标记为 `missing`，实例配置、状态及布局引用继续保留。候选代码在 D1 确认前保留旧的 active 修订；之后的变更会清理不再被当前安装使用的模块。代码发布和 D1 更新之间没有跨系统事务，真实切换对正在播放流的影响仍需云端验证。
+移除完成后安装标记为`missing`，实例配置、状态及布局引用继续保留。候选代码在D1确认前保留旧的active修订；历史模块物理回收不作为移除功能的门禁。代码发布和D1更新之间没有跨系统事务；已有代表性切换观察不保证任意在途播放流均不中断。
 
 ## 本地正式入口验证
 
@@ -142,4 +143,4 @@ bun test tests/worker-publishing.test.ts
 |---|---|---|
 | [正式入口探针](../scripts/probe-worker-service.ts) | 实际产品 core/薄入口/注册表在本地 workerd 的接线、页面、D1 与 DAV | Cloudflare 控制面接受实际上传及真实流量行为 |
 | [6项发布集成测试](../tests/worker-publishing.test.ts) | 真实Miniflare D1 +官方SDK，仅平台Fetch受控；multipart、安装/移除、响应丢失、精确新调用迁移/原子激活、失败保留及暂存中断 | 真平台配置保留、权限、传播时序与资源额度 |
-| [真实云端验收](verification/p4-worker-cloud.md) | 付费账号单Worker/D1；插件自行发布、一次失败保留、更新/移除重装、Secrets/D1/ASSETS及设置保留；双示例扫码/每日/HEAD及范围、QQ全文与WSL发行物HTTPS远程挂载 | 免费计划额度、真实自然续期/失效重登、其余示例行为、大集合资源、在途切换/响应丢失恢复及其他OS |
+| [真实云端验收](verification/p4-worker-cloud.md) | 付费账号单Worker/D1；发布/失败保留/移除重装、绑定保留、核心升级、双示例内容/音质、代表音频/客户端及实际切换观察 | 免费/大目录资源、真实会话重登及其他OS；响应丢失恢复沿用正式D1+SDK证据 |

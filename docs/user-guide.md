@@ -1,6 +1,6 @@
 # MusicFS 使用说明
 
-本包是开发预览，提供插件式只读音乐文件服务。Linux 已有原生运行与挂载证据；Windows、两种 macOS 及真实 Cloudflare 仍需对应环境验收。构建成功不代表这些环境已通过。
+本包是开发预览，提供插件式只读音乐文件服务。Linux发行程序已在WSL完成运行与FUSE挂载；真实付费Cloudflare的发布、双示例和代表性客户端已有验证。Windows、两种macOS、原生Linux图形入口及免费Worker资源仍待相应环境验收。
 
 下列文件路径均相对解压后的发行目录。普通桌面使用不需要安装 Bun、Node.js 或 rclone；rclone 已随包提供。
 
@@ -27,7 +27,7 @@
 
 在实例的“内容源”刷新需要的入口，等待显示完成；然后到“目录布局”添加来源、安排分组并保存发布。新歌单等子目录可在已发布目录预览中打开并准备。
 
-桌面后台会继续准备，Worker 在关闭页面后由定时步骤慢速续跑；重新打开页面可以查看同一操作。大集合留在页面中推进会更快。失败刷新保留最近成功内容，网络或限流问题可稍后重试。
+桌面后台会继续准备。Worker模板默认每分钟用Cron慢速推进一步；如果部署时关闭Cron，已安排的一页结束后，需要重新打开管理页继续同一操作。大集合留在页面中推进会更快。失败刷新保留最近成功内容，网络或限流问题可稍后重试。
 
 如果来源明确提示授权失效，点击错误旁的“重新授权”，按插件步骤完成登录后再次读取。授权窗口中的“上次授权流程已完成”是历史操作记录；来源要求重新授权时，以当前错误提示为准。重新登录保留实例配置和目录布局。
 
@@ -53,7 +53,7 @@ OpenList 选择 WebDAV 驱动，地址使用完整 DAV 地址，根文件夹填 
 
 ## 独立部署 Worker
 
-Worker ZIP 包含共用页面、模块、插件注册表、D1迁移和 `wrangler.jsonc`。首次部署需要自己的 Cloudflare 账号及官方 Wrangler 工具；真实免费计划及云出口尚未验收。
+Worker ZIP 包含共用页面、模块、插件注册表、D1迁移和 `wrangler.jsonc`，详细操作见包内`WORKER.md`。首次部署需要自己的Cloudflare账号及官方Wrangler工具；当前已有付费账号真实运行结果，免费计划资源仍待验证。
 
 在 Worker 解压目录执行，按命令输出填写自己的 D1 ID及账号配置：
 
@@ -61,16 +61,17 @@ Worker ZIP 包含共用页面、模块、插件注册表、D1迁移和 `wrangler
 bunx wrangler d1 create musicfs
 # 编辑 wrangler.jsonc 中的D1 ID、CF_ACCOUNT_ID和Worker名称。
 bunx wrangler d1 migrations apply musicfs --remote
-bunx wrangler secret put ADMIN_TOKEN
-bunx wrangler secret put DAV_USERNAME
-bunx wrangler secret put DAV_PASSWORD
-bunx wrangler secret put CF_API_TOKEN
-bunx wrangler deploy
+# 在发行目录外准备私有JSON文件，包含下述四个Secret。
+bunx wrangler deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 ```
+
+私有JSON的四个键为`ADMIN_TOKEN`、`DAV_USERNAME`、`DAV_PASSWORD`和`CF_API_TOKEN`。前三项使用自己选择的管理令牌和只读DAV凭据；发布Token使用目标账号的Workers Scripts Edit权限。Wrangler登录用于本机部署，Worker保存发布Token以便以后自行安装或更新插件。若不需要关闭页面后继续刷新，可在部署前将`wrangler.jsonc`的`triggers.crons`改为`[]`。
 
 部署后打开 Worker 地址并输入管理令牌。注册表内的代码不会自行激活插件；从WebUI上传本发行目录`plugin-packages/`中的ZIP或填写作者发布地址，后台自动组装发布，等操作显示完成。`plugins/`中的展开模块由部署使用，不是安装包。后续安装插件无需重新编译核心或页面。发布Token由Worker保存；它必须具备对应账号与Worker的读取及编辑能力。
 
-修改核心版本前先按新包迁移数据库，再部署对应模块；保留已有D1和Secrets。用户配置和授权在D1中，不在插件模块中。当前自动发布的真实配置保留、切换影响及免费资源仍待云端验收。
+升级核心或WebUI时，先按包内`WORKER.md`的“升级核心与WebUI，保留云端插件”步骤，用同版本源码中的组装工具读取当前云端注册表及插件模块，再发布新核心/页面。不要直接部署新包的初始注册表，它可能缺少已经安装的插件；保留原D1、Secrets和实际配置，有新增迁移时才执行迁移。插件自身的更新仍从WebUI完成。
+
+真实切换观察中管理页面保持可用，更新来源的目录曾短暂返回带`Retry-After`的503，准备完成后恢复读取。发布完成后先确认实例和布局仍在、读取一个已准备文件；不承诺无中断切换。
 
 ## 随包资料
 
