@@ -9,6 +9,7 @@ function waiting(step: AuthStep) { if (step.kind !== 'waiting') throw new Error(
 function fixture() {
   const calls: { path: string; cookie: string; signal: AbortSignal | null }[] = [];
   let statusUnavailable = false; let brokenVersion = false; let preview = true; let cancelledBody = false;
+  let statusBody: unknown = { code: 200, profile: { userId: 42, nickname: '测试账号' } };
   let playlistIds = [1, 2, 1]; let wrongTrackCount = false; let missingPlayback = false;
   let likedPlaylistId = 8; const playlistCalls: string[] = [];
   let playbackRows = (rows: Record<string, unknown>[], _level: string) => rows;
@@ -33,7 +34,7 @@ function fixture() {
       'MUSIC_U=private-session; Domain=.music.163.com; Path=/; HttpOnly; Secure; Expires=Thu, 31 Dec 2099 23:59:59 GMT',
       '__csrf=private-csrf; Domain=.music.163.com; Path=/; Secure'
     ]);
-    if (path === '/api/w/nuser/account/get') return statusUnavailable ? json({}, [], 502) : json({ code: 200, profile: { userId: 42, nickname: '测试账号' } });
+    if (path === '/api/w/nuser/account/get') return statusUnavailable ? json({}, [], 502) : json(statusBody);
     if (path === '/api/user/playlist') return json({ code: 200, more: false, playlist: [
       { id: likedPlaylistId, userId: 42, specialType: 5, name: '不能按名字猜的系统集合' },
       { id: 9, userId: 42, specialType: 0, name: '自建歌单' }, { id: 10, userId: 52, specialType: 0, name: '收藏歌单' }
@@ -55,7 +56,7 @@ function fixture() {
     return json({ code: 404 }, [], 404);
   }, { preconnect: fetch.preconnect });
   const ctx: Context = { instanceId: 'netease-a', config: { label: '网易云', quality: 'standard' }, privateState: null, signal: new AbortController().signal, fetch: fakeFetch };
-  return { ctx, calls, playbackCalls, playlistCalls, setLikedPlaylistId(id: number) { likedPlaylistId = id; }, setStatusUnavailable(state: boolean) { statusUnavailable = state; }, setBrokenVersion(state: boolean) { brokenVersion = state; },
+  return { ctx, calls, playbackCalls, playlistCalls, setLikedPlaylistId(id: number) { likedPlaylistId = id; }, setStatusUnavailable(state: boolean) { statusUnavailable = state; }, setStatusBody(body: unknown) { statusBody = body; }, setBrokenVersion(state: boolean) { brokenVersion = state; },
     setPreview(state: boolean) { preview = state; }, setPlaylistIds(ids: number[]) { playlistIds = ids; }, setWrongTrackCount(state: boolean) { wrongTrackCount = state; },
     setPlaybackRows(transform: typeof playbackRows) { playbackRows = transform; },
     setMissingPlayback(state: boolean) { missingPlayback = state; }, cancelledBody: () => cancelledBody };
@@ -104,6 +105,66 @@ test('NetEase confirmed credentials survive a temporary profile failure without 
   f.ctx.privateState = failure.nextPrivateState!; f.setStatusUnavailable(false);
   expect(value(await plugin.authenticate!(f.ctx, { kind: 'poll', challengeId: qr.challengeId })).kind).toBe('complete');
   expect(f.calls.filter(call => call.path.includes('qrcode/client/login'))).toHaveLength(1);
+});
+
+test('NetEase missing or expired session cookies require reauthorization before making a protected request', async () => {
+  for (const expired of [false, true]) {
+    const f = fixture(); await authorize(f);
+    const state = structuredClone(f.ctx.privateState) as { cookies: string; accountId: string | null; accountName: string | null };
+    const jar = JSON.parse(state.cookies) as { cookies: { key: string; expires?: string }[] };
+    if (expired) jar.cookies.find(cookie => cookie.key === 'MUSIC_U')!.expires = '2000-01-01T00:00:00.000Z';
+    else jar.cookies = jar.cookies.filter(cookie => cookie.key !== 'MUSIC_U');
+    state.cookies = JSON.stringify(jar); f.ctx.privateState = state;
+    const before = f.calls.length; const failure = await plugin.list(f.ctx, 'created');
+    expect(failure).toMatchObject({ ok: false, error: { kind: 'needs_auth' }, nextPrivateState: { accountId: null, accountName: null } });
+    expect(f.calls).toHaveLength(before); expect(JSON.stringify(failure.nextPrivateState)).not.toContain('private-session');
+    f.ctx.privateState = failure.nextPrivateState!; await authorize(f);
+    expect(value(await plugin.roots(f.ctx)).items).toHaveLength(5);
+    expect(f.calls.some(call => call.path.includes('/login/token/refresh'))).toBe(false);
+  }
+});
+
+test('NetEase malformed account responses remain temporary and preserve the authorized session', async () => {
+  const f = fixture(); await authorize(f);
+  for (const body of [{ code: 200 }, { code: 200, profile: { userId: 'broken' } }, { code: 502, profile: null }]) {
+    f.setStatusBody(body); const failure = await plugin.roots(f.ctx);
+    expect(failure).toMatchObject({ ok: false, error: { kind: 'temporary' } });
+    expect(failure.nextPrivateState).toBeUndefined();
+    expect(f.ctx.privateState).toMatchObject({ accountId: '42', accountName: '测试账号' });
+  }
+  f.setStatusBody({ code: 200, profile: { userId: 42, nickname: '测试账号' } });
+  expect(value(await plugin.roots(f.ctx)).items).toHaveLength(5);
+});
+
+test('NetEase an explicit logged-out account response clears the session identity and allows a fresh QR login', async () => {
+  const f = fixture(); await authorize(f); f.setStatusBody({ code: 200, account: null, profile: null });
+  const failure = await plugin.roots(f.ctx);
+  expect(failure).toMatchObject({ ok: false, error: { kind: 'needs_auth' }, nextPrivateState: { accountId: null, accountName: null } });
+  f.ctx.privateState = failure.nextPrivateState!;
+  f.setStatusBody({ code: 200, profile: { userId: 42, nickname: '测试账号' } }); await authorize(f);
+  expect(value(await plugin.list(f.ctx, 'created')).items.map(item => item.name)).toEqual(['自建歌单']);
+});
+
+test('NetEase response cookie updates survive a later business failure and are reused after restoring the proposal', async () => {
+  const f = fixture(); await authorize(f); const originalFetch = f.ctx.fetch; let cookieAtFailure = '';
+  f.ctx.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init); const path = new URL(request.url).pathname;
+    if (path === '/eapi/v6/playlist/detail') {
+      cookieAtFailure = request.headers.get('cookie') ?? '';
+      const headers = new Headers(); headers.append('Set-Cookie', '__csrf=rotated-csrf; Domain=.music.163.com; Path=/; Secure');
+      return Response.json({ code: 503 }, { status: 503, headers });
+    }
+    const response = await originalFetch(input, init);
+    if (path === '/weapi/user/playlist') response.headers.append('Set-Cookie', 'MUSIC_U=rotated-session; Domain=.music.163.com; Path=/; HttpOnly; Secure; Expires=Thu, 31 Dec 2099 23:59:59 GMT');
+    return response;
+  }, { preconnect: fetch.preconnect });
+  const failure = await plugin.list(f.ctx, 'liked');
+  expect(failure).toMatchObject({ ok: false, error: { kind: 'temporary' }, nextPrivateState: { accountId: '42', accountName: '测试账号' } });
+  expect(cookieAtFailure).toContain('MUSIC_U=rotated-session'); expect(cookieAtFailure).not.toContain('private-session');
+  expect(JSON.stringify(failure.nextPrivateState)).toContain('rotated-csrf');
+  f.ctx.privateState = failure.nextPrivateState!; f.ctx.fetch = originalFetch;
+  expect(value(await plugin.roots(f.ctx)).items).toHaveLength(5);
+  expect(f.calls.at(-1)!.cookie).toContain('MUSIC_U=rotated-session'); expect(f.calls.at(-1)!.cookie).toContain('__csrf=rotated-csrf');
 });
 
 test('NetEase cancellation discards only the matching local challenge', async () => {

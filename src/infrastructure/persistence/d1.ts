@@ -5,6 +5,8 @@ import type { AuthenticationRecord, Instance, InstanceStore, SourceStamp } from 
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
 import type { RefreshStore } from '../../core/library/refresh-types';
 import type { PluginChangeStore } from '../../application/change-plugin';
+import type { RenewalStore } from '../../core/sources/renewal';
+import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import { changeFromRow, changeLeaseFromRow, changeInputFromRow, changeRecordSQL, nextChangeInstanceSQL, readyChangesSQL,
   createChangeStatement, claimChangeStatement, releaseChangeStatement, commitChangePlan, type ChangeRow, type ChangeInputRow } from './plugin-change-sql';
 import { cancelRefreshPlan, claimRefreshStatement, commitRefreshPlan, createdRefresh, createRefreshPlan, currentRefreshSQL,
@@ -71,7 +73,7 @@ export function createD1Store(db: D1Database) {
     },
     async saveState(snapshot, state) {
       const result = await db.prepare(`UPDATE instances SET private_state = ?, state_revision = state_revision + 1
-        WHERE ${predicate} AND state_revision = ?`).bind(JSON.stringify(state), ...bindings(snapshot), snapshot.stateRevision).run();
+        WHERE ${predicate} AND state_revision = ? AND ${noActiveRenewalSQL}`).bind(JSON.stringify(state), ...bindings(snapshot), snapshot.stateRevision).run();
       return result.meta.changes === 1;
     },
     async configure(snapshot, config, state) {
@@ -91,6 +93,15 @@ export function createD1Store(db: D1Database) {
       return result.meta.changes === 1;
     },
     async deleteInstance(id) { await db.prepare('DELETE FROM instances WHERE id = ?').bind(id).run(); },
+    async claimRenewal(expected, token, now, until) {
+      const results = await db.batch<RenewalClaimRow>(claimRenewalPlan(expected, token, now, until).map(prepare));
+      return renewalClaimFromRow(results.at(-1)?.results[0]);
+    },
+    async finishRenewal(expected, token, outcome, now, retryAt) {
+      const results = await db.batch(finishRenewalPlan(expected, token, outcome, now, retryAt).map(prepare));
+      return results.at(-1)!.results.length === 1;
+    },
+    async releaseRenewal(instanceId, token) { await prepare(releaseRenewalStatement(instanceId, token)).run(); },
     async layout() {
       const row = await db.prepare('SELECT revision, nodes FROM library_layout WHERE id = 1').first<{ revision: number; nodes: string | null }>();
       if (!row) throw new Error('Library layout migration is missing');
@@ -145,5 +156,5 @@ export function createD1Store(db: D1Database) {
       const rows = await db.prepare(readyRefreshesSQL).bind(now, limit).all<{ operation_id: string }>();
       return rows.results.map(row => row.operation_id);
     }
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore;
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & RenewalStore;
 }

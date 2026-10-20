@@ -185,9 +185,37 @@ sequenceDiagram
   end
 ```
 
+## 当前按需会话续期
+
+插件判断到期和重试时间，sources只协调同一实例的必要续期；普通内容请求在租约之外。SQLite/D1使用同一条件SQL计划，详见[会话验证](../verification/p2-session-lifecycle.md)。
+
+```mermaid
+sequenceDiagram
+  participant R as roots/list/stat/open
+  participant S as sources
+  participant P as 插件 renewal
+  participant DB as SQLite / D1
+  R->>S: 当前实例调用
+  S->>P: needed（本地状态，无网络）
+  alt 无需续期
+    S->>P: 普通内容操作
+  else 需要续期
+    S->>DB: 条件取得短租约并预留状态修订
+    alt 其他调用正在续期
+      S->>DB: 可取消等待后读取新状态或短期失败
+    else 本调用取得租约
+      S->>P: renew（可取消，事务外）
+      P-->>S: 可选新状态和成功/错误
+      S->>DB: 条件保存结果并释放租约
+    end
+    S->>P: 成功后执行普通内容操作
+  end
+  P-->>R: 内容结果（后续失败不回滚已保存凭据）
+```
+
 ## 当前 QQ 插件内部链路
 
-仅描述 alpha.5 的已接线责任。自建/收藏、推荐、完整分页、实例音质/回退/去重已接入；续期和部分 metadata facade 取消仍待完成。没有把 SDK 的整个路由服务暴露成 MusicFS API。
+描述 alpha.8 的已接线责任。自建/收藏、推荐、完整分页、实例音质/回退/去重已接入；SDK续期已通过本地包验证，真实自然到期/失效重登及部分认证facade取消仍待收口。没有把 SDK 的整个路由服务暴露成 MusicFS API。
 
 ```mermaid
 flowchart LR

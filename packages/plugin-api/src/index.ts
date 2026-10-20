@@ -82,6 +82,11 @@ export interface SourcePlugin {
   stat(ctx: Context, file: string): Promise<Outcome<FileInfo>>;
   open(ctx: Context, file: string, request: ReadRequest): Promise<Outcome<ReadResult>>;
   authenticate?(ctx: Context, action: AuthAction): Promise<Outcome<AuthStep>>;
+  /** Optional session maintenance. needed is local/pure; only renew holds an instance lease. */
+  renewal?: {
+    needed(ctx: Context): boolean | Promise<boolean>;
+    renew(ctx: Context): Promise<Outcome<null>>;
+  };
   /** Pure candidate conversions; the host validates and atomically activates their outputs. */
   migrateConfig?(input: { fromVersion: number; config: Json; state: Json }): Json;
   migrateState?(input: { fromVersion: number; state: Json; config: Json }): Json;

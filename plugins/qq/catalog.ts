@@ -29,7 +29,7 @@ export async function roots(client: QqClient, cursor?: string): Promise<Page<Roo
   client.requireSession(); if (cursor !== undefined) fail('not_found', 'QQ 内容源分页位置无效。');
   // Verify the restored credential through an authenticated read, not just its local presence.
   const status = await client.call('/login/status');
-  if (!Object.keys(object(object(status.data).profile)).length) fail('needs_auth', 'QQ 授权已失效，请重新扫码。');
+  if (!Object.keys(object(object(status.data).profile)).length) return client.needsAuthentication();
   const label = typeof object(client.ctx.config).label === 'string' ? object(client.ctx.config).label : 'QQ 音乐';
   return { items: [
     { sourceId: 'liked', name: `${label} · 喜欢的音乐`, directoryRef: 'liked' },

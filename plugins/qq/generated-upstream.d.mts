@@ -3,6 +3,10 @@
 export { createSealedSessionResolver } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/serverless/sealedResolver.js';
 export { deriveAndroidDevice } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/serverless/derivedDevice.js';
 export { createSessionMusicuClient } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/recommend/sessionMusicu.js';
+export { AUTH_REFRESH_EARLY_MS, AUTH_REFRESH_RETRY_MS } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/auth/sessionState.js';
+export { createFetchTransport } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/transport/fetch.js';
+export { refreshLoginCredential } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/auth/authenticatedReads.js';
+export type { AuthHttpClient } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/auth/httpClient.js';
 export { credentialMusicId } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/auth/androidDevice.js';
 export { QqApiError } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/protocol/errors.js';
 export { StreamCdnSelector } from './node_modules/@yakult-green-tea/qq-music-api/dist/src/services/auth/streamCdnSelector.js';

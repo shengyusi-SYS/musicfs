@@ -36,9 +36,12 @@ export class NeteaseClient {
     }
   }
   update(next: NeteaseState) { this.state = next; this.changed = true; }
-  requireSession() { if (!this.state.accountId) fail('needs_auth', '请先为此网易云实例扫码授权。'); }
+  requireSession() {
+    if (!this.state.accountId) fail('needs_auth', '请先为此网易云实例扫码授权。');
+    if (!this.jar.getCookiesSync(site).some(cookie => cookie.key === 'MUSIC_U' && cookie.value)) this.loseSession();
+  }
   loseSession(): never {
-    this.update({ ...this.state, accountId: null, accountName: null });
+    this.update({ ...this.state, cookies: JSON.stringify(this.jar.serializeSync()), accountId: null, accountName: null });
     return fail('needs_auth', '网易云授权已失效，请重新扫码。');
   }
   readonly request: UpstreamRequest = async (uri, data, options) => {
@@ -85,9 +88,11 @@ export class NeteaseClient {
   }
   async profile(): Promise<{ id: string; name: string }> {
     const response = await this.call(endpoints.status);
-    const profile = object(object(response.data).profile);
+    const data = object(response.data);
+    if (data.profile === null) return this.loseSession();
+    const profile = object(data.profile);
     const id = String(profile.userId ?? '');
-    if (!/^\d+$/.test(id) || id === '0') return this.loseSession();
+    if (!/^[1-9]\d*$/.test(id) || typeof profile.userId === 'number' && !Number.isSafeInteger(profile.userId)) fail('temporary', '网易云暂未返回有效账号信息，请稍后重试。');
     return { id, name: typeof profile.nickname === 'string' ? profile.nickname.slice(0, 500) : '网易云账号' };
   }
 }

@@ -1,6 +1,6 @@
 # QQ 插件复用固定 SDK 的原始读取能力
 
-日期：2026-10-20。状态：已采用，适用于 QQ 开发预览 alpha.3 起，当前 alpha.5。依据：[来源职责](0001-installable-source-plugins.md)、[独立插件合同](0003-independent-plugin-interface.md)、[QQ 实测](../verification/p2-qq-catalog.md)及[音质批量验证](../verification/p2-qq-quality.md)。
+日期：2026-10-20。状态：已采用，适用于 QQ 开发预览 alpha.3 起，当前 alpha.8。依据：[来源职责](0001-installable-source-plugins.md)、[独立插件合同](0003-independent-plugin-interface.md)、[QQ 实测](../verification/p2-qq-catalog.md)及[音质批量验证](../verification/p2-qq-quality.md)。
 
 ## 问题
 
@@ -19,6 +19,10 @@ SDK 已有可复用的 sealed 会话解析和 Musicu 请求客户端，能注入
 音质适配继续使用这条作者导出路径：复用 SDK 的文件类型映射、APE 文件存在规则与 StreamCdnSelector，并由 session Musicu 的 executeBatch 处理原生请求。公共播放 facade 只能为同一请求提供一个 mediaId，逐曲调用还会重复分发探测；插件改用明确的原生 vkey 批量，保留各曲 mediaId。平台目标/实际格式、回退、去重和出现位置在 `playback/catalog`，字节合同在 `media`，会话/传输/错误在 `client`。CDN selector 只在本次调用内存在，其 promise 不跨请求或实例共享；宿主 Fetch 负责真正的范围与取消。没有新增通用核心播放框架或另写平台加密。
 
 ## 代价与约束
+
+alpha.8沿用同一路线复用 SDK 的 `resolver.rotate`、`refreshLoginCredential` 和 Fetch transport。插件只将该续期RPC所需的JSON POST与宿主Fetch/取消信号接线，不重写凭据刷新、加密或登录重定向。QQ/微信渠道取自实际凭据，来源的六小时提前窗口、五分钟失败间隔和原登录有效期限制由固定SDK决定。插件私有状态v2保存下一检查时间，由公开迁移合同保留v1已有账号。
+
+SDK进程内的 in-flight/retry 表不提供跨 Worker isolate 保证；实例互斥和持久失败合并由 `sources` 的可选续期合同及SQLite/D1完成。当前 SDK 认证HTTP facade没有实例Fetch/取消注入口，QR/状态请求的剩余取消缺口继续单列，不能把续期接线写成全部认证取消已经通过。证据见[会话记录](../verification/p2-session-lifecycle.md)。
 
 私有文件路径不是 SDK 的稳定承诺。因此依赖与 lock 固定为 3.3.3，构建入口检查版本及文件存在性，升级须显式复核导出、类型和行为。SDK 将来提供合适的公共入口时，应替换生成入口，保留插件内部职责和行为测试。
 

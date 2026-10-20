@@ -65,6 +65,7 @@ test('QQ cancellation discards the private challenge and cannot be resumed throu
   expect(await plugin.authenticate!(context(null, 'other'), { kind: 'poll', challengeId: step.challengeId })).toMatchObject({ ok: false, error: { kind: 'invalid_config' } });
 });
 
-test('QQ declares the public contract needed by source-provided file descriptions', () => {
-  expect(parseManifest(manifest, 'worker').apiRange).toBe('>=0.1.3 <0.2.0');
+test('QQ declares the public contract needed by host-coordinated renewal and its migrated state', () => {
+  expect(parseManifest(manifest, 'worker').apiRange).toBe('>=0.1.5 <0.2.0');
+  expect(parseManifest(manifest, 'worker').stateVersion).toBe(2);
 });

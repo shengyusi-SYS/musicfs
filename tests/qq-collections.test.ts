@@ -13,7 +13,7 @@ async function fixture(account = '123') {
   const credential = { musicid: account, str_musicid: account, musickey: 'private-native-key-' + account, loginType: 2, encryptUin: 'encrypted-' + account };
   const token = await createSealedSessionResolver({ secrets: { current: secret } }).issue({ credential,
     device: await deriveAndroidDevice(secret), expiresAt: Date.now() + 60 * 60 * 1000 });
-  const state: Json = { version: 1, secret, token, accountName: null, pending: null };
+  const state: Json = { version: 2, secret, token, accountName: null, pending: null, renewAfter: 0 };
   let created: Record<string, unknown> = { v_playlist: [{ tid: 7, dirId: 1, dirName: '收藏歌单' }, { tid: 0, dirId: 201, dirName: '' }], total: 2, bFinish: true };
   let favorites: unknown[] = [{ id: 7, title: '我的歌单' }, { id: 8, title: '另一份' }, { id: 10, title: '末页' }];
   let favoriteMoreEmpty = false; let code = 0; let block = false;

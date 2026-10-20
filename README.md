@@ -19,6 +19,6 @@
 
 开发入口和当前证据见[开发说明](docs/development.md)、[P0 目录/DAV 记录](docs/verification/p0-library-dav.md)、[WebUI 首轮记录](docs/verification/p1-webui.md)与[通用认证记录](docs/verification/p1-authentication.md)。尚未覆盖的真实平台、完整管理流程、云部署、目标系统和客户端能力保留在验收台账中。
 
-QQ 开发预览已接入手机 QQ/微信扫码、会话恢复、原始歌单分类、实例单/多音质与缺失策略；真实 MP3/M4A、正式 DAV/rclone 范围读取和双会话本地 workerd 已有[限定证据](docs/verification/p2-qq-quality.md)。完整双宿主示例仍欠续期、其余真实档位和云端验收，详见[插件说明](plugins/qq/README.md)。
+QQ 开发预览已接入手机 QQ/微信扫码、会话恢复、原始歌单分类、实例单/多音质与缺失策略；真实 MP3/M4A、正式 DAV/rclone 范围读取和双会话本地 workerd 已有[限定证据](docs/verification/p2-qq-quality.md)。[按需续期及失效判断](docs/verification/p2-session-lifecycle.md)已有SQLite/D1和实际QQ包的本地验证；真实自然续期/完整重登、其余档位和云端仍待验，详见[插件说明](plugins/qq/README.md)。
 
 网易云已完成真实授权、每日推荐、4,158 曲喜欢列表的完整刷新和 MP3 读取，详见[真实来源记录](docs/verification/p2-netease-source.md)。桌面和 Worker 的构建、运行及未验边界分别见[桌面说明](docs/desktop.md)与[Worker 说明](docs/worker.md)。

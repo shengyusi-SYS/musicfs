@@ -18,7 +18,7 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun test tests/plugin-migration-source.test.ts tests/plugin-change-persistence.test.ts tests/plugin-migration-desktop.test.ts tests/worker-publishing.test.ts tests/migrations.test.ts` | 迁移转换、SQLite/D1原子激活、正式桌面更新/重启、Worker新调用接棒及旧数据库升级；使用独立临时数据 |
 | `bun run build:sample` | 同一 JSON Schema 生成 Ajv standalone 校验，构建浏览器兼容 ESM 并生成 ZIP |
 | `bun run build:qq` | 构建 QQ 开发预览与必要许可，生成固定 SDK 原始读取入口、固定日志设置以消除 process 依赖；生成 dist/plugins/org.musicfs.qq.zip |
-| `bun run probe:worker:qq` | 将实际 QQ 打包模块放入本地 workerd/D1，无 Node 兼容开关；检查状态隔离，可显式选择真实开发会话 |
+| `bun run probe:worker:qq` | 实际 QQ 打包模块在本地 workerd/D1、无 Node 兼容开关；检查状态隔离、受控上游的SDK续期/双控制器合并/密文跨运行时恢复；可显式选择真实开发会话 |
 | `bun run build:netease` | 固定 4.32.0 必要 SDK 模块、原样加密及 Ajv standalone，输出 dist/netease/org.musicfs.netease.zip |
 | `bun run probe:worker:netease` | 实际网易云 ESM 在 Bun/workerd 请求真实二维码；可显式选取已授权实例验证 D1 会话恢复和每日目录；需要网络 |
 | `bun run build:worker` | 组装正式 Worker core/薄入口/独立 registry、WebUI、模板及迁移；可附已有插件 ZIP 路径 |
@@ -78,6 +78,7 @@ bun scripts/probe-player.ts --url-file /tmp/selected-audio-url.txt --output /tmp
 | 包清单/兼容与基础安装策略 | [extensions](../src/core/extensions/index.ts) |
 | 共用插件迁移激活 / 候选转换 / 两驱动共同SQL | [application](../src/application/change-plugin.ts)、[sources migration](../src/core/sources/migration.ts)、[SQL计划](../src/infrastructure/persistence/plugin-change-sql.ts) |
 | 实例调用、配置及状态条件写入协调 | [sources](../src/core/sources/index.ts) |
+| 可选按需续期 / 两驱动共同SQL | [renewal](../src/core/sources/renewal.ts)、[SQL计划](../src/infrastructure/persistence/renewal-sql.ts) |
 | 完整快照、布局、路径与内容核对 | [library](../src/core/library/index.ts) |
 | 管理 API / 共用只读 DAV | [HTTP](../src/transport/http/index.ts)、[DAV](../src/transport/dav/index.ts)、[接口说明](management-api.md) |
 | 共用页面 / 独立管理 DTO | [WebUI](../src/web/shell.tsx)、[合同](../src/contracts/management.ts)、[界面说明](architecture/web-ui.md) |
@@ -90,6 +91,6 @@ bun scripts/probe-player.ts --url-file /tmp/selected-audio-url.txt --output /tmp
 | 网易云来源认证、目录和音频 | [网易云插件说明](../plugins/netease/README.md) |
 | 无账号、歌单或音质设置的来源 | [sample](../plugins/sample/index.ts) |
 
-安装器目前拒绝配置/私有状态 schema 版本变化，直到候选迁移与统一激活实现；失败候选保留当前安装。桌面仍保留不可变修订文件，后续补齐回收与中断恢复。完整示例、续期合并、真实云端和目标系统仍按[台账](verification.md)收口。SQLite 使用五份顺序迁移，D1 正式模板和探针按文件名应用相同 SQL；不要修改已应用的历史迁移来补新字段。
+安装器已实现配置/私有状态schema候选转换和全部实例整体激活，失败保留当前安装；QQ私有状态v1→v2复用同一机制。桌面仍保留不可变修订文件，后续补齐必要回收。按需续期协调已本地验证，真实来源自然到期/重登、云端和目标系统仍按[台账](verification.md)收口。SQLite 使用七份顺序迁移，D1 正式模板和探针按文件名应用相同 SQL；不要修改已应用的历史迁移来补新字段。
 
 变更后的检查以实际职责为准；本地 Worker、真实 Cloudflare、桌面二进制和目标系统挂载分别记录证据，不相互替代。结果见[插件基础](verification/p0-plugin-foundation.md)及[目录/DAV/管理链路](verification/p0-library-dav.md)。

@@ -22,7 +22,7 @@ async function qrImage(client: QqClient, value: unknown): Promise<string> {
 async function complete(client: QqClient): Promise<AuthStep> {
   const status = await client.call('/login/status');
   const profile = object(object(status.data).profile);
-  if (!Object.keys(profile).length) fail('needs_auth', 'QQ 未确认有效账号，请重新开始扫码。');
+  if (!Object.keys(profile).length) { client.update({ ...client.state, pending: null }); return client.needsAuthentication(); }
   const name = [profile.nickname, profile.nick, profile.name].find(value => typeof value === 'string' && value.length > 0);
   client.update({ ...client.state, pending: null, accountName: typeof name === 'string' ? name.slice(0, 500) : null });
   return { kind: 'complete', ...(client.state.accountName ? { accountName: client.state.accountName } : {}) };
@@ -48,14 +48,17 @@ export async function authenticate(client: QqClient, action: AuthAction): Promis
     client.update({ ...client.state, pending: null }); return { kind: 'cancelled' };
   }
   if (action.kind !== 'poll') fail('not_supported', '此 QQ 授权方式只需扫码，不需要提交表单。');
+  if (pending.confirmed) {
+    if (client.state.token) return complete(client);
+    client.update({ ...client.state, pending: null }); return client.needsAuthentication();
+  }
   if (Date.parse(pending.expiresAt) <= Date.now()) { client.update({ ...client.state, pending: null }); return { kind: 'expired', message: 'QQ 二维码已过期，请重新开始。' }; }
-  if (pending.confirmed && client.state.token) return complete(client);
   const checked = await client.call('/login/qr/check', { key: pending.key });
   if (checked.code === 803) {
     const cookie = typeof checked.cookie === 'string' ? checked.cookie : '';
     const token = cookie.split(';').find(item => item.trim().startsWith('qqmusic_session='))?.trim().slice('qqmusic_session='.length);
     if (!token) fail('temporary', 'QQ 已确认扫码，但未返回有效授权，请重试。');
-    client.update({ ...client.state, token, pending: { ...pending, confirmed: true } });
+    client.update({ ...client.state, token, renewAfter: 0, pending: { ...pending, confirmed: true } });
     return complete(client);
   }
   if (checked.code === 800) {

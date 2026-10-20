@@ -8,6 +8,9 @@ import authenticationSchema from './migrations/0003.sql' with { type: 'text' };
 import workerChangesSchema from './migrations/0004.sql' with { type: 'text' };
 import refreshSchema from './migrations/0005.sql' with { type: 'text' };
 import pluginChangesSchema from './migrations/0006.sql' with { type: 'text' };
+import renewalsSchema from './migrations/0007.sql' with { type: 'text' };
+import type { RenewalStore } from '../../core/sources/renewal';
+import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
 import type { RefreshStore } from '../../core/library/refresh-types';
 import type { PluginChangeStore } from '../../application/change-plugin';
@@ -29,14 +32,15 @@ export function openSqlite(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = db.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version;
-  if (version === undefined || version < 0 || version > 6) { db.close(); throw new Error('Unsupported MusicFS database version'); }
-  if (version < 6) db.transaction(() => {
+  if (version === undefined || version < 0 || version > 7) { db.close(); throw new Error('Unsupported MusicFS database version'); }
+  if (version < 7) db.transaction(() => {
     if (version === 0) db.exec(initialSchema);
     if (version < 2) db.exec(librarySchema);
     if (version < 3) db.exec(authenticationSchema);
     if (version < 4) db.exec(workerChangesSchema);
     if (version < 5) db.exec(refreshSchema);
-    db.exec(pluginChangesSchema); db.exec('PRAGMA user_version = 6');
+    if (version < 6) db.exec(pluginChangesSchema);
+    db.exec(renewalsSchema); db.exec('PRAGMA user_version = 7');
   })();
 
   const installation = (id: string): Installation | undefined => {
@@ -84,7 +88,8 @@ export function openSqlite(path: string) {
     current: snapshot => db.query(`SELECT 1 FROM instances WHERE ${predicate}`).get(bindings(snapshot)) !== null,
     saveState(snapshot, state) {
       return db.query(`UPDATE instances SET private_state = $state, state_revision = state_revision + 1
-        WHERE ${predicate} AND state_revision = $stateRevision`).run({ ...bindings(snapshot), state: JSON.stringify(state), stateRevision: snapshot.stateRevision }).changes === 1;
+        WHERE ${predicate} AND state_revision = $stateRevision AND ${noActiveRenewalSQL}`)
+        .run({ ...bindings(snapshot), state: JSON.stringify(state), stateRevision: snapshot.stateRevision }).changes === 1;
     },
     configure(snapshot, config, state) {
       return db.query(`UPDATE instances SET config = $config, private_state = $state, epoch = epoch + 1, state_revision = state_revision + 1, authentication = NULL
@@ -100,6 +105,13 @@ export function openSqlite(path: string) {
           stateRevision: snapshot.stateRevision, expected: snapshot.authentication === null ? null : JSON.stringify(snapshot.authentication) }).changes === 1;
     },
     deleteInstance: id => { db.query('DELETE FROM instances WHERE id = ?').run(id); },
+    claimRenewal(expected, token, now, until) {
+      return renewalClaimFromRow(batch<RenewalClaimRow>(claimRenewalPlan(expected, token, now, until)).at(-1)?.[0]);
+    },
+    finishRenewal(expected, token, outcome, now, retryAt) {
+      return batch(finishRenewalPlan(expected, token, outcome, now, retryAt)).at(-1)!.length === 1;
+    },
+    releaseRenewal(instanceId, token) { execute(releaseRenewalStatement(instanceId, token)); },
     layout() {
       const row = db.query<{ revision: number; nodes: string | null }, []>('SELECT revision, nodes FROM library_layout WHERE id = 1').get();
       if (!row) throw new Error('Library layout migration is missing');
@@ -156,5 +168,5 @@ export function openSqlite(path: string) {
           WHERE operation_id IN (${readyRefreshesSQL}))`).get(Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1)?.instant ?? null;
     },
     close: () => db.close()
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & { close(): void; nextBackgroundWorkAt(): number | null };
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & RenewalStore & { close(): void; nextBackgroundWorkAt(): number | null };
 }

@@ -12,7 +12,16 @@ const build = await Bun.build({ entrypoints: ['tests/probes/worker-qq.ts'], targ
   plugins: [{ name: 'packed-qq-artifact', setup(builder) { builder.onResolve({ filter: /^musicfs-qq-artifact$/ }, () => ({ path: resolve('dist/plugins/org.musicfs.qq/index.mjs') })); } }] });
 if (!build.success) throw new AggregateError(build.logs, 'QQ Worker probe build failed');
 const directory = await mkdtemp(join(tmpdir(), 'musicfs-worker-qq-'));
-const mf = new Miniflare({ modules: [{ type: 'ESModule', path: resolve('dist/p0/qq/worker.mjs') }], compatibilityDate: '2026-07-30', d1Databases: { DB: 'musicfs-qq-p0' }, d1Persist: directory, log: new Log(LogLevel.ERROR) });
+let renewalRequests = 0;
+const credential = { musicid: '123', str_musicid: '123', musickey: 'fixture-old-key', loginType: 6,
+  refresh_key: 'fixture-refresh-key', refresh_token: 'fixture-refresh-token', openid: 'fixture-openid', encryptUin: 'encrypted-123' };
+const upstream = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: async request => {
+  const body = await request.json() as { req_0: { method: string } }; assert.equal(body.req_0.method, 'Login'); renewalRequests++;
+  return Response.json({ code: 0, req_0: { code: 0, data: { ...credential, musickey: 'fixture-renewed-key',
+    musickeyCreateTime: Math.floor(Date.now() / 1000), keyExpiresIn: 3 * 86_400 } } });
+} });
+const mf = new Miniflare({ modules: [{ type: 'ESModule', path: resolve('dist/p0/qq/worker.mjs') }], compatibilityDate: '2026-07-30', d1Databases: { DB: 'musicfs-qq-p0' }, d1Persist: directory,
+  bindings: { RENEWAL_URL: upstream.url.href }, log: new Log(LogLevel.ERROR) });
 try {
   const db = await mf.getD1Database('DB');
   for (const name of (await readdir('src/infrastructure/persistence/migrations')).filter(name => name.endsWith('.sql')).sort()) {
@@ -29,6 +38,23 @@ try {
   const rows = await db.prepare('SELECT private_state FROM instances ORDER BY rowid').all<{ private_state: string }>();
   assert.equal(rows.results.length, 2); const states = rows.results.map(row => JSON.parse(row.private_state) as { secret: string });
   assert.notEqual(states[0]!.secret, states[1]!.secret);
+  const { createSealedSessionResolver, deriveAndroidDevice } = await import('../plugins/qq/generated-upstream.mjs');
+  const secret = states[1]!.secret; const resolver = createSealedSessionResolver({ secrets: { current: secret } });
+  const token = await resolver.issue({ credential, device: await deriveAndroidDevice(secret), expiresAt: Date.now() + 3_600_000 });
+  await db.prepare('UPDATE instances SET private_state = ? WHERE id = ?').bind(JSON.stringify({ version: 2, secret, token,
+    accountName: 'fixture', pending: null, renewAfter: 0 }), instanceIds[1]!).run();
+  const before = await db.prepare('SELECT epoch, state_revision FROM instances WHERE id = ?').bind(instanceIds[1]!).first<{ epoch: number; state_revision: number }>();
+  const responses = await Promise.all([0, 1].map(() => mf.dispatchFetch(`http://probe/probe/renewal/${instanceIds[1]}`)));
+  for (const response of responses) { assert.equal(response.status, 200); assert.deepEqual(await response.json(), { ok: true }); }
+  const after = await db.prepare('SELECT epoch, state_revision, private_state FROM instances WHERE id = ?').bind(instanceIds[1]!).first<{ epoch: number; state_revision: number; private_state: string }>();
+  assert(before && after); const renewed = JSON.parse(after.private_state) as { token: string; renewAfter: number };
+  assert.notEqual(renewed.token, token); assert(renewed.renewAfter > Date.now());
+  assert.equal((await resolver.resolve(renewed.token))?.credential.musickey, 'fixture-renewed-key');
+  assert.equal(after.epoch, before.epoch); assert.equal(after.state_revision, before.state_revision + 2); assert.equal(renewalRequests, 1);
+  const restored = await mf.dispatchFetch(`http://probe/probe/renewal/${instanceIds[1]}`); assert.equal(restored.status, 200); await restored.body?.cancel();
+  assert.equal(renewalRequests, 1);
+  console.log(JSON.stringify({ runtime: 'local workerd', packedSdkRenewal: true, controlledUpstream: true,
+    concurrentControllers: 2, renewalRequests, persistedTokenCrossRuntime: true, epochPreserved: true, realVendorRenewalTested: false }));
   const { MUSICFS_QQ_TEST_STATE_DB, MUSICFS_QQ_TEST_INSTANCE_ID } = process.env;
   if (MUSICFS_QQ_TEST_STATE_DB || MUSICFS_QQ_TEST_INSTANCE_ID) {
     assert(MUSICFS_QQ_TEST_STATE_DB && MUSICFS_QQ_TEST_INSTANCE_ID, 'Set both real-session probe selectors');
@@ -65,4 +91,4 @@ try {
     console.log(JSON.stringify({ runtime: 'local workerd', multipleQualitySnapshot: true, persistedD1Counters: statistics }));
   }
   console.log(JSON.stringify({ runtime: 'local workerd', sdk: '@yakult-green-tea/qq-music-api 3.3.3/serverless', packedBundle: true, nodeCompatibility: false, isolatedSecrets: true, standaloneValidation: true, realLoginTested: false }));
-} finally { await mf.dispose(); await rm(directory, { recursive: true, force: true }); }
+} finally { await mf.dispose(); await upstream.stop(true); await rm(directory, { recursive: true, force: true }); }

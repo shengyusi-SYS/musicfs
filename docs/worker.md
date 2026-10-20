@@ -57,7 +57,7 @@ bunx wrangler deploy
 
 | 配置 | 方式 | 用途 |
 |---|---|---|
-| `DB` | D1 binding | 实例、布局、快照、分页刷新与插件变更；需要包含 `0006.sql` 的全部迁移 |
+| `DB` | D1 binding | 实例、布局、快照、分页刷新、插件变更及续期租约；需要包含 `0007.sql` 的全部迁移 |
 | `ASSETS` | 静态资源 binding | 根页面和 `/assets/*`，与管理 API/DAV 共用一个 Worker |
 | `CF_ACCOUNT_ID`、`CF_WORKER_NAME` | 模板 vars | 定位当前部署；Worker 名称必须与实际目标一致 |
 | `CF_API_TOKEN` | Secret | 后台读取当前代码集合、发布替换代码；仅宿主使用 |
@@ -77,6 +77,10 @@ bunx wrangler deploy
 开始刷新及冷读取响应可以经 `waitUntil` 安排一页；它不会在同一次调用中循环。WebUI后续逐次POST step；模板另配置每分钟Cron，scheduled优先推进一次插件变更，否则推进一页目录刷新，供页面关闭后的慢速续跑。Cron不保证精确完成时间，大集合应在页面中推进；平台配置保留的真实验收也应覆盖此触发器。
 
 单页预算与完整集合预算仍需分开测量。分页化不证明加密 CPU、插件内部请求、CDN 出口或逐文件 DAV 元数据满足免费额度；当前没有真实 Cloudflare 测试账号，继续本地验证，云端项保持待验。设计与已测边界见 [ADR 0007](adr/0007-durable-paged-refresh.md)和[分页记录](verification/p2-durable-refresh.md)。
+
+## 按需会话续期
+
+来源会话续期使用独立的按需入口：插件本地判断必要性，D1短租约协调同一实例并发调用并保存结果。普通目录/音频读取在续期完成后继续，不由Cron定时登录。QQ的下一检查时间留在插件私有状态；网易云二维码Cookie不支持SDK的login/refresh，不新增无效定时调用。详见[会话记录](verification/p2-session-lifecycle.md)。
 
 ## 在后台安装与移除插件
 

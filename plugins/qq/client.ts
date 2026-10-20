@@ -1,12 +1,22 @@
 import type { Context, Json, Outcome, PluginFault } from '@musicfs/plugin-api';
 import type { handleRequest } from '@yakult-green-tea/qq-music-api/serverless';
 import { z } from 'zod';
-import { createSealedSessionResolver, createSessionMusicuClient, recommendPlaylistsResult, QqApiError, type AuthSession, type MusicuDescriptor } from './generated-upstream.mjs';
+import { AUTH_REFRESH_EARLY_MS, AUTH_REFRESH_RETRY_MS, createFetchTransport, createSealedSessionResolver, createSessionMusicuClient, refreshLoginCredential, recommendPlaylistsResult, QqApiError, type AuthHttpClient, type AuthSession, type MusicuDescriptor } from './generated-upstream.mjs';
 
 export type QqHandler = typeof handleRequest;
 const pending = z.object({ id: z.string(), key: z.string(), channel: z.enum(['qq', 'wechat']), expiresAt: z.string(), qrImage: z.string(), confirmed: z.boolean() }).strict();
-const saved = z.object({ version: z.literal(1), secret: z.string().min(32), token: z.string().nullable(), accountName: z.string().nullable(), pending: pending.nullable() }).strict();
+const savedV1 = z.object({ version: z.literal(1), secret: z.string().min(32), token: z.string().nullable(), accountName: z.string().nullable(), pending: pending.nullable() }).strict();
+const saved = savedV1.extend({ version: z.literal(2), renewAfter: z.number().int().nonnegative() }).strict();
 export type QqState = z.infer<typeof saved>;
+const activeChallenge = (state: QqState) => state.pending !== null
+  && (state.pending.confirmed || Date.parse(state.pending.expiresAt) > Date.now());
+export function migrateState(fromVersion: number, state: Json): Json {
+  if (fromVersion !== 1) fail('invalid_config', 'QQ 插件不支持此私有状态版本。');
+  const previous = savedV1.safeParse(state);
+  if (!previous.success) fail('invalid_config', 'QQ 插件的私有状态无法识别。');
+  return { ...previous.data, version: 2, renewAfter: 0 };
+}
+export const validateState = (state: Json): boolean => saved.safeParse(state).success;
 export const object = (value: unknown): Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export class QqFailure extends Error {
   constructor(readonly fault: PluginFault) { super(fault.message); }
@@ -26,13 +36,37 @@ export function catalogueContext(ctx: Context): Context {
   }) as typeof fetch };
 }
 
+/** Only the SDK renewal RPC uses this JSON POST adapter; login redirects remain SDK-owned. */
+function renewalHttp(ctx: Context): AuthHttpClient {
+  const transport = createFetchTransport(ctx.fetch);
+  const request: AuthHttpClient['request'] = async <T>(config: Parameters<AuthHttpClient['request']>[0]) => {
+    const result = await transport({ url: String(config.url), body: typeof config.data === 'string' ? config.data : JSON.stringify(config.data),
+      headers: Object.fromEntries(Object.entries(config.headers ?? {}).map(([key, value]) => [key, String(value)])),
+      signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(10_000)]) });
+    return { data: result.body as T, status: result.status, statusText: '', headers: {},
+      config: config as Awaited<ReturnType<AuthHttpClient['request']>>['config'] };
+  };
+  return { getCookieHeader: () => '', request, post: (url, data, config = {}) => request({ ...config, url, data, method: 'POST' }) };
+}
+
+/** Local SDK resolution only; the host coordinates renewal separately from ordinary reads. */
+export async function renewalNeeded(ctx: Context): Promise<boolean> {
+  ctx.signal.throwIfAborted();
+  const state = saved.safeParse(ctx.privateState);
+  if (!state.success || !state.data.token || activeChallenge(state.data) || state.data.renewAfter > Date.now()) return false;
+  const resolver = createSealedSessionResolver({ secrets: { current: state.data.secret } });
+  const session = await resolver.resolve(state.data.token);
+  ctx.signal.throwIfAborted();
+  return !session || Date.now() > session.expiresAt - AUTH_REFRESH_EARLY_MS;
+}
+
 export class QqClient {
   state: QqState;
   changed = false;
   private sessionPromise?: Promise<AuthSession>;
   constructor(readonly ctx: Context, private readonly handler: QqHandler) {
     if (ctx.privateState === null) {
-      this.state = { version: 1, secret: Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join(''), token: null, accountName: null, pending: null };
+      this.state = { version: 2, secret: Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join(''), token: null, accountName: null, pending: null, renewAfter: 0 };
       this.changed = true;
     } else {
       const parsed = saved.safeParse(ctx.privateState);
@@ -40,10 +74,21 @@ export class QqClient {
       this.state = parsed.data;
     }
   }
-  update(next: QqState) { this.state = next; this.changed = true; }
-  private needsAuthentication(): never {
-    this.update({ ...this.state, token: null, accountName: null });
+  update(next: QqState) { if (next.token !== this.state.token) delete this.sessionPromise; this.state = next; this.changed = true; }
+  needsAuthentication(): never {
+    this.update({ ...this.state, token: null, accountName: null, renewAfter: 0 });
     return fail('needs_auth', 'QQ 授权已失效，请重新扫码。');
+  }
+  async renew(): Promise<null> {
+    if (!this.state.token || activeChallenge(this.state)) return null;
+    this.ctx.signal.throwIfAborted();
+    const resolver = createSealedSessionResolver({ secrets: { current: this.state.secret } });
+    const rotation = await resolver.rotate!(this.state.token, session => refreshLoginCredential(renewalHttp(this.ctx), session.device, session.credential));
+    // The SDK keeps the old token on a transient failure, including a cancelled fetch.
+    this.ctx.signal.throwIfAborted();
+    if (!rotation) return this.needsAuthentication();
+    this.update({ ...this.state, token: rotation.token, renewAfter: Date.now() + AUTH_REFRESH_RETRY_MS });
+    return null;
   }
   private session(): Promise<AuthSession> {
     this.requireSession();
@@ -85,7 +130,8 @@ export class QqClient {
     return this.readResponse(response);
   }
   async recommendations(): Promise<Record<string, unknown>> {
-    const result = await recommendPlaylistsResult(await this.session(), 25, { fetcher: this.ctx.fetch, maxRetries: 0 });
+    const result = await recommendPlaylistsResult(await this.session(), 25, { fetcher: (input, init) => this.ctx.fetch(input, {
+      ...init, signal: init?.signal ? AbortSignal.any([this.ctx.signal, init.signal]) : this.ctx.signal }), maxRetries: 0 });
     return this.readResponse(new Response(JSON.stringify(result.body), { status: result.status, headers: result.headers }));
   }
   private async readResponse(response: Response): Promise<Record<string, unknown>> {

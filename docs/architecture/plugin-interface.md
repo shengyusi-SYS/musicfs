@@ -6,7 +6,7 @@
 
 ## 包与版本
 
-当前宿主合同版本为 **0.1.4**；新增配置转换、目标私有状态验证和迁移整体激活语义。使用迁移能力的插件声明 `apiRange >=0.1.4 <0.2.0`。0.1.3 的文件条目完整 `info`、0.1.2 的目录计数和0.1.1的二维码图片仍有效；旧插件未提供 info 时保持原 stat 行为，不自动获得大目录的请求预算保证。
+当前宿主合同版本为 **0.1.5**，新增可选的按需会话续期。使用续期能力的插件声明 `apiRange >=0.1.5 <0.2.0`；0.1.4 的候选转换和整体迁移激活、0.1.3 的文件条目完整 `info`、0.1.2 的目录计数和0.1.1的二维码图片仍有效。旧插件无需声明续期；未提供 info 时保持原 stat 行为，不自动获得大目录的请求预算保证。
 
 首轮验证 ZIP 插件包，采用现成归档库解析。包内有一份 manifest、预构建 ESM 入口及依赖模块、JSON 配置 Schema、UI 提示和必要只读资产/许可；模块和资产路径在 manifest 中明确列出，不运行安装脚本或在线安装 npm 依赖。
 
@@ -82,6 +82,10 @@ interface SourcePlugin {
   open(ctx: Context, file: Ref, request: ReadRequest): Promise<Outcome<ReadResult>>;
   // 声明认证的插件提供；action/step 是下文约定的判别联合 DTO
   authenticate?(ctx: Context, action: Json): Promise<Outcome<Json>>;
+  renewal?: {
+    needed(ctx: Context): boolean | Promise<boolean>; // 纯本地判断，不发网络请求
+    renew(ctx: Context): Promise<Outcome<null>>;
+  };
   // 无 I/O 的候选转换和验证；宿主决定何时提交
   migrateConfig?(input: { fromVersion: number; config: Json; state: Json }): Json;
   migrateState?(input: { fromVersion: number; state: Json; config: Json }): Json;
@@ -136,6 +140,14 @@ DAV 从已发布信息批量描述条目，来源有效性按同一来源戳在�
 业务结果与已确认的授权变化分别处理：例如 token 已续期、随后目录请求失败，失败结果仍可携带新授权状态，经同样的代际/CAS 检查保存；`library` 仍不得发布失败目录。不能因为整个调用失败就丢弃已发生的必要状态变化，也不能因为有新状态就把失败内容当成功。
 
 这份私有状态用于必要授权与来源流程状态，不承载整份公共目录或音频缓存。超大来源状态、必要批量缓存等真实需求出现时，在宿主存储 seam 扩展有明确所有者的操作，不直接暴露数据库或通用任意写入能力。
+
+## 按需会话续期
+
+0.1.5 的 `renewal` 是可选能力，不要求来源具备账号。`needed` 只检查当前私有状态与本地时间；来源有效期、提前量和重试策略仍归插件。`sources` 在 roots/list/stat/open 前调用它，配置检查与交互认证走原合同。返回 false 或未声明能力时不取得续期租约，普通内容操作保持并发。
+
+确需续期时，宿主按实例在 SQLite/D1 条件取得短租约，同时预留一个私有状态修订；网络请求在事务外执行。预留修订及普通写入检查防止旧调用的完整状态覆盖新凭据。完成时原子保存可选新状态、公开错误与短期重试时间，并释放租约；其他控制器等待后读取新状态或复用该次失败，不依赖 Worker isolate 内存。配置、交互认证或插件代际变化使旧续期不能提交。续期不改变实例代际，不作换号处理，也不使成功目录失效。
+
+当前租约60秒、续期操作信号25秒、等待预算25秒；等待可取消，取消一个等待者不取消另一调用的续期。插件应把信号传到真实 Fetch，不以租约替代取消。已发生的凭据变化由 `renew` 的 `nextPrivateState` 独立提交，之后内容读取失败也不会丢失。插件可把成功检查/临时失败的下次检查时间保存在私有状态；核心不解释 token、有效期或登录渠道，也不增加定时登录。实现及限定证据见[会话生命周期](../verification/p2-session-lifecycle.md)。
 
 ## 配置与私有状态迁移
 

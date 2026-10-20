@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { openSqlite } from '../src/infrastructure/persistence/sqlite';
 
-for (const version of [1, 2, 3, 4, 5]) test(`version-${version} data survives current migrations and subsequent reopening`, async () => {
+for (const version of [1, 2, 3, 4, 5, 6]) test(`version-${version} data survives current migrations and subsequent reopening`, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-migration-')); const path = join(directory, 'state.sqlite');
   const snapshot = { id: 'legacy-snapshot', kind: 'roots' as const, items: [], completedAt: '2026-10-20T00:00:00.000Z',
     stamp: { id: 'instance', pluginId: 'legacy', epoch: 1, pluginRevision: 'old', pluginGeneration: 1 } };
@@ -16,6 +16,7 @@ for (const version of [1, 2, 3, 4, 5]) test(`version-${version} data survives cu
     if (version >= 3) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0003.sql').text());
     if (version >= 4) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0004.sql').text());
     if (version >= 5) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0005.sql').text());
+    if (version >= 6) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0006.sql').text());
     legacy.exec(`PRAGMA user_version = ${version}`);
     legacy.query('INSERT INTO installations (id, manifest, revision, generation, status) VALUES (?, ?, ?, 1, ?)').run('legacy', '{}', 'old', 'active');
     legacy.query('INSERT INTO instances (id, plugin_id, name, config, private_state, epoch, state_revision) VALUES (?, ?, ?, ?, ?, 1, 1)')
@@ -24,9 +25,11 @@ for (const version of [1, 2, 3, 4, 5]) test(`version-${version} data survives cu
       .run('instance', 'roots', '', 'old-request', JSON.stringify(snapshot));
     const oldChange = JSON.stringify({ view: { operationId: 'old-change', status: 'completed' }, expectedGeneration: 1, revision: 'old', registry: 'retained-registry' });
     if (version >= 4) {
-      legacy.query("INSERT INTO worker_plugin_changes (operation_id, status, document) VALUES ('old-change', 'completed', ?)").run(oldChange);
+      legacy.query(`INSERT INTO ${version >= 6 ? 'plugin_changes' : 'worker_plugin_changes'} (operation_id, status, document) VALUES ('old-change', 'completed', ?)`).run(oldChange);
       legacy.query("INSERT INTO worker_plugin_change_files (operation_id, name, chunk_index, bytes) VALUES ('old-change', 'fixture.mjs', 0, ?)").run(new Uint8Array([1, 2, 3]));
     }
+    if (version >= 6) legacy.query(`INSERT INTO plugin_change_instances (operation_id, instance_id, plugin_id, name, config, private_state,
+      epoch, state_revision, candidate_config, candidate_state) VALUES ('old-change', 'instance', 'legacy', '保留', '{}', '{"old":true}', 1, 1, '{"new":true}', 'null')`).run();
     legacy.close();
     let current = openSqlite(path);
     expect(current.instances()[0]?.config).toEqual({ server: 'original' }); expect(current.capture('instance')?.privateState).toEqual({ session: 'fixture' });
@@ -35,13 +38,16 @@ for (const version of [1, 2, 3, 4, 5]) test(`version-${version} data survives cu
     expect(current.layout()).toEqual({ revision: 0, nodes: null }); expect(current.saveLayout(0, [])).toBe(true); current.close();
     current = openSqlite(path); expect(current.layout()).toEqual({ revision: 1, nodes: [] }); expect(current.instances()).toHaveLength(1); current.close();
     const migrated = new Database(path);
-    expect(migrated.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version).toBe(6);
+    expect(migrated.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version).toBe(7);
     if (version >= 4) {
       expect(migrated.query<{ document: string; revision: number }, []>('SELECT document, revision FROM plugin_changes').get()).toEqual({ document: oldChange, revision: 0 });
       expect(migrated.query<{ table: string }, []>('PRAGMA foreign_key_list(worker_plugin_change_files)').get()?.table).toBe('plugin_changes');
       expect(migrated.query<{ count: number }, []>('SELECT count(*) AS count FROM worker_plugin_change_files').get()?.count).toBe(1);
     }
-    expect(migrated.query<{ count: number }, []>('SELECT count(*) AS count FROM plugin_change_instances').get()?.count).toBe(0);
+    expect(migrated.query<{ count: number }, []>('SELECT count(*) AS count FROM plugin_change_instances').get()?.count).toBe(version >= 6 ? 1 : 0);
+    if (version >= 6) expect(migrated.query<{ candidate_config: string; candidate_state: string }, []>('SELECT candidate_config, candidate_state FROM plugin_change_instances').get())
+      .toEqual({ candidate_config: '{"new":true}', candidate_state: 'null' });
+    expect(migrated.query<{ count: number }, []>('SELECT count(*) AS count FROM source_renewals').get()?.count).toBe(0);
     migrated.close();
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

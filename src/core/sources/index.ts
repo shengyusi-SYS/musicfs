@@ -1,44 +1,12 @@
-import type { AuthAction, AuthStep, Context, Json, Outcome, Page, PluginFault, Root, Entry, FileInfo, ReadRequest, ReadResult, SourcePlugin } from '@musicfs/plugin-api';
+import type { AuthAction, AuthStep, Context, Json, Outcome, Page, Root, Entry, FileInfo, ReadRequest, ReadResult, SourcePlugin } from '@musicfs/plugin-api';
 import { z } from 'zod';
-import type { Installation, PluginRegistry } from '../extensions';
+import type { PluginRegistry } from '../extensions';
 
-export type Instance = { id: string; pluginId: string; name: string; config: Json; epoch: number };
-export type InstanceSnapshot = Instance & {
-  privateState: Json;
-  stateRevision: number;
-  pluginRevision: string;
-  pluginGeneration: number;
-  authentication: AuthenticationRecord | null;
-};
-export type SourceStamp = Pick<InstanceSnapshot, 'id' | 'pluginId' | 'epoch' | 'pluginRevision' | 'pluginGeneration'>;
-export type Authentication = { operationId: string; step: AuthStep | null; error?: PluginFault };
-export type AuthenticationRecord = Authentication & { revision: number; stamp: SourceStamp };
-export type AuthenticationAction = { kind: 'start' } | { kind: 'cancel'; operationId: string }
-  | { kind: 'poll'; operationId: string; challengeId: string }
-  | { kind: 'submit'; operationId: string; challengeId: string; input: Json };
+import { SourceError, type Instance, type InstanceSnapshot, type SourceStamp, type Authentication, type AuthenticationRecord, type AuthenticationAction, type InstanceStore } from './types';
+import { prepareSession, type RenewalStore } from './renewal';
+export { SourceError, type Instance, type InstanceSnapshot, type SourceStamp, type Authentication, type AuthenticationRecord, type AuthenticationAction, type InstanceStore } from './types';
+export type { RenewalClaim, RenewalStore } from './renewal';
 type Stored<T> = T | Promise<T>;
-
-/** Adapter operations own atomic checks and writes; no network work runs inside them. */
-export interface InstanceStore {
-  instances(): Stored<Instance[]>;
-  capture(id: string): Stored<InstanceSnapshot | undefined>;
-  insert(instance: Instance, privateState: Json, installation: Installation): Stored<boolean>;
-  current(snapshot: SourceStamp): Stored<boolean>;
-  saveState(snapshot: InstanceSnapshot, state: Json): Stored<boolean>;
-  configure(snapshot: InstanceSnapshot, config: Json, privateState: Json): Stored<boolean>;
-  /** Advances the epoch while preserving the latest private state, fencing any pending authentication call. */
-  advanceAuthentication(snapshot: InstanceSnapshot, next: AuthenticationRecord): Stored<boolean>;
-  /** Atomically accepts a step and private state against both the operation and state revisions. */
-  saveAuthentication(snapshot: InstanceSnapshot, next: AuthenticationRecord, state: Json): Stored<boolean>;
-  deleteInstance(id: string): Stored<void>;
-}
-
-export class SourceError extends Error {
-  constructor(public readonly code: 'missing_instance' | 'stale_call' | 'invalid_auth_action' | 'plugin_failure', message: string) {
-    super(message);
-    this.name = 'SourceError';
-  }
-}
 
 const text = z.string().min(1).max(4096);
 const configuration = z.object({ schema: z.record(z.string(), z.json()), ui: z.object({
@@ -58,7 +26,7 @@ const activeStep = (step: AuthStep | null): step is Extract<AuthStep, { kind: 'w
 const stampOf = ({ id, pluginId, epoch, pluginRevision, pluginGeneration }: SourceStamp): SourceStamp => ({ id, pluginId, epoch, pluginRevision, pluginGeneration });
 const publicAuthentication = ({ operationId, step, error }: Authentication): Authentication => ({ operationId, step, ...(error ? { error } : {}) });
 
-export function createSources(store: InstanceStore, registry: PluginRegistry, request: typeof fetch = fetch, now: () => number = Date.now) {
+export function createSources(store: InstanceStore & RenewalStore, registry: PluginRegistry, request: typeof fetch = fetch, now: () => number = Date.now) {
   const stale = () => new SourceError('stale_call', 'The source changed while this operation was running');
   const invalidAction = () => new SourceError('invalid_auth_action', 'Authentication operation or challenge is no longer current');
   // Native Worker fetch requires its global receiver even when a plugin invokes ctx.fetch().
@@ -157,7 +125,12 @@ export function createSources(store: InstanceStore, registry: PluginRegistry, re
     options: { discard?: (value: T) => Promise<void>; commit?: (snapshot: InstanceSnapshot, value: T, state: Json) => Stored<boolean> } = {}
   ): Promise<Outcome<T>> {
     signal.throwIfAborted();
-    const snapshot = await capture(id); const plugin = await load(snapshot);
+    let snapshot = await capture(id); const plugin = await load(snapshot);
+    if (!options.commit) {
+      const prepared = await prepareSession({ initial: snapshot, plugin, store, context, now }, signal);
+      if (!prepared.ok) return { ok: false, error: prepared.error };
+      snapshot = prepared.value;
+    }
     const outcome = await invoke(signal, () => operation(plugin, context(snapshot, signal)));
     const reject = async () => {
       if (outcome.ok && options.discard) await options.discard(outcome.value).catch(() => {});

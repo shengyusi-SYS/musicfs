@@ -7,5 +7,5 @@ export async function qqSession(account = '123'): Promise<Json> {
     credential: { musicid: account, str_musicid: account, musickey: 'private-native-key-' + account, loginType: 2, encryptUin: 'encrypted-' + account },
     device: await deriveAndroidDevice(secret), expiresAt: Date.now() + 3_600_000
   });
-  return { version: 1, secret, token, accountName: null, pending: null };
+  return { version: 2, secret, token, accountName: null, pending: null, renewAfter: 0 };
 }
