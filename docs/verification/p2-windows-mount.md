@@ -75,3 +75,29 @@ flowchart LR
 ```
 
 未覆盖 Windows 忙卸载、崩溃恢复、默认图形启动、远程 rclone 挂载、原生映射后的音频读取或播放/拖动；本轮没有音乐平台请求、重复扫码、压力测试或新的云端部署。
+
+## dev.2：挂载项生命周期与本机自签名 HTTPS
+
+2026-10-21，用户要求补齐挂载项移除、重新挂载、WinFsp 检测/安装引导和 App 内 HTTPS 方案。仅使用同一 Windows VM（用户提供新地址 `192.0.2.74`），全部从 WSL 经 SSH 操作；未调用 Windows 宿主、音乐平台、Cloudflare 或真实账号。最终程序输入为干净提交 `05347ff1eca9f2e1bc7fbb1bbb4a389342867396`，源码摘要 `fcce70848a975561c0590812d28736f22e3fd06e13687bbac1c35dabf86121ad`，页面摘要 `f096cbc3e1c328c79a208e8280ef2e8040ac69aa8b11f70c301c5e52f7e417a6`。
+
+| 正式 App 操作 | 实际结果 |
+|---|---|
+| WinFsp 检测、安装入口复用 | 返回 ready；已安装运行时的产品版本显示为 `2025`，安装请求直接复用，没有重复安装或重启 |
+| 添加本地挂载并读取 sample | 自动分配盘符，读取 16,044 字节 WAV，文件头 RIFF |
+| 卸载后通过保存 ID 重新挂载 | 原 ID 保持，音频再次读取成功，无需重填连接和凭据 |
+| 移除活动挂载 | 正常卸载并删除记录，随后挂载列表为空 |
+| 启用本机 HTTPS、App 完成系统连接设置 | 专用自签名叶证书进入 LocalMachine Root；正式入口返回 trusted=true、webClient=running |
+| WebClient 停止时的正式设置入口 | 单独将本轮测试启动的服务恢复为 Stopped，再调用 App 设置；返回 running，未改变服务启动类型或全局 BasicAuthLevel |
+| 原生 Windows HTTPS HEAD | 正常验证证书，返回 200，没有跳过 TLS 校验 |
+| 原生临时盘符映射与读取 | WNetAddConnection2 返回 0；完整 sample 为 16,044 字节，RIFF 头；WNetCancelConnection2 返回 0 |
+| 正常退出及测试证书清理 | 后台 runtime.json 移除；本轮专用临时系统信任移除，未清理其他证书 |
+
+虚拟机中最终 `MusicFS.exe` 的 SHA-256 为 `9e36ced3fcbfd307d63166099cb0d474f84e90296cb1af92e0d9379e733b536b`，与发行构建一致。WinFsp 官方 `2.1.25156` MSI 已随 Windows 包提供，仅运行组件；当前 VM 已有该组件，因此没有为覆盖安装分支而卸载驱动。缺失、取消、重启要求及重复安装请求通过窄进程 seam 检查，不能冒充缺组件机器的交互安装实测。
+
+一次必要的同端点对照明确了服务因素：在同一受信任的本机 HTTPS 端点，WebClient 为 Stopped 时原生映射返回 1203；仅启动服务后返回 0，完整小文件可读。最终 App 已承担启动现有服务这一步。所有测试保持 `BasicAuthLevel=1`，不为本机 HTTP 放宽全局策略。
+
+当前 SSH 上下文对 CurrentUser Root 的 .NET 和 certutil 写入均返回 ERROR_NOT_SUPPORTED；同证书写入 LocalMachine Root 成功，并被 Windows 原生客户端接受。这不推导所有交互用户上下文都不能使用 CurrentUser 信任。产品收敛为一次系统连接设置，不让用户选择证书存储技术细节，也不引入本地 CA 或代理。
+
+测试脚本的 PowerShell `Start-Process -Wait` 会等待后代后台，最初使探针停在启动阶段；已改为只等待启动器进程退出，并在同一 SSH 会话内完成验收和正常退出。辅助转换函数的 DLL 入口在此系统不可用，最终直接使用标准 `\\127.0.0.1@SSL@端口\DavWWWRoot\dav\Sample` 路径。两项均属验收工具问题，没有增加产品等待重试或更改 WebDAV 协议。
+
+本轮没有压力测试、真实来源刷新或新的云端资源。未增加播放/拖动、macOS 原生运行或普通用户交互桌面的 UAC 点击验收。当前 Windows 原生客户端默认 50,000,000 字节传输上限仍保留；大文件使用 App 管理的 WinFsp 路径。去敏回执位于本机忽略目录 `.musicfs/windows-mount-dev2/`。

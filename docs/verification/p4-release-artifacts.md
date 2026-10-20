@@ -177,3 +177,15 @@ GPL项目正文、独立项目源码、实际打包npm依赖声明、WebUI许可
 本轮管理回归会重建 sample ZIP；测试进程的时区使 ZIP 内 DOS 时间戳从本机构建的 08:00 变为 00:00，包内文件摘要完全相同，但 ZIP 修订不同。统一打包检查因此第一次拒绝 Worker/桌面的 sample 修订不一致。恢复桌面构建时的同一份 sample ZIP 后重新组装 Worker，再打包通过；没有修改插件代码/清单、四个桌面程序或跳过身份检查。后续需要重建插件的检查应安排在最终构建输入归一之前。
 
 去敏回执为本机忽略目录 `.musicfs/latest-release-receipt.json`。已知云端续步与格式/播放器验证边界见[交付说明](../release.md)，本次打包未改变这些结论。
+
+## 最新发行：挂载管理与本机 HTTPS（dev.2）
+
+2026-10-21，应用版本 **0.1.0-dev.2 / API 0.1.6 / schema 8**，插件保持 sample 0.1.3、QQ alpha.11、网易云 alpha.9。构建输入为干净提交 `05347ff1eca9f2e1bc7fbb1bbb4a389342867396`，源码摘要 `fcce70848a975561c0590812d28736f22e3fd06e13687bbac1c35dabf86121ad`，页面摘要 `f096cbc3e1c328c79a208e8280ef2e8040ac69aa8b11f70c301c5e52f7e417a6`。后续验收文档不改变程序构建身份。
+
+新增挂载项重挂/移除、Windows WinFsp 检测和随包安装引导、本机自签名 HTTPS 及一次系统证书信任/WebClient 设置。使用现有 Windows VM 对最终程序完成 sample 挂载、卸载、同 ID 重挂、活动记录移除、原生 HTTPS 验证/映射/读取/正常断开，并补验 WebClient 原本停止时正式 App 入口能够启动它。详细事实与未覆盖范围见[Windows 记录](p2-windows-mount.md#dev2挂载项生命周期与本机自签名-https)。
+
+Windows ZIP 中的 `MusicFS.exe` 与 VM 实测文件 SHA-256 同为 `9e36ced3fcbfd307d63166099cb0d474f84e90296cb1af92e0d9379e733b536b`。ZIP 确含固定官方 WinFsp `2.1.25156` 安装器，摘要 `073a70e00f77423e34bed98b86e600def93393ba5822204fac57a29324db9f7a`；已有驱动直接复用，没有为覆盖安装分支重装系统组件。
+
+本轮定向自动检查共 19 项/152 次断言通过；三组类型检查通过，依赖图 202 模块/766 依赖无违规。四桌面、Worker、作者包及源码共 7 个新版本归档，另有 3 个独立插件；校验清单共 11 项通过，具体大小和摘要以[发行清单](../../dist/releases/release-manifest.json)为准。初次 Worker 组装未显式选择插件，被既有身份检查拒绝；按仓库已有命令带上三个插件重组后通过，没有修改四桌面程序或跳过检查。
+
+本轮未调用 Windows 宿主、音乐平台或 Cloudflare，没有压力测试、云端发布或新增资源；macOS 只有交叉构建，未重复 Linux/FUSE 实际旅程。VM 的测试映射、临时证书信任和后台均正常清理。去敏回执位于本机忽略目录 `.musicfs/windows-mount-dev2/`，最新综合回执为 `.musicfs/latest-release-receipt.json`。
