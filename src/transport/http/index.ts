@@ -3,6 +3,7 @@ import { bearerAuth } from 'hono/bearer-auth';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
+import { version } from '../../../package.json';
 import type { HostKind, Json, Outcome } from '@musicfs/plugin-api';
 import type { Result, Connection, Status, PluginInstallation, SourceInstance, SourceConfiguration, Layout, ViewEntry, DirectoryListing, AuthenticationSession } from '../../contracts/management';
 import type { PluginChange } from '../../contracts/plugin-changes';
@@ -79,7 +80,7 @@ export function createManagementApi(input: {
   });
   // Never serialize Outcome.nextPrivateState into a management response.
   const result = <T>(outcome: Outcome<T>): Result<T> => outcome.ok ? { ok: true, value: outcome.value } : { ok: false, error: outcome.error };
-  app.get('/api/status', c => c.json({ host: input.host, version: '0.1.0-dev.0' } satisfies Status));
+  app.get('/api/status', c => c.json({ host: input.host, version } satisfies Status));
   app.get('/api/connection', c => input.connection ? c.json(input.connection) : c.json({ error: 'not_supported', message: 'Connection details are unavailable' }, 404));
   app.get('/api/plugins', async c => c.json((await extensions.list()) satisfies PluginInstallation[]));
   app.post('/api/plugins/inspect', async c => c.json(await inspectPackage(new Uint8Array(await c.req.arrayBuffer()), input.host, c.req.raw.signal)));

@@ -16,7 +16,7 @@ if (authorPlugin) assert(values['plugin-archive']!.trim() && values['plugin-id']
 const release = resolve(values.directory ?? 'dist/desktop/linux-x64');
 const pluginArchive = resolve(values['plugin-archive'] ?? join(release, 'plugins/org.musicfs.sample.zip'));
 const pluginId = values['plugin-id'] ?? 'org.musicfs.sample';
-const metadata = await Bun.file(join(release, 'release.json')).json() as { target: string; executable: string };
+const metadata = await Bun.file(join(release, 'release.json')).json() as { target: string; executable: string; version: string };
 const native = `${process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : process.platform}-${process.arch}`;
 assert.equal(metadata.target, native, 'Run each release probe on its native target system');
 const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-product-'));
@@ -37,6 +37,8 @@ try {
   const admin = { Authorization: `Bearer ${token}` };
   const json = { ...admin, 'Content-Type': 'application/json' };
   const page = await fetch(origin); assert.equal(page.status, 200); assert((await page.text()).includes('<div id="root">'));
+  const status = await fetch(origin + '/api/status', { headers: admin }); assert.equal(status.status, 200);
+  assert.deepEqual(await status.json(), { host: 'desktop', version: metadata.version });
   const initial = await fetch(origin + '/api/plugins', { headers: admin }); assert.deepEqual(await initial.json(), []);
   const inspection = await fetch(origin + '/api/plugins/inspect', { method: 'POST', headers: admin,
     body: await Bun.file(pluginArchive).arrayBuffer() });
