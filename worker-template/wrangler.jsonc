@@ -7,8 +7,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "triggers": { "crons": ["* * * * *"] },
   "rules": [
-    { "type": "ESModule", "globs": ["**/*.mjs", "**/*.js"], "fallthrough": true },
-    { "type": "Text", "globs": ["plugins/**/*.json", "plugins/**/*.txt", "plugins/**/*.md"], "fallthrough": true }
+    { "type": "ESModule", "globs": ["*.mjs", "plugins/**/*.mjs", "plugins/**/*.js"], "fallthrough": false },
+    { "type": "Text", "globs": ["plugins/**/*.json", "plugins/**/*.txt", "plugins/**/*.md"], "fallthrough": false }
   ],
   "assets": { "directory": "./web", "binding": "ASSETS", "run_worker_first": ["/api/*", "/dav", "/dav/*"] },
   "d1_databases": [{ "binding": "DB", "database_name": "musicfs", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "migrations" }],

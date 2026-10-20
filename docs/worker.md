@@ -1,6 +1,6 @@
 # Worker 构建与部署
 
-日期：2026-10-20。状态：正式入口与后台插件变更已接线，本地 workerd 和受控 Cloudflare 网络测试通过；尚未部署真实云端，也未验证免费计划额度。架构取舍见 [ADR 0006](adr/0006-worker-code-publication.md)。
+日期：2026-10-20。状态：正式入口与后台插件变更已接线；[真实云端](verification/p4-worker-cloud.md)的WebUI/API/DAV、最小插件自行发布/更新失败保留/移除重装及D1/Secrets/ASSETS保留通过。真实示例来源和免费计划额度继续待验。架构取舍见 [ADR 0006](adr/0006-worker-code-publication.md)。
 
 正式入口是 [`src/worker.ts`](../src/worker.ts)，由 [`createWorkerService`](../src/hosts/worker/service.ts) 接线 D1、插件注册表、来源实例、目录快照、管理 API、只读 DAV 和静态 WebUI。它与桌面使用同一业务模块和协议实现；发布器通过安装/移除用例接入管理 API，安装不在运行时执行 `eval` 或动态导入未知源码。
 
@@ -66,7 +66,7 @@ bunx wrangler deploy
 
 发布 Token 需要有权读取目标 Worker 的当前模块及写入代码。官方 Content API 列出接受的写权限，账号与资源范围应按真实部署校验。[Cloudflare Content API 权限与合同](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/)
 
-插件变更只发送代码模块和主模块名，使用平台承诺不修改配置的 Content API，以避免自行重建 Secrets、D1 和 ASSETS 设置；本项目已验证请求没有发送覆盖配置的字段，**尚未以真实 Cloudflare 部署证明这些配置确实全部保留**。发布 Token 不下发 WebUI，也不写入插件包或模块源码。
+插件变更只发送代码模块和主模块名，使用不修改配置的Content API。真实云端sample生命周期已直接对比平台设置，并通过后续发布/管理/DAV及静态JS摘要验证D1、Secrets、ASSETS和设置保留；其他在途切换及失败恢复范围仍见[限定证据](verification/p4-worker-cloud.md)。发布Token不下发WebUI，也不写入插件包或模块源码。
 
 模板开启 `nodejs_compat` 供控制面依赖使用；QQ 预构建插件已有独立的无此开关探测。这一开关既不是插件公共合同，也不证明免费计划的 CPU、包体或请求额度足够。
 
@@ -76,7 +76,7 @@ bunx wrangler deploy
 
 开始刷新及冷读取响应可以经 `waitUntil` 安排一页；它不会在同一次调用中循环。WebUI后续逐次POST step；模板另配置每分钟Cron，scheduled优先推进一次插件变更，否则推进一页目录刷新，供页面关闭后的慢速续跑。Cron不保证精确完成时间，大集合应在页面中推进；平台配置保留的真实验收也应覆盖此触发器。
 
-单页预算与完整集合预算仍需分开测量。分页化不证明加密 CPU、插件内部请求、CDN 出口或逐文件 DAV 元数据满足免费额度；当前没有真实 Cloudflare 测试账号，继续本地验证，云端项保持待验。设计与已测边界见 [ADR 0007](adr/0007-durable-paged-refresh.md)和[分页记录](verification/p2-durable-refresh.md)。
+单页预算与完整集合预算仍需分开测量。分页化不证明加密CPU、插件内部请求、CDN出口或逐文件DAV元数据满足免费额度；付费账号的首次部署现已成功，后续按必要的有限链路推进，不扩展压测或对照矩阵。云端分页和免费额度仍待验。设计与已测边界见 [ADR 0007](adr/0007-durable-paged-refresh.md)和[分页记录](verification/p2-durable-refresh.md)。
 
 读取侧已有[本地CPU定位与重复工作减法](verification/p2-read-cpu.md)：属性投影、命名快返、快照头只返回一次，以及可选的正式workerd V8 profile入口。逐文件ETag和整份XML仍有成本；这不等于真实免费Worker的CPU已通过，也不增加额外定时器或存储服务。
 
