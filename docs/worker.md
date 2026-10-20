@@ -1,6 +1,6 @@
 # Worker 构建与部署
 
-日期：2026-10-20。状态：[真实云端](verification/p4-worker-cloud.md)的WebUI/API/DAV、后台插件生命周期、绑定保留、核心升级、双示例有限内容/音质、代表客户端、一次切换观察及退出后重新扫码已有证据。本次开发预览按用户决定跳过QQ真实续期、免费计划和大目录资源验证，保留未验证状态。架构取舍见[ADR 0006](adr/0006-worker-code-publication.md)。本页也随Worker包保存为`WORKER.md`；代码/验收等相对链接对应项目源码包中的文档位置。
+日期：2026-10-21。状态：[真实云端](verification/p4-worker-cloud.md)的WebUI/API/DAV、后台插件生命周期、绑定保留、核心升级、双示例有限内容/音质、代表客户端、一次切换观察及退出后重新扫码已有证据。现有部署已升级 API 0.1.6、schema 8 与带元数据的两示例版本，见[本次升级](verification/p4-worker-cloud.md#音乐资料功能原地升级)。本次开发预览按用户决定跳过QQ真实续期、免费计划和大目录资源验证，保留未验证状态。架构取舍见[ADR 0006](adr/0006-worker-code-publication.md)。本页也随Worker包保存为`WORKER.md`；代码/验收等相对链接对应项目源码包中的文档位置。
 
 正式入口是 [`src/worker.ts`](../src/worker.ts)，由 [`createWorkerService`](../src/hosts/worker/service.ts) 接线 D1、插件注册表、来源实例、目录快照、管理 API、只读 DAV 和静态 WebUI。它与桌面使用同一业务模块和协议实现；发布器通过安装/移除用例接入管理 API，安装不在运行时执行 `eval` 或动态导入未知源码。
 
@@ -55,7 +55,7 @@ bunx wrangler deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 
 | 配置 | 方式 | 用途 |
 |---|---|---|
-| `DB` | D1 binding | 实例、布局、快照、分页刷新、插件变更及续期租约；需要包含 `0007.sql` 的全部迁移 |
+| `DB` | D1 binding | 实例、布局、快照、分页刷新、插件变更、续期租约与可选插件缓存；需要包含 `0008.sql` 的全部迁移 |
 | `ASSETS` | 静态资源 binding | 根页面和 `/assets/*`，与管理 API/DAV 共用一个 Worker |
 | `CF_ACCOUNT_ID`、`CF_WORKER_NAME` | 模板 vars | 定位当前部署；Worker 名称必须与实际目标一致 |
 | `CF_API_TOKEN` | Secret | 后台读取当前代码集合、发布替换代码；仅宿主使用 |
@@ -66,7 +66,7 @@ bunx wrangler deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 
 插件变更只发送代码模块和主模块名，使用不修改配置的Content API。真实云端已验证D1、Secrets、ASSETS与设置保留；一次实际切换中页面保持200，更新来源的合成音频两次503/Retry-After:2后恢复200，详见[限定证据](verification/p4-worker-cloud.md)。发布Token不下发WebUI，也不写入插件包或模块源码。
 
-模板开启 `nodejs_compat` 供控制面依赖使用；QQ 预构建插件已有独立的无此开关探测。这一开关既不是插件公共合同，也不证明免费计划的 CPU、包体或请求额度足够。
+模板开启 `nodejs_compat` 供控制面依赖及当前示例选用的标签库使用；当前 QQ alpha.11、网易云 alpha.9 的构建包采用这一环境。此前旧 QQ 包不使用此开关的实验不代表新包。该开关不是插件公共合同，也不证明免费计划的 CPU、包体或请求额度足够。
 
 ## 升级核心与 WebUI，保留云端插件
 

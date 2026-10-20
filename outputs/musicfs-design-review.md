@@ -31,7 +31,7 @@
 └── 已实现：来源范围内格式、最终文件身份、小资料缓存与双宿主区段读取
 ```
 
-继续沿用来源资料归插件、核心保持通用、两个示例覆盖桌面与Worker的既有边界。当前源码和开发插件包已完成，未改动冻结发行物或现有云端部署。
+继续沿用来源资料归插件、核心保持通用、两个示例覆盖桌面与Worker的既有边界。当前源码和开发插件包已完成，现有云端已[原地升级](../docs/verification/p4-worker-cloud.md#音乐资料功能原地升级)，冻结发行归档保持不变。
 
 2026-10-21 先完成有限离线[可行性验证](../docs/verification/metadata-tagging-feasibility.md)，再接通两个示例和可选 `@musicfs/audio-tags`。四格式均通过标签与原音频区段组合；M4A 采用保留原音频位置、尾部追加更新元数据的方案，不走实验中的整文件 buffer。双宿主缓存、正式 workerd/DAV 与两源各一首真实 MP3 已取得限定证据，见[实现记录](../docs/verification/metadata-implementation.md)。
 

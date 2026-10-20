@@ -208,3 +208,28 @@ Wrangler登录只给本机部署工具授权。现有普通Worker方案让云端
 Cloudflare原生Dynamic Workers是替代候选：Worker Loader绑定可加载预构建模块，能够消除自行发布和发布Token，但需改变Worker宿主中的插件调用/状态与流接线。它当前只支持Workers Paid，并有按日创建量、请求和CPU计费；同一代码应使用稳定ID复用。[原生加载](https://developers.cloudflare.com/dynamic-workers/getting-started/)、[价格](https://developers.cloudflare.com/dynamic-workers/pricing/)
 
 本轮没有启用这一候选，也没有改变免费优先的既有范围。不同时维护第二套插件运行机制；先说明一次性配置与长期产品取舍，再决定是否调整路线。
+
+## 音乐资料功能原地升级
+
+2026-10-21（北京时间），按用户要求升级现有 Worker/D1。全程在 WSL 执行，复用已有 Wrangler 登录和发布 Token；不创建资源，不修改账号计划、Cron、CPU 上限或持久日志。下列结果只证明升级与必要读取，不追加为四格式真实来源/播放器验收。
+
+先通过正式管理入口保存 4 个插件、5 个实例、布局及公开授权记录的基线。`build-worker-upgrade.ts` 读取一次当前云端模块，原样保留注册表、作者插件、sample 和两个旧示例修订，构建新核心；现有页面资源没有变化，直接复用。源码身份补上可选音频工具的实际构建输入，构建提交 `b5bab21`，dirty=false，源码摘要 `b94c75e9cfc1f5ed6c7ff4d199a61deae70eae713cd5a006e91999101b56bd3c`。
+
+| 更新 | 实际结果 |
+|---|---|
+| 原 D1 迁移 | 仅应用 `0008.sql`，新增 `source_plugin_cache`；原有表和数据保留 |
+| 核心 | API 0.1.6，Wrangler 4.119.0 部署版本 `<resource-id>`；29 模块，gzip 647.87 KiB，平台启动 135 ms |
+| QQ | 经正式插件安装接口从 alpha.10 更新为 alpha.11；操作 `<resource-id>` completed |
+| 网易云 | QQ 完成后串行从 alpha.8 更新为 alpha.9；操作 `<resource-id>` completed |
+| 其他插件 | sample 0.1.3 与 author-proof 0.1.0 的活动修订不变 |
+| 数据保留 | 5 个实例的 ID、名称、配置、epoch 逐项相同；布局及修订 5 保留 |
+| 设置保留 | 绑定（含四项 Secrets）、D1 身份、兼容设置、limits、observability 前后一致；Cron 仍为空，CPU 上限仍 100ms |
+| 必要读取 | 页面 200；既有合成 WAV HEAD 为 16,044 字节，0—15 字节为正确 206/Content-Range、RIFF/WAVE |
+
+最终 QQ 修订 `9f3a5f101fa4782b9404162a8c4c5e3d4ac314af4493c400abdf00cd97d2eabc`，网易云修订 `94fc3550133d184b4d8bae44ad214a97504ec2d965dcabd083f8645831015474`。核心部署版本是上表的 Wrangler 检查点；后续两次插件发布会各自产生代码版本，不把这个编号称为最终插件发布版本。
+
+最初的前后比较把“公开二维码完成记录必须完全相同”作为条件，检查未通过。实际 `currentAuthentication` 要求交互记录的插件修订/代际仍匹配；插件换版后旧记录返回 null，与保存凭据是不同事实。本轮没有删除授权或重新扫码。随后只准备两个实例的根入口，各一页/5 项均 completed，曲目目录刷新数量为 0，证明新插件接受原保存会话。根入口冷准备曾正常返回 `refresh_pending`，最终复用同一任务核对完成，没有启动全实例刷新。
+
+本次共 23 次应用 HTTP 请求，包含前后状态、两次插件更新及查询、合成文件与上述根入口检查；不等于 23 次音乐平台请求。没有刷新曲目目录、下载真实音频或测试播放压力。新修订的曲目快照需按需刷新后生成带资料的文件，不主动重刷大账号。具体功能证据与未覆盖范围见[元数据实现记录](metadata-implementation.md)。
+
+私有执行基线及去敏摘要保存在忽略目录 `.musicfs/cloud-metadata-upgrade/`；后续组装目录为 `dist/cloud-metadata-upgrade/`，其中注册表只是核心发布时的检查点，下次升级仍需重新读取实际云端模块。冻结发行归档没有重打包。
