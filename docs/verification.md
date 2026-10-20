@@ -8,6 +8,8 @@
 
 三个正式交付包已接线。持久分页、批量目录描述、插件迁移、会话协调、安装兼容及统一发行已有各自限定证据；Linux本地/远程FUSE和活动挂载崩溃恢复已验。代表性MP3/M4A/FLAC经[OpenList与独立mpv](verification/p2-clients.md)完成本地列目录、播放及双向拖动；当前alpha.8喜欢目录42页发布4,159曲/4,659文件，25.8MB FLAC的直接DAV与原生代理均通过。共用失效重登入口已验，真实自然续期/再次扫码、真实Cloudflare、其他目标系统及完整运行时发行资料仍待收口。用户暂时没有Cloudflare测试账号，云端结果保留待验，不以本地验证代替；具体证据见下方记录，执行取舍见[计划](../outputs/musicfs-implementation-plan.md)与[复盘](../outputs/musicfs-effort-risk-roi-assessment.md)。
 
+本次实际启动现有Linux发行物，用户确认WSL2中的启动器已打开宿主机浏览器，详见[环境结果](verification/p2-desktop-host.md#wsl2启动与宿主浏览器)。此结果不替代Windows发行程序或原生Linux图形桌面验收。用户禁止后续调用Windows宿主，执行范围保持在WSL内。按用户要求已删除无用上游源码/调查临时材料约394.5MiB，实际开发依赖、必要许可和发行物保留。
+
 ## 统一发行与独立作者交付
 
 四个桌面目标、Worker、独立作者包及项目源码已从相同源码输入生成七个版本化ZIP，三个独立插件ZIP一同保存于`dist/releases/`；发行清单关联版本、源码内容摘要、WebUI与插件修订，校验和覆盖七个归档、三个插件和清单。Linux归档用系统unzip解压后，主程序和rclone仍为0755；直接运行的安装、16,044字节HEAD/RIFF范围、后台复用及正常退出通过。其余三个目标仍只有交叉构建证据。
