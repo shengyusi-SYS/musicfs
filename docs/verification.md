@@ -6,7 +6,7 @@
 
 已有开发alpha，核心/协议/共用页面已接线，QQ/微信与网易云真实扫码、目录和音频已有证据。QQ完整音质策略见[音质/统计](verification/p2-qq-quality.md)；网易云完整喜欢 **4,158曲/4,657个多版本文件**、每日30曲/35个多版本文件和真实128k/320k MP3见[来源记录](verification/p2-netease-source.md)。正式桌面点击启动/挂载管理、Worker入口/持久后台发布已接线；**224项测试、2,699次断言**、三组类型及155模块/560依赖边界通过；[持久分页刷新](verification/p2-durable-refresh.md)已有核心、SQLite/D1、正式workerd与真实网易云/浏览器证据。目标系统、其余客户端范围、真实云端及完整示例仍未完成。
 
-三个正式交付包已并行接线。持久分步已完成本地链路，真实网易云无损+标准多目标42页发布4,657文件，并取得真实FLAC字节；[目录描述批量读取](verification/p2-listing-metadata.md)已落地，4,158文件正式D1 allprop为15条SQL、0来源stat/外部请求；[OpenList/独立mpv](verification/p2-clients.md)的双来源本地MP3播放/双向seek已验；[插件结构迁移](verification/p2-plugin-migration.md)已通过正式桌面与真实本地D1/Worker接棒；[按需续期及认证完成边界](verification/p2-session-lifecycle.md)已有两驱动/实际QQ包和正式管理入口证据。[读取CPU](verification/p2-read-cpu.md)已有正式本地采样和重复工作减法，暂缓schema8。FR22本地管理旅程、[统一归档和独立作者接入](verification/p4-release-artifacts.md)已验；QQ认证底层取消及M4A客户端已按下节收口；Linux正式发行物活动挂载两种端口恢复路径已验，入口与嵌套目录的独立失败标记已补齐；磁盘不足诊断已接通；下一处理代表性FLAC客户端、失效重登及运行时许可资料。一次只推进一页仍不等于真实免费Worker已验。真实自然续期/失效重登继续独立保留。用户确认暂时没有Cloudflare测试账号，先继续本地开发；云端验收保留待验。具体出口与约13—24有效人日估算见[计划](../outputs/musicfs-implementation-plan.md)和[复盘](../outputs/musicfs-effort-risk-roi-assessment.md)。
+三个正式交付包已接线。持久分页、批量目录描述、插件迁移、会话协调、安装兼容及统一发行已有各自限定证据；Linux本地/远程FUSE和活动挂载崩溃恢复已验。代表性MP3/M4A/FLAC经[OpenList与独立mpv](verification/p2-clients.md)完成本地列目录、播放及双向拖动；当前alpha.8喜欢目录42页发布4,159曲/4,659文件，25.8MB FLAC的直接DAV与原生代理均通过。共用失效重登入口已验，真实自然续期/再次扫码、真实Cloudflare、其他目标系统及完整运行时发行资料仍待收口。用户暂时没有Cloudflare测试账号，云端结果保留待验，不以本地验证代替；具体证据见下方记录，执行取舍见[计划](../outputs/musicfs-implementation-plan.md)与[复盘](../outputs/musicfs-effort-risk-roi-assessment.md)。
 
 ## 统一发行与独立作者交付
 
@@ -24,7 +24,7 @@
 
 QQalpha.10在插件内部装配固定SDK的五个登录操作及可注入HTTP/QR服务，认证与账号状态Fetch贯通宿主取消；不改全局Fetch或平台协议。五项SDK回归及最终无Node兼容workerd整包取消通过；Axios默认cache被workerd拒绝的实际差异已用no-store修正。Bun与本地workerd正式管理入口均完成真实QQ/微信二维码创建、未扫码轮询和取消，本轮没有请求人重新扫码。真实自然续期/失效重登继续待验，见[会话记录](verification/p2-session-lifecycle.md)。
 
-隔离真实会话更新至alpha.10后，OpenList原生驱动列出两个M4A；3,973,975字节样本经独立mpv实际解码、PulseAudio播放时钟及五次双向seek通过，DAV出现实际非零与后退206。网易云小样本未取得FLAC，不扫描全账号或重跑4,158曲，FLAC播放器仍待验；详见[客户端记录](verification/p2-clients.md)。
+隔离真实会话更新至alpha.10后，OpenList原生驱动列出两个M4A；3,973,975字节样本经独立mpv实际解码、PulseAudio播放时钟及五次双向seek通过，DAV出现实际非零与后退206。该M4A检查点尚未取得FLAC；后续固定版本准备已知目录并完成FLAC客户端，详见[客户端记录](verification/p2-clients.md)。
 
 ## 正式宿主与第二来源检查点
 
@@ -73,9 +73,9 @@ FR22原先只有服务端安装拒绝，缺少安装前展示。现共用ZIP解�
 | FR04 | 示例喜欢的音乐 | 已实现 | 部分通过 | QQ分页与计数、微信1曲/0文件；网易云真实4158曲完整42页，标准/隐藏1913文件、多目标4657文件分别通过；真实云端大集合/其余配置待验 |
 | FR05 | 示例发现 | 已实现 | 部分通过 | QQ每日30曲多版本10文件、推荐25张/102曲通过；网易云每日30曲/18文件，Bun和workerd通过；alpha.8桌面service与本地workerd/D1真实推荐7张及其中一张35曲/66文件完整通过，桌面重开后正式目录200；真实云端待验 |
 | FR06 | 内容与顺序 | 已实现 | 部分通过 | library 完整分页、空中间页、顺序/重复位置及截断快照拒绝通过；QQ 喜欢分页/重复位置有回归，102 首推荐歌单完整刷新及微信非空自建/喜欢读取通过；大集合和双示例待验 |
-| FR07 | 音频读取 | 已实现 | 部分通过 | 已知字节合同与QQ MP3/M4A、网易云MP3的正式DAV/rclone完整/范围，以及网易云FLAC的DAV完整/范围通过；本地双来源MP3及QQ M4A的OpenList/mpv已验；代表性FLAC客户端、目标系统和云端待验，不逐档寻找真实样本 |
+| FR07 | 音频读取 | 已实现 | 部分通过 | 已知字节合同与QQ MP3/M4A、网易云MP3的正式DAV/rclone完整/范围，以及网易云FLAC的DAV完整/范围通过；Linux本地双来源MP3、QQ M4A及网易云FLAC的OpenList/mpv已验；目标系统和真实云端待验，不逐档寻找真实样本 |
 | FR08 | 示例音质模式 | 已实现 | 部分通过 | [QQ 实例音质](verification/p2-qq-quality.md)及共用 Schema 表单已实现；本地桌面/workerd 的真实 MP3/M4A 多版本、配置隔离和计数通过；网易云单/多版本实现及真实多目标4657文件已验；两示例单/多版本与实际标签的真实云端结果待验，不扩展账号×档位全排列 |
-| FR09 | WebDAV 与 OpenList | 已实现 | 部分通过 | Bun/本地 workerd 共用 DAV、真实 rclone 读取通过；两来源本地OpenList与Linux mpv的MP3播放/seek已验；M4A的OpenList/mpv已验；代表性FLAC、各目标系统宿主差异及真实云端待验 |
+| FR09 | WebDAV 与 OpenList | 已实现 | 部分通过 | Bun/本地workerd共用DAV、真实rclone读取通过；Linux本地OpenList/mpv的双来源MP3、QQ M4A及网易云FLAC播放/双向seek通过；FLAC所在新完整目录4,659文件列出及25.8MB样本原生代理读取通过；各目标系统宿主差异及真实云端待验 |
 | FR10 | 一键挂载 | 已实现 | 部分通过 | 正式启动器/页面/随包rclone已接线，Linux发行物真实FUSE全文/偏移读取通过；Windows/macOS待验 |
 | FR11 | 挂载管理 | 已实现 | 部分通过 | 并发合并/端口恢复回归通过；Linux实际就绪/忙时保留/关闭句柄后退出通过；正式发行物崩溃后保留原rclone、原端口恢复及换端口正常重挂通过；其他OS待验 |
 | FR12 | 远程挂载 | 已实现 | 部分通过 | Linux页面连接独立HTTP服务并FUSE读取真实网易云MP3全文/前后偏移通过；跨公网/云及其他系统待验 |
@@ -105,7 +105,7 @@ FR22原先只有服务端安装拒绝，缺少安装前展示。现共用ZIP解�
 | 示例插件 | 网易云、QQ × 桌面/真实 Worker | 三种实际扫码、双来源目录/DAV字节、本地workerd会话恢复通过；完整策略/续期与真实Worker待完成 |
 | 独立扩展 | 无认证/歌单/音质的独立最小插件、同插件双实例 | 本地双宿主加载、浏览器安装与双实例通过；独立作者包仓库外构建并安装现成Linux通过；GPL声明与项目源码已交付；真实云端待收口 |
 | Worker 发布 | 普通免费路线、安装/更新/移除、绑定/数据保留、失败恢复与切换影响 | 正式入口/模板/持久发布已实现，本地有限通过；无测试账号，真实配置保留、免费配额/切换待验 |
-| 真实客户端 | OpenList、rclone、普通播放器；目录、播放、双向拖动 | rclone 对已知 WAV 与真实 QQ MP3 的列目录/完整/前后偏移读取通过；[OpenList/独立mpv](verification/p2-clients.md)已用真实双来源MP3完成冷准备/重试、播放与双向seek；其余格式/系统/云端待验 |
+| 真实客户端 | OpenList、rclone、普通播放器；目录、播放、双向拖动 | rclone对已知WAV与真实来源的完整/范围读取通过；[OpenList/独立mpv](verification/p2-clients.md)已完成双来源MP3、QQ M4A及网易云FLAC的本地列目录、播放与双向seek；其他目标系统/真实云端及跨公网待验，不扩成全部格式矩阵 |
 | 挂载与生命周期 | 四个桌面目标、本地/远程 DAV、就绪/卸载/重复启动/页面关闭 | Linux实际发行物的本地/独立远程FUSE、全文/偏移、忙保留及正常退出通过；正式Linux活动挂载SIGKILL后同端口恢复/端口占用重挂已验；其他OS和公网仍待验 |
 | 故障与资源 | 状态交错、网络/限流/部署失败、目录与并发/内存/缓存表现 | CAS/旧刷新/取消/失败包与截断/忽略范围/换版通过；真实来源/部署故障及资源表现待验 |
 | 交付物 | 四个桌面目标产物、Worker 模板/迁移、插件包、使用/作者说明、许可与图表 | 七个统一版本归档、三个插件ZIP、清单/校验和及随包指南已生成；Worker19模块/七份迁移；Linux系统解压后运行通过；其余目标/真云与完整许可待验 |
