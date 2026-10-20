@@ -68,12 +68,15 @@ macOS 的固定 rclone 1.75.2 `nfsmount` 已注册 RC，但其内置卸载调用
 bun run scripts/build-desktop.ts
 bun run scripts/build-desktop.ts --target windows-x64
 bun run scripts/build-desktop.ts --all
+bun run scripts/build-desktop.ts --target linux-x64 --runtime /absolute/path/to/rebuilt-bun
 bun test tests/desktop-launcher.test.ts tests/desktop-mounts.test.ts
 bun scripts/probe-desktop-product.ts --mount
 bun scripts/probe-desktop-product.ts --mount --crash-recovery
 ```
 
 构建先产出共享 WebUI 和示例插件，再按目标编译。输出在 `dist/desktop/<target>/`，含应用、页面、固定 `rclone v1.75.2`、校验与版本记录、示例插件 ZIP、依赖锁文件与许可。rclone 从官方固定版本下载，核对该发布的 SHA-256；已有缓存复用前核对二进制摘要。`--skip-web` 仅用于复用已构建的页面。跨系统编译不能替代运行验收，`release.json` 保持 `targetRuntimeVerified: false`，实际证据记入验收台账。[Bun 独立可执行程序](https://bun.sh/docs/bundler/executables)
+
+开发者重建Bun/JSC后，可用`--runtime`指定匹配目标的Bun程序；构建器直接使用官方`compile.executablePath`并记录输入SHA-256，不复制一套运行时组装算法。每次只构建一个目标，不能与`--all`合用。固定运行时材料保存在`licenses/bun-runtime/`，当前仍为部分收集；实际源码重建和完整资料边界见[调查](../outputs/research-bun-runtime-distribution.md)及随包材料README。替换入口的Linux标记副本验收不等于JSC源码重建通过。
 
 需要从源码检查启动器时，可显式指定完整资源目录：
 

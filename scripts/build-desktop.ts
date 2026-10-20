@@ -15,11 +15,16 @@ const targets = {
 type Target = keyof typeof targets;
 const rcloneVersion = 'v1.75.2';
 const { values } = parseArgs({ args: process.argv.slice(2), strict: true, options: {
-  target: { type: 'string' }, all: { type: 'boolean' }, 'skip-web': { type: 'boolean' }
+  target: { type: 'string' }, all: { type: 'boolean' }, 'skip-web': { type: 'boolean' }, runtime: { type: 'string' }
 } });
 const native = `${process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : process.platform}-${process.arch}`;
 const selected = values.all ? Object.keys(targets) as Target[] : [values.target ?? native];
 if (selected.some(target => !(target in targets))) throw new Error(`Supported targets: ${Object.keys(targets).join(', ')}`);
+if (values.runtime !== undefined && (!values.runtime.trim() || values.all)) throw new Error('Supply --runtime with one target; build each target with its matching Bun executable.');
+const runtimeExecutable = values.runtime === undefined ? undefined : resolve(values.runtime);
+if (runtimeExecutable && !await Bun.file(runtimeExecutable).exists()) throw new Error('The selected Bun runtime executable does not exist.');
+const runtime = runtimeExecutable ? { kind: 'explicit' as const,
+  sha256: new Bun.CryptoHasher('sha256').update(await Bun.file(runtimeExecutable).arrayBuffer()).digest('hex') } : { kind: 'default' as const };
 
 async function run(script: string) {
   const child = Bun.spawn([process.execPath, 'run', script], { stdout: 'inherit', stderr: 'inherit' });
@@ -32,6 +37,15 @@ const pluginInputs = [['org.musicfs.sample', 'dist/plugins/org.musicfs.sample.zi
   ['org.musicfs.netease', 'dist/netease/org.musicfs.netease.zip']] as const;
 const identity = await createReleaseIdentity(await Promise.all(pluginInputs.map(async ([, path]) =>
   readPackage(new Uint8Array(await Bun.file(path).arrayBuffer()), 'desktop', new AbortController().signal))), 'dist/web');
+const runtimeMaterialsDirectory = resolve('third-party', `bun-${Bun.version}`);
+const runtimeMaterials = JSON.parse(await readFile(join(runtimeMaterialsDirectory, 'index.json'), 'utf8')) as {
+  bunVersion: string; bunRevision: string; components: { documents: { file: string; sha256: string }[] }[];
+};
+if (runtimeMaterials.bunVersion !== Bun.version || runtimeMaterials.bunRevision !== Bun.revision) throw new Error('Bun runtime materials must match the fixed compiler revision.');
+for (const component of runtimeMaterials.components) for (const document of component.documents) {
+  const hash = new Bun.CryptoHasher('sha256').update(await Bun.file(join(runtimeMaterialsDirectory, document.file)).arrayBuffer()).digest('hex');
+  if (hash !== document.sha256) throw new Error(`Bun runtime document checksum mismatch: ${document.file}`);
+}
 
 async function fetchBytes(url: string): Promise<Uint8Array> {
   const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
@@ -100,7 +114,8 @@ for (const selectedTarget of selected as Target[]) {
   await cp('dist/web', join(resources, 'web'), { recursive: true });
   await rclone(target.rclone, resources);
   const result = await Bun.build({ entrypoints: ['src/desktop.ts'], minify: true, metafile: true, define: { MUSICFS_COMPILED: 'true' },
-    compile: { target: target.compile, outfile: executable, ...(selectedTarget === 'windows-x64' ? { windows: { hideConsole: true } } : {}) } });
+    compile: { target: target.compile, outfile: executable, ...(runtimeExecutable ? { executablePath: runtimeExecutable } : {}),
+      ...(selectedTarget === 'windows-x64' ? { windows: { hideConsole: true } } : {}) } });
   if (!result.success) throw new AggregateError(result.logs, `Desktop compilation failed for ${selectedTarget}`);
   if (macos) await writeFile(join(releaseDirectory, 'MusicFS.app/Contents/Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -114,9 +129,10 @@ for (const selectedTarget of selected as Target[]) {
   await writeBundleLicenses(result.metafile, join(licenses, 'core'));
   await cp('dist/web/THIRD_PARTY_LICENSES.md', join(licenses, 'WebUI.md'));
   await cp(`third-party/bun-${Bun.version}-LICENSE.md`, join(licenses, `bun-${Bun.version}-LICENSE.md`));
+  await cp(runtimeMaterialsDirectory, join(licenses, 'bun-runtime'), { recursive: true });
   await cp('third-party/README.md', join(licenses, 'README.md'));
   await writeFile(join(releaseDirectory, 'release.json'), JSON.stringify({ target: selectedTarget, version: identity.version, rclone: rcloneVersion,
-    identity, bunVersion: Bun.version, entrypoint: 'src/desktop.ts',
+    identity, bunVersion: Bun.version, runtime, entrypoint: 'src/desktop.ts',
     executable: executable.slice(releaseDirectory.length + 1), generatedAt: new Date().toISOString(), targetRuntimeVerified: false,
     executableSha256: new Bun.CryptoHasher('sha256').update(await Bun.file(executable).arrayBuffer()).digest('hex') }, null, 2) + '\n');
   console.log(`Desktop artifact: ${releaseDirectory} (target runtime and system mounting require separate verification)`);
