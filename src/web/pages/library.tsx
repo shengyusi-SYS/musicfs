@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Alert, App, Breadcrumb, Button, Empty, Input, Modal, Select, Skeleton, Space, Tag, Tree, Typography } from 'antd';
+import { Alert, App, Breadcrumb, Button, Empty, Input, List, Modal, Select, Skeleton, Space, Tag, Tree, Typography } from 'antd';
 import { ArrowLeftOutlined, DeleteOutlined, FileOutlined, FolderAddOutlined, FolderOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LayoutNode, SourceInstance } from '../../contracts/management';
@@ -85,7 +85,9 @@ function DirectoryBrowser({ api }: { api: Api }) {
     <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh} reload={() => void directory.refetch()} />
     {directory.data?.status?.error && <Alert type="warning" showIcon title="刷新失败，保留最近成功内容"
       description={`最近成功：${new Date(directory.data.status.completedAt).toLocaleString()}`} />}
-    {directory.isPending ? <Skeleton active /> : directory.data?.entries.length ? <div className="directory-list">{directory.data.entries.map(entry => <button key={entry.path} className="directory-entry" disabled={entry.kind === 'file'} onClick={() => setPath(entry.path)}>{entry.kind === 'directory' ? <FolderOutlined /> : <FileOutlined />}<span>{entry.name}</span>{entry.kind === 'file' && <Tag>音频文件</Tag>}</button>)}</div> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个目录暂时没有内容" />}
+    {directory.isPending ? <Skeleton active /> : directory.data?.entries.length ? <List key={path} className="directory-list" dataSource={directory.data.entries} rowKey="path"
+      pagination={{ position: 'top', pageSize: 50, hideOnSinglePage: true, showSizeChanger: false, simple: true, showTotal: total => `共 ${total} 项` }}
+      renderItem={entry => <List.Item><button className="directory-entry" disabled={entry.kind === 'file'} onClick={() => setPath(entry.path)}>{entry.kind === 'directory' ? <FolderOutlined /> : <FileOutlined />}<span>{entry.name}</span>{entry.kind === 'file' && <Tag>音频文件</Tag>}</button></List.Item>} /> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个目录暂时没有内容" />}
     <p className="page-footnote">这里显示当前 WebDAV 目录。草稿保存成功后才对客户端生效。</p>
   </>;
 }

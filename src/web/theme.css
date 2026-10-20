@@ -64,7 +64,8 @@ p { text-wrap: pretty; }
 .node-editor .ant-btn { justify-self: start; }
 .restore-default { margin: 24px 0 0 -16px; }
 .directory-list { display: grid; margin: 24px 0; }
-.directory-entry { display: flex; align-items: center; gap: 12px; padding: 16px 8px; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; color: var(--ink); font: inherit; }
+.directory-list .ant-list-item { padding: 0; border-block-end: 0; }
+.directory-entry { display: flex; width: 100%; align-items: center; gap: 12px; padding: 16px 8px; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; color: var(--ink); font: inherit; }
 .directory-entry > span:not(.anticon):not(.ant-tag) { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .directory-entry:hover:not(:disabled), .directory-entry:focus-visible { background: var(--canvas); }
 .directory-entry:disabled { cursor: default; }
