@@ -1,12 +1,14 @@
 # MusicFS 实现与验收台账
 
-更新日期：2026-10-20。完成标准见 [Codex 主线目标](codex-goal.md#全部完成的判定)，功能与发布合同见[统一需求第 3、14 节](../outputs/musicfs-requirements-and-technical-design.md)。本台账记录状态与证据，不另定义产品范围。
+更新日期：2026-10-21。完成标准见 [Codex 主线目标](codex-goal.md#全部完成的判定)，功能与发布合同见[统一需求第 3、14 节](../outputs/musicfs-requirements-and-technical-design.md)。本台账记录状态与证据，不另定义产品范围。
 
 ## 本次发行范围修订
 
 用户要求“直接进入最终发行收口，其它验证跳过”。QQ适用真实续期、Windows/macOS及原生Linux图形桌面、免费Worker及大目录资源验证统一记为**本次跳过／未验证**，不改写为实测通过，不再作为开发预览发行门禁。现有18项FR通过结论保留；其余行保留部分通过与未验证范围，发行完成不等于原始25项全部实测通过。
 
 本轮已完成现有许可材料与说明整理、统一归档及校验、最终交付入口更新；7个归档、3个插件包和11项校验已收口，见[最终发行记录](verification/p4-release-artifacts.md#最终开发预览交付)。运行时材料索引的`complete:false`与未核实范围如实保留，不继续完整上游源码/依赖闭包调查。最终产物与支持范围见[交付页](release.md)。
+
+2026-10-21用户提供Windows测试VM并重新开放相关验证。已从真实Windows程序/sample复现并修复盘符与根目录路径问题，实际WinFsp挂载、16,044字节/DAV一致性和正常卸载通过；没有操作物理Windows宿主或音乐平台。原生WebDAV映射尚未闭合，图形启动、忙路径和异常恢复也未升级为通过，见[限定记录](verification/p2-windows-mount.md)。原最终归档保持不变，本次补丁程序单列身份。
 
 ## 当前事实
 
@@ -105,8 +107,8 @@ FR22原先只有服务端安装拒绝，缺少安装前展示。现共用ZIP解�
 | FR07 | 音频读取 | 已实现 | 通过 | 双宿主已知字节的流式/HEAD/206/416/取消/忽略Range及真实来源MP3/M4A/FLAC证据齐全；真云两路代表HEAD/Range、QQ全文/挂载偏移和OpenList/mpv定位通过。其他OS启动/挂载归FR10—12/16，不重复字节合同 |
 | FR08 | 示例音质模式 | 已实现 | 通过 | 单/多模式、Schema表单与实例隔离已有本地/workerd真实证据；真云单M4A/单标准已验，现多目标QQ导出128k/M4A两个文件，网易云33个曲序各极高/标准两个文件，实际标签/扩展名及代表HEAD/Range通过 |
 | FR09 | WebDAV 与 OpenList | 已实现 | 通过 | 双宿主共用DAV、rclone真实完整/范围、Linux双来源MP3/M4A/FLAC的OpenList/mpv播放与双向seek已验；真云HTTPS挂载及代表OpenList/mpv定位通过。WSL Pulse限制和实际延迟保留；其他OS原生挂载仅归FR10—12/16 |
-| FR10 | 一键挂载 | 已实现 | 部分通过 | 正式启动器/页面/随包rclone已接线，Linux发行物真实FUSE全文/偏移读取通过；Windows/macOS及原生Linux图形启动本次跳过／未验证 |
-| FR11 | 挂载管理 | 已实现 | 部分通过 | 并发合并/端口恢复回归通过；Linux实际就绪/忙时保留/关闭句柄后退出通过；正式发行物崩溃后保留原rclone、原端口恢复及换端口正常重挂通过；其他OS本次跳过／未验证 |
+| FR10 | 一键挂载 | 已实现 | 部分通过 | 正式启动器/页面/随包rclone已接线，Linux发行物真实FUSE全文/偏移读取通过；Windows VM正式程序/sample与实际WinFsp盘符读取已有[证据](verification/p2-windows-mount.md)，默认图形启动、macOS及原生Linux图形启动仍未验证 |
+| FR11 | 挂载管理 | 已实现 | 部分通过 | 并发合并/端口恢复回归通过；Linux实际就绪/忙时保留/关闭句柄后退出及两种活动恢复通过；Windows VM本机挂载、真实读取和正常卸载已验，忙路径/恢复与其他OS仍未验证 |
 | FR12 | 远程挂载 | 已实现 | 部分通过 | Linux页面连接独立HTTP服务并FUSE读取真实网易云MP3全文/前后偏移通过；WSL现成发行物经正式API/随包rclone挂载真实云端HTTPS DAV，QQ M4A头/尾/中定位与全文一致、正常卸载退出；其他系统本次跳过／未验证 |
 | FR13 | 刷新与失败 | 已实现 | 通过 | [实例/单目录刷新](verification/p1-instance-refresh.md)、失败保留/过期状态、取消/代际和实例隔离通过；workerd/D1、浏览器真实刷新、[42页恢复](verification/p2-durable-refresh.md)及真云每日/分类发布已验；目录独立失败持久展示、重建后保留、成功才清除通过。云CPU/免费预算仅归FR25，不重做交错全排列 |
 | FR14 | 基本访问控制 | 已实现 | 通过 | 独立读取/管理凭据、配置/认证私有状态过滤及越权拒绝通过；正式桌面生成/恢复凭据已有证据；真实Worker读取凭据被管理入口拒绝，Secrets在插件发布后保留 |

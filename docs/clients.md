@@ -32,6 +32,12 @@ OpenList 自己也缓存目录。本次版本默认存储缓存为30分钟；Mus
 
 OpenList 必须能访问填写的地址。另一台机器或容器中的 `127.0.0.1` 指向它自己，应填写该环境可访问的 MusicFS 服务地址。
 
+## Windows 盘符与资源管理器
+
+Windows 桌面程序的“本机挂载”使用随包 rclone 和系统 WinFsp，支持 HTTP/HTTPS DAV；挂载发生在运行该后台的电脑。通过 Windows 浏览器打开 WSL 管理页，不会把 WSL 的挂载变成 Windows 盘符。
+
+资源管理器“映射网络驱动器”使用另一套 Windows WebDAV 客户端。它需要现有 WebClient 服务运行；Windows 默认 `BasicAuthLevel=1` 仅允许 HTTPS 的 Basic 认证，因此不能把本机 HTTP DAV 直接映射视为默认可用。优先使用上述桌面挂载；原生映射应使用可达且证书受信任的 HTTPS DAV、读取凭据和已准备目录。本轮测试 VM 的 HTTP 原生映射未通过，rclone/WinFsp 实际盘符读取与卸载通过，见[Windows记录](verification/p2-windows-mount.md)。[Microsoft 原生客户端说明](https://learn.microsoft.com/en-us/iis/publish/using-webdav/using-the-webdav-redirector)
+
 ## 其他播放器
 
 支持 WebDAV 的播放器可使用同一读取连接。也可以打开某个已准备音频文件的 DAV URL，并使用播放器提供的 HTTP 认证或自定义请求头功能。通过 OpenList 打开时，使用它生成的代理下载链接，由 OpenList 保存读取凭据。

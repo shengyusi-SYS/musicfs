@@ -99,6 +99,34 @@ test('missing system dependencies remain diagnosable and do not block quitting a
   await expect(manager.mount({ mountPoint: join(directory, 'other'), source: { kind: 'remote', url: 'https://user:password@example.com/dav/', username: '', password: '' } })).rejects.toMatchObject({ code: 'invalid_mount' });
 });
 
+test('Windows mount requests keep drive letters and normalize Windows directory paths before calling cmount', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-windows-mounts-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const requests: Record<string, unknown>[] = [];
+  const control: RcloneControl = {
+    async call<T>(method: string, parameters: Record<string, unknown> = {}) {
+      if (method === 'mount/mount') {
+        requests.push(parameters);
+        throw new MountError('mount_failed', 'Stop before the platform filesystem in this contract test');
+      }
+      return fake.control.call<T>(method, parameters);
+    },
+    close: () => fake.control.close()
+  };
+  const manager = await createMountManager({ directory: join(directory, 'state'), binary: 'unused', localConnection,
+    control, platform: 'win32', checkDependencies: async () => {} });
+  cleanup.push(() => manager.close());
+  for (const mountPoint of ['M:', '*', 'C:\\MusicFS\\temporary\\..\\mount']) {
+    await manager.mount({ mountPoint, source: { kind: 'local' } });
+  }
+  expect(requests.map(request => ({ mountPoint: request.mountPoint, mountType: request.mountType }))).toEqual([
+    { mountPoint: 'M:', mountType: 'cmount' },
+    { mountPoint: '*', mountType: 'cmount' },
+    { mountPoint: 'C:\\MusicFS\\mount', mountType: 'cmount' }
+  ]);
+});
+
 test('rclone RC disk-full errors reach management HTTP without exposing private details or changing busy and dependency classification', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-rc-errors-'));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));

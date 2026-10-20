@@ -1,5 +1,5 @@
 import { access, lstat, mkdir, readFile, readdir } from 'node:fs/promises';
-import { isAbsolute, join, normalize } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { z } from 'zod';
 import type { MountInput, MountManager, MountView } from '../../contracts/mounts';
 import { createRcloneControl, MountError, writePrivateJson, type RcloneControl } from './rclone-control';
@@ -31,6 +31,7 @@ export async function createMountManager(options: {
   await mkdir(options.directory, { recursive: true, mode: 0o700 });
   const statePath = join(options.directory, 'mounts.json');
   const platform = options.platform ?? process.platform;
+  const mountPath = platform === 'win32' ? win32 : posix;
   const control = options.control ?? createRcloneControl(options);
   let records: RecordEntry[] = [];
   try { records = recordsSchema.parse(JSON.parse(await readFile(statePath, 'utf8'))) as RecordEntry[]; }
@@ -50,10 +51,12 @@ export async function createMountManager(options: {
     const input: MountInput = { mountPoint: parsed.data.mountPoint, source: parsed.data.source,
       ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }) };
     if (/[\u0000\r\n]/.test(input.mountPoint) || input.mountPoint.startsWith('-')) throw new MountError('invalid_mount', '挂载路径包含无效字符。');
-    if (!(platform === 'win32' && (/^[a-z]:$/i.test(input.mountPoint) || input.mountPoint === '*')) && !isAbsolute(input.mountPoint)) {
+    const driveLetter = platform === 'win32' && /^[a-z]:$/i.test(input.mountPoint);
+    if (!(platform === 'win32' && (driveLetter || input.mountPoint === '*')) && !mountPath.isAbsolute(input.mountPoint)) {
       throw new MountError('invalid_mount', '请选择绝对挂载路径，Windows 也可填写空闲盘符（例如 M:）。');
     }
-    input.mountPoint = normalize(input.mountPoint);
+    // Preserve rclone's bare drive target; win32.normalize('M:') produces 'M:.'
+    if (!driveLetter) input.mountPoint = mountPath.normalize(input.mountPoint);
     if (input.source.kind === 'remote') {
       const url = new URL(input.source.url);
       if (!['http:', 'https:'].includes(url.protocol)
@@ -179,9 +182,10 @@ export async function createMountManager(options: {
         const mounted = (await activePoints()).some(point => equalPoint(point.MountPoint, result.mountPoint));
         if (!mounted) throw new MountError('mount_failed', 'rclone 未确认挂载就绪。');
         // Confirm the actual filesystem root can be opened, not merely that a process exists.
+        const root = platform === 'win32' && /^[a-z]:$/i.test(result.mountPoint) ? `${result.mountPoint}\\` : result.mountPoint;
         let timeout: ReturnType<typeof setTimeout> | undefined;
         try {
-          await Promise.race([readdir(result.mountPoint), new Promise<never>((_, reject) => {
+          await Promise.race([readdir(root), new Promise<never>((_, reject) => {
             timeout = setTimeout(() => reject(new MountError('mount_failed', '挂载目录暂不可读，请检查网络与挂载状态。')), 8_000);
           })]);
         } finally { clearTimeout(timeout); }
