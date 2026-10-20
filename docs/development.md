@@ -31,6 +31,7 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun run build:author-kit` | 生成公开类型/最小插件/构建器/文档及独立锁文件，不带核心、页面或来源SDK |
 | `bun run package:release` | 从已有正式构建生成四目标/Worker/作者ZIP、独立插件、统一清单与SHA256SUMS；拒绝混用源码/页面/插件版本 |
 | `bun scripts/probe-desktop-product.ts --mount` | 在原生Linux运行实际发行物、外置sample、后台复用及真实FUSE全文/偏移/忙卸载/退出；不用源码服务代替发行物 |
+| `bun scripts/probe-desktop-product.ts --mount --crash-recovery` | 同一临时FUSE挂载两次SIGKILL后台；验证保留原端口与原rclone，以及端口被占用后的明确需重挂/正常重挂。只终止探针临时后台，约需两次30秒锁恢复 |
 | `bun run build:web` | 构建共用 React/Vite 页面至 dist/web |
 | `bun run build:auth-fixture` | 开发专用的“非真实音源”认证测试包，生成至 dist/p0/authentication-fixture.zip |
 | `bun run dev:service` | 用显式测试凭据启动 127.0.0.1:8787 的开发服务，状态保存在 dist/dev-data，同时提供已构建页面 |

@@ -62,6 +62,8 @@ bun test tests/desktop-launcher.test.ts tests/desktop-mounts.test.ts
 
 ## 必须继续收口
 
+2026-10-20磁盘不足诊断补充：rclone RC明确返回ENOSPC、no space left on device或disk full时，现由现有MountError边界返回disk_full及释放数据/缓存所在磁盘空间后重试的提示；优先于包含fusermount名称的缺依赖匹配。writePrivateJson写入、rename或chmod遇ENOSPC采用同一提示，不建立磁盘预检服务。受控本地RC经实际Fetch和正式管理HTTP的回归通过，原busy/缺依赖分类保持；desktop-mounts整组6项/59断言通过。没有填满真实磁盘，私有JSON写入的真实ENOSPC及各目标OS原生错误仍按环境待验。
+
 2026-10-20 启动恢复补充：已修复后台只试一次锁、前台仅等15秒却需30秒才判陈旧的窗口。锁仍由 proper-lockfile 维护与判定；宿主最多32秒协调接管，前台统一47秒等待上限，竞争启动发现健康后台后尽快退出。源码启动的真实临时后台经 SIGKILL 后立即重开，约32.27秒恢复，保留原凭据/端口、更新PID；健康重复后台3秒内退出。定向3项/35断言通过。此结果没有实际挂载或Windows/macOS运行，也不把“可恢复”描述为即时重启。
 
 2026-10-20 发行物活动挂载补充：在Linux实际FUSE宿主执行以下命令，使用独立临时目录和随包sample，不读取开发账号：

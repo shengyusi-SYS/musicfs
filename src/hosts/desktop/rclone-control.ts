@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 export class MountError extends Error {
   override readonly name = 'MountError';
-  constructor(public readonly code: 'invalid_mount' | 'dependency_missing' | 'mount_failed' | 'mount_busy' | 'not_found', message: string) {
+  constructor(public readonly code: 'invalid_mount' | 'dependency_missing' | 'disk_full' | 'mount_failed' | 'mount_busy' | 'not_found', message: string) {
     super(message);
   }
 }
@@ -16,6 +16,7 @@ export interface RcloneControl {
 
 const runtimeSchema = z.object({ pid: z.number().int().positive(), port: z.number().int().min(1).max(65535), password: z.string().min(32) }).strict();
 type Runtime = z.infer<typeof runtimeSchema>;
+const diskFull = () => new MountError('disk_full', '磁盘空间不足；请释放 MusicFS 数据目录或挂载缓存所在磁盘的空间后重试。');
 
 export async function writePrivateJson(path: string, value: unknown) {
   const staging = `${path}.${crypto.randomUUID()}.tmp`;
@@ -23,6 +24,9 @@ export async function writePrivateJson(path: string, value: unknown) {
     await writeFile(staging, JSON.stringify(value), { mode: 0o600 });
     await rename(staging, path);
     if (process.platform !== 'win32') await chmod(path, 0o600);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOSPC') throw diskFull();
+    throw error;
   } finally { await rm(staging, { force: true }); }
 }
 
@@ -43,6 +47,7 @@ export function createRcloneControl(input: { directory: string; binary: string; 
     if (!response.ok) {
       const error = z.object({ error: z.string() }).safeParse(body);
       // Never return rclone's raw message: it can contain remote URLs or credentials.
+      if (error.success && /\bENOSPC\b|no space left on device|\bdisk (?:is )?full\b/i.test(error.data.error)) throw diskFull();
       if (error.success && /busy|already mounted|not empty/i.test(error.data.error)) throw new MountError('mount_busy', '挂载路径正在使用；请关闭占用文件的程序后重试。');
       if (error.success && /fusermount|libfuse|winfsp|mount type|not registered|cannot find|executable file not found/i.test(error.data.error)) {
         throw new MountError('dependency_missing', '系统挂载依赖不可用。Linux 请检查 FUSE/fusermount，Windows 请安装 WinFsp；macOS 请检查系统 NFS 挂载权限。');
