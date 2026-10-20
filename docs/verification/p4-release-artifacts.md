@@ -194,6 +194,8 @@ Windows ZIP 中的 `MusicFS.exe` 与 VM 实测文件 SHA-256 同为 `9e36ced3fcb
 
 2026-10-21，应用版本 **0.1.0-dev.3 / API 0.1.6 / schema 8**，三个插件版本/修订不变。干净构建输入为 `4fe2297f8e2fee12a55c52429671766653bc489b`，源码摘要 `88ad6fce1450d6ef91bb2b0e20c3b1a6ee885cc0df50483ffd92a77c87b99bef`，页面摘要 `0e97012264d105fedc1656aece265eaa2e221ee3fb8d167bdfb009da8d530112`。
 
-App 可在原有 Windows 连接设置中提高原生 WebDAV 单文件上限至 4GiB−1，记录并恢复原值；界面说明全局影响及 WebClient 重启中断。四桌面、正式三插件 Worker 与作者包复用固定运行时/依赖缓存构建，没有新增依赖、云部署或音乐平台请求。定向检查 9 项/64 次断言、三组类型检查和模块边界检查通过。实机大文件读取/恢复仍待既有 VM 网络恢复，详见 [Windows 记录](p2-windows-mount.md#dev3原生映射文件上限与恢复)；dev.2 的小文件和挂载证据保留原版本边界。
+App 可在原有 Windows 连接设置中提高原生 WebDAV 单文件上限至 4GiB−1，记录并恢复原值；界面说明全局影响及 WebClient 重启中断。四桌面、正式三插件 Worker 与作者包复用固定运行时/依赖缓存构建，没有新增依赖、云部署或音乐平台请求。定向检查 9 项/64 次断言、三组类型检查和模块边界检查通过。实机验收初期受 VM 网络阻塞，用户重连后已用正式 dev.3 程序完成跨 50MB 阈值的 64MiB 原生读取与原值恢复，详见 [Windows 记录](p2-windows-mount.md#dev3原生映射文件上限与恢复)；dev.2 的小文件和挂载证据保留原版本边界。
 
-七份 dev.3 归档与三个独立插件已生成，`SHA256SUMS` 共 11 项全部通过。Windows ZIP 中程序 SHA-256 为 `26ff1bacf65be07e10935eac277a8be1bcd77a723df1a5e2fdb34c1515f3b683`，与构建元数据一致；随包 WinFsp MSI 摘要保持 `073a70e00f77423e34bed98b86e600def93393ba5822204fac57a29324db9f7a`。源码归档包含新模块与定向测试，未包含临时大文件 fixture 或本机状态。完整归档大小/摘要见 [发行清单](../../dist/releases/release-manifest.json)，本机去敏回执为 `.musicfs/latest-release-receipt.json`；前版证据另存 `release-dev2-receipt.json`，未将前版实测写成 dev.3 通过。该归档后记录只写入仓库，不为回写日志重建发行物。
+七份 dev.3 归档与三个独立插件已生成，`SHA256SUMS` 共 11 项全部通过。Windows ZIP 中程序 SHA-256 为 `26ff1bacf65be07e10935eac277a8be1bcd77a723df1a5e2fdb34c1515f3b683`，与构建元数据及 VM 实测一致；随包 WinFsp MSI 摘要保持 `073a70e00f77423e34bed98b86e600def93393ba5822204fac57a29324db9f7a`。源码归档包含新模块与定向测试，未包含临时大文件 fixture 或本机状态。完整归档大小/摘要见 [发行清单](../../dist/releases/release-manifest.json)，本机去敏回执为 `.musicfs/latest-release-receipt.json`；前版证据另存 `release-dev2-receipt.json`，未将前版实测写成 dev.3 通过。
+
+本次 VM 实测原 DWORD 为 `50,000,000`：原生映射后的文件读取报 `0x800700DF`；正式 App 提高为 `4,294,967,295` 后，完整读取 `67,108,864` 字节并匹配生成器 SHA-256，随后正式恢复入口准确还原 `50,000,000`。两次映射均正常断开，BasicAuthLevel 保持 1，后台正常退出、临时信任与测试文件清理完成。程序、页面及插件无需重建；仅为将实际验收结论纳入对应源码交付，更新本次归档说明。宿主 Windows 禁令始终保持，无平台请求、压力测试或云端资源变更。
