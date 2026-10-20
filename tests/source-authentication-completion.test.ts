@@ -59,8 +59,9 @@ for (const source of ['qq', 'netease'] as const) {
         } };
       let now = Date.now();
       const sources = createSources(store, registry, transport, () => now);
+      const extensions = createExtensions(store, async () => {});
       const api = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin', sources, library: createLibrary(sources, store),
-        extensions: createExtensions(store, async () => {}), maxPackageBytes: 100_000,
+        extensions, remove: id => extensions.remove(id), maxPackageBytes: 100_000,
         install: async () => { throw new Error('Not part of authentication completion'); } });
       const call = (path: string, value?: unknown) => api.request('http://fixture/api' + path, {
         headers: { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' },

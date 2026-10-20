@@ -193,7 +193,8 @@ test('source-provided QR images allow only bounded embedded PNG or JPEG', async 
 test('HTTP authentication validates actions and strips all private host and plugin state', async () => {
   const { id, store, sources } = await setup(async () => ({ ok: true, value: waiting(), nextPrivateState: { password: 'fixture-secret' } }));
   const installed = store.installation(manifest.id)!;
-  const api = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin', sources, library: createLibrary(sources, store), extensions: createExtensions(store, async () => {}), maxPackageBytes: 100_000, install: async () => installed });
+  const extensions = createExtensions(store, async () => {});
+  const api = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin', sources, library: createLibrary(sources, store), extensions, remove: id => extensions.remove(id), maxPackageBytes: 100_000, install: async () => installed });
   const headers = { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' };
   const started = await api.request(`/api/instances/${id}/authentication`, { method: 'POST', headers, body: JSON.stringify({ kind: 'start' }) });
   const body = await started.text(); expect(started.status).toBe(200); expect(started.headers.get('Cache-Control')).toBe('no-store');

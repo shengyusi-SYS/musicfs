@@ -9,6 +9,8 @@
 | `GET /api/status` | 宿主和应用版本 |
 | `GET /api/connection` | 受管理认证保护的 DAV 地址路径、用户名及读取密码；宿主未提供时返回 404 |
 | `GET /api/plugins` | 安装清单、版本与 active/missing 状态 |
+| `POST /api/plugins/inspect` | 正文为预构建ZIP；只读返回插件manifest/revision及当前API/宿主兼容结果，不安装或加载模块 |
+| `POST /api/plugins/inspect-url` | `{url}`，按相同下载限制检查发布包，返回相同兼容预览 |
 | `POST /api/plugins` | 正文为预构建ZIP；桌面首次安装/同结构更新返回201，结构升级返回202持久变更；Worker均返回202 |
 | `POST /api/plugins/from-url` | `{url}`，下载有大小/超时限制的 HTTP(S) 发布包并安装 |
 | `DELETE /api/plugins/:id` | 桌面完成返回 204；Worker 返回 202 持久变更操作；完成后停止该插件的新调用，保留实例与布局引用 |
@@ -34,6 +36,8 @@
 | `POST /api/mounts` | `{name?,mountPoint,source}`；source 为 `{kind:"local"}` 或 `{kind:"remote",url,username,password}`。结果必须查看 state，错误状态不表示挂载成功 |
 | `DELETE /api/mounts/:id` | 正常卸载指定挂载；占用失败保留可操作状态 |
 | `POST /api/desktop/quit` | 仅正式桌面后台，正常卸载后返回 202 `{stopping:true}`，随后结束在途读取并退出；挂载占用返回 409 并继续运行 |
+
+`PluginInspection`包含manifest、revision和compatibility（host、apiVersion、apiCompatible、hostCompatible）。结构有效但API或宿主不兼容也返回200，以便安装前说明；坏包仍返回422。检查只读、不执行插件代码，不代表运行已通过；安装继续使用同一规则重新校验。发布地址安装会重新下载，不持有检查缓存或临时上传任务。
 
 `PluginChange`包含 `operationId/kind/pluginId/status/createdAt/updatedAt` 和可选安装结果/错误；status为queued、preparing、uploading、deploying、verifying、migrating、completed或failed。202仅表示受理，页面持续查询到终态，重新打开插件页可用保存的operationId恢复。结构升级只有全部实例候选与安装整体切换才completed，失败保留旧安装和全部活动数据；不返回候选配置或私有状态。未结束变更返回409，Worker发布凭据缺失返回503。恢复边界见[迁移验证](verification/p2-plugin-migration.md)及[Worker指南](worker.md)。
 

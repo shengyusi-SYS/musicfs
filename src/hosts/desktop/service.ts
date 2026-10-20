@@ -32,7 +32,8 @@ export async function createDesktopService(input: { directory: string; adminToke
     connection: { davPath: '/dav', ...input.dav },
     ...(input.mounts ? { mounts: input.mounts } : {}),
     maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
-    install: async (archive, signal) => changes.install(await readPackage(archive, 'desktop', signal), signal), pluginChange: id => changes.get(id) }));
+    install: async (archive, signal) => changes.install(await readPackage(archive, 'desktop', signal), signal),
+    remove: id => extensions.remove(id), pluginChange: id => changes.get(id) }));
   app.route('/', createDav(library.files, input.dav));
   if (input.webRoot) {
     app.get('/', serveStatic({ root: input.webRoot, path: 'index.html' }));

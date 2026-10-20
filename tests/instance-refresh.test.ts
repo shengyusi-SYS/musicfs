@@ -30,8 +30,9 @@ async function setup() {
   };
   const f = await libraryFixture(source); cleanups.push(f.close);
   const installation = f.store.installations()[0]!;
+  const extensions = createExtensions(f.store, async () => {});
   const http = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin', sources: f.sources, library: f.library,
-    extensions: createExtensions(f.store, async () => {}), maxPackageBytes: 1024, install: async () => installation });
+    extensions, remove: id => extensions.remove(id), maxPackageBytes: 1024, install: async () => installation });
   const fetcher = ((input, init) => http.request(new Request(new URL(String(input), 'http://fixture'), init))) as typeof fetch;
   const finish = (view: RefreshView) => driveRefresh((url: string, init?: RequestInit) => fetcher(url, init), view, 'http://fixture', { Authorization: 'Bearer fixture-admin' });
   return { ...f, source, content, calls, failures, api: createApi('fixture-admin', fetcher), http, finish };

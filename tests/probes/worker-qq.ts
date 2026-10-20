@@ -25,7 +25,8 @@ app.all('/api/*', async c => {
   const store = createD1Store(c.env.DB);
   if (!await store.installation(manifest.id)) await store.activate(manifest, revision, null);
   const sources = createSources(store, createWorkerRegistry(store, [{ id: manifest.id, revision, module: plugin }]));
-  return createManagementApi({ host: 'worker', adminToken: 'fixture-admin', sources, library: createLibrary(sources, store), extensions: createExtensions(store, async () => {}),
+  const extensions = createExtensions(store, async () => {});
+  return createManagementApi({ host: 'worker', adminToken: 'fixture-admin', sources, library: createLibrary(sources, store), extensions, remove: id => extensions.remove(id),
     maxPackageBytes: 100_000, install: async () => { throw new Error('Not part of the QQ Worker probe'); } }).fetch(c.req.raw);
 });
 export default app;

@@ -13,6 +13,8 @@ import { createManagementApi } from '../src/transport/http';
 import manifest from '../plugins/sample/manifest.json';
 import { completeRefresh, requestReady } from '../scripts/helpers/refresh-http';
 import type { RefreshView } from '../src/contracts/refreshes';
+import type { PluginInspection } from '../src/contracts/management';
+import { strToU8, unzipSync, zipSync } from 'fflate';
 
 let archive: Uint8Array; const cleanups: (() => Promise<void>)[] = [];
 beforeAll(async () => { archive = await buildSample(); });
@@ -36,6 +38,34 @@ async function setup() {
   } };
 }
 const body = (value: unknown) => ({ body: JSON.stringify(value), headers: { 'Content-Type': 'application/json' } });
+
+test('plugin inspection reports both compatibility dimensions without installing; URL inspection shares the same checks', async () => {
+  const { request } = await setup();
+  const compatible = await request('/api/plugins/inspect', { method: 'POST', body: new Uint8Array(archive) });
+  expect(compatible.status).toBe(200);
+  const preview = await compatible.json() as PluginInspection;
+  expect(preview.manifest).toEqual(parseManifest(manifest, 'desktop'));
+  expect(preview.revision).toMatch(/^[0-9a-f]{64}$/);
+  expect(preview.compatibility).toEqual({ host: 'desktop', apiVersion: '0.1.5', apiCompatible: true, hostCompatible: true });
+  const files = unzipSync(archive);
+  const incompatible = zipSync({ ...files, 'manifest.json': strToU8(JSON.stringify({ ...manifest, apiRange: '^9.0.0', hosts: { worker: 'index.mjs' } })) });
+  const rejected = await request('/api/plugins/inspect', { method: 'POST', body: incompatible });
+  expect(rejected.status).toBe(200);
+  expect((await rejected.json() as PluginInspection).compatibility).toMatchObject({ apiCompatible: false, hostCompatible: false });
+  expect((await request('/api/plugins', { method: 'POST', body: incompatible })).status).toBe(422);
+  const malformed = zipSync({ ...files, 'manifest.json': strToU8(JSON.stringify({ ...manifest, version: 'latest' })) });
+  expect((await request('/api/plugins/inspect', { method: 'POST', body: malformed })).status).toBe(422);
+  const notExecutable = zipSync({ ...files, 'index.mjs': strToU8('throw new Error("Inspection must not execute this module");') });
+  expect((await request('/api/plugins/inspect', { method: 'POST', body: notExecutable })).status).toBe(200);
+  const release = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response(new Uint8Array(archive)) });
+  try {
+    const viaUrl = await request('/api/plugins/inspect-url', { method: 'POST', ...body({ url: release.url.href }) });
+    expect(viaUrl.status).toBe(200); expect(await viaUrl.json()).toEqual(preview);
+    expect(await (await request('/api/plugins')).json()).toEqual([]);
+    expect((await request('/api/plugins/from-url', { method: 'POST', ...body({ url: release.url.href }) })).status).toBe(201);
+    expect((await (await request('/api/plugins')).json() as unknown[]).length).toBe(1);
+  } finally { await release.stop(true); }
+});
 
 test('HTTP install → independent instances → layout → DAV → restart → remove/reinstall', async () => {
   const { request, restart } = await setup();
@@ -88,7 +118,8 @@ test('refresh HTTP accepts without reading, advances one page per request and re
   const sources = createSources(store, { get: async () => ({ ...installation, module: source }), isCurrent: async () => true });
   const created = await sources.create(manifest.id, '分页实例', {}, new AbortController().signal); if (!created.ok) throw new Error('Fixture creation failed');
   const library = createLibrary(sources, store, undefined, { execution: 'deferred' });
-  const api = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin-token', sources, library, extensions: createExtensions(store, async () => {}), maxPackageBytes: 1024, install: async () => installation });
+  const extensions = createExtensions(store, async () => {});
+  const api = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin-token', sources, library, extensions, remove: id => extensions.remove(id), maxPackageBytes: 1024, install: async () => installation });
   const request = (path: string, init: RequestInit = {}) => api.request(path, { ...init, headers: { Authorization: admin, ...init.headers } });
   const base = `/api/instances/${created.value.id}`;
   expect(await (await request(`${base}/refresh`)).json()).toBeNull();
@@ -152,7 +183,8 @@ test('configuration responses never expose private state, on success or failure'
     validateConfig: async (_ctx, config) => ({ ok: true, value: config, nextPrivateState: { token: 'fixture-private-token' } }) };
   const sources = createSources(store, { get: async () => ({ ...installation, module }), isCurrent: async () => true });
   const instance = await sources.create(manifest.id, '配置隔离', {}, new AbortController().signal); if (!instance.ok) throw new Error('Fixture creation failed');
-  const api = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin-token', sources, extensions: createExtensions(store, async () => {}), library: createLibrary(sources, store), maxPackageBytes: 1024, install: async () => installation });
+  const extensions = createExtensions(store, async () => {});
+  const api = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin-token', sources, extensions, remove: id => extensions.remove(id), library: createLibrary(sources, store), maxPackageBytes: 1024, install: async () => installation });
   for (const failed of [false, true]) {
     module.validateConfig = async (_ctx, config) => ({ ...(failed ? { ok: false as const, error: { kind: 'invalid_config' as const, message: 'Fixture validation failure' } } : { ok: true as const, value: config }), nextPrivateState: { token: failed ? 'fixture-renewed-token' : 'fixture-private-token' } });
     const response = await api.request(`/api/instances/${instance.value.id}/config`, { method: 'PUT', headers: { Authorization: admin, 'Content-Type': 'application/json' }, body: JSON.stringify({ config: {} }) });

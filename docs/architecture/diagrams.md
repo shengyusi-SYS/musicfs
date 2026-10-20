@@ -287,6 +287,8 @@ flowchart TD
   HTTP --> L[library]
   HTTP --> S[sources]
   HTTP --> E[extensions]
+  HTTP --> Archive[归档 Adapter：只读包检查]
+  Archive --> E
   DAV --> L
   UC --> E
   UC --> S
@@ -339,7 +341,11 @@ sequenceDiagram
   participant E as extensions
   participant S as sources
   participant DB as 持久化 Adapter
-  U->>H: 上传包 / 地址
+  U->>H: 先只读检查ZIP / 地址
+  H->>E: 共用归档校验、semver与宿主支持
+  H-->>U: 插件信息及API/宿主兼容结果
+  Note over U,H: 检查不加载代码、不改变安装
+  U->>H: 审阅后安装ZIP / 地址
   H->>E: 校验包、版本与宿主兼容
   H->>DB: 记录持久操作和期望安装代际
   H-->>U: 202与原operationId

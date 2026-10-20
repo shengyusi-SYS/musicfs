@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { Miniflare, Log, LogLevel } from 'miniflare';
 import { buildWorker, type WorkerBundle } from './build-worker';
 import { requestReady } from './helpers/refresh-http';
+import type { PluginInspection } from '../src/contracts/management';
 
 const archive = 'dist/plugins/org.musicfs.sample.zip';
 assert(await Bun.file(archive).exists(), 'Build the sample plugin before this probe; it does not rebuild plugin artifacts');
@@ -38,6 +39,13 @@ try {
   assert.equal(status.status, 200); assert.equal((await status.json() as { host: string }).host, 'worker');
   const empty = await mf.dispatchFetch('http://musicfs/api/plugins', { headers });
   assert.equal(empty.status, 200); assert.deepEqual(await empty.json(), []);
+  const inspection = await mf.dispatchFetch('http://musicfs/api/plugins/inspect', { method: 'POST', headers: { Authorization: headers.Authorization },
+    body: await Bun.file(archive).arrayBuffer() });
+  assert.equal(inspection.status, 200);
+  const preview = await inspection.json() as PluginInspection;
+  assert.equal(preview.manifest.id, 'org.musicfs.sample');
+  assert.deepEqual(preview.compatibility, { host: 'worker', apiVersion: '0.1.5', apiCompatible: true, hostCompatible: true });
+  assert.deepEqual(await (await mf.dispatchFetch('http://musicfs/api/plugins', { headers })).json(), []);
   const unavailable = await mf.dispatchFetch('http://musicfs/api/plugins', { method: 'POST', headers: { Authorization: headers.Authorization },
     body: await Bun.file(archive).arrayBuffer() });
   assert.equal(unavailable.status, 503); assert.equal((await unavailable.json() as { error: string }).error, 'host_not_configured');
@@ -68,6 +76,6 @@ try {
   try { await assert.rejects(broken.ready); } finally { await broken.dispose().catch(() => {}); }
   console.log(JSON.stringify({ entry: 'src/worker.ts', runtime: 'local workerd', sharedManagementApi: true, staticWebUI: true,
     separateRegistry: true, prebuiltPluginModules: true, registryDoesNotActivate: true, d1RestartPersistence: true,
-    missingPublicationCredentialsDiagnosed: true, invalidPluginRejectedAtStartup: true,
+    missingPublicationCredentialsDiagnosed: true, compatibilityInspectionWithoutPublication: true, invalidPluginRejectedAtStartup: true,
     davHead: 16044, rangeBytes: 'RIFF', nodeCompatibility: true, cloudDeploymentTested: false, freeQuotaTested: false }));
 } finally { await mf.dispose(); await rm(persistence, { recursive: true, force: true }); }

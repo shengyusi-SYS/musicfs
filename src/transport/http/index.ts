@@ -11,6 +11,7 @@ import type { RefreshView } from '../../contracts/refreshes';
 import { ExtensionError, type Extensions, type Installation } from '../../core/extensions';
 import { SourceError, type Sources } from '../../core/sources';
 import { LibraryError, PendingRefreshError, type Library } from '../../core/library';
+import { inspectPackage } from '../../infrastructure/archives';
 
 const name = z.string().trim().min(1).max(120);
 const instanceInput = z.object({ pluginId: z.string().min(1), name, config: z.json() }).strict();
@@ -51,11 +52,11 @@ async function download(url: string, signal: AbortSignal, maxSize: number): Prom
 }
 
 export function createManagementApi(input: {
-  host: HostKind; adminToken: string; sources: Sources; library: Library; extensions: Pick<Extensions, 'list' | 'remove'>;
+  host: HostKind; adminToken: string; sources: Sources; library: Library; extensions: Pick<Extensions, 'list'>;
   connection?: Connection;
   mounts?: MountManager;
   maxPackageBytes: number; install: (archive: Uint8Array, signal: AbortSignal) => Promise<Installation | PluginChange>;
-  remove?: (id: string, signal: AbortSignal) => Promise<PluginChange | void>;
+  remove: (id: string, signal: AbortSignal) => Promise<PluginChange | void>;
   pluginChange?: (id: string) => Promise<PluginChange | null>;
 }) {
   const { sources, library, extensions } = input;
@@ -81,6 +82,11 @@ export function createManagementApi(input: {
   app.get('/api/status', c => c.json({ host: input.host, version: '0.1.0-dev.0' } satisfies Status));
   app.get('/api/connection', c => input.connection ? c.json(input.connection) : c.json({ error: 'not_supported', message: 'Connection details are unavailable' }, 404));
   app.get('/api/plugins', async c => c.json((await extensions.list()) satisfies PluginInstallation[]));
+  app.post('/api/plugins/inspect', async c => c.json(await inspectPackage(new Uint8Array(await c.req.arrayBuffer()), input.host, c.req.raw.signal)));
+  app.post('/api/plugins/inspect-url', async c => {
+    const { url } = urlInput.parse(await json(c));
+    return c.json(await inspectPackage(await download(url, c.req.raw.signal, input.maxPackageBytes), input.host, c.req.raw.signal));
+  });
   const installed = (c: Context, result: Installation | PluginChange) => c.json(result, 'operationId' in result ? 202 : 201);
   app.post('/api/plugins', async c => installed(c, await input.install(new Uint8Array(await c.req.arrayBuffer()), c.req.raw.signal)));
   app.post('/api/plugins/from-url', async c => {
@@ -88,7 +94,7 @@ export function createManagementApi(input: {
     return installed(c, await input.install(await download(url, c.req.raw.signal, input.maxPackageBytes), c.req.raw.signal));
   });
   app.delete('/api/plugins/:id', async c => {
-    const result = input.remove ? await input.remove(c.req.param('id'), c.req.raw.signal) : await extensions.remove(c.req.param('id'));
+    const result = await input.remove(c.req.param('id'), c.req.raw.signal);
     return result ? c.json(result, 202) : c.body(null, 204);
   });
   app.get('/api/plugin-changes/:id', async c => {

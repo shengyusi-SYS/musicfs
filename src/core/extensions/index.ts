@@ -31,7 +31,8 @@ const manifestSchema = z.object({
   files: z.array(packagePath).min(1).max(256)
 }).strict();
 
-export function parseManifest(input: unknown, host: HostKind): PluginManifest {
+/** Validates the package declaration independently of the current installation host. */
+export function parsePackageManifest(input: unknown): PluginManifest {
   const parsed = manifestSchema.safeParse(input);
   if (!parsed.success) throw new ExtensionError('invalid_package', 'Invalid plugin manifest');
   const manifest = parsed.data;
@@ -45,13 +46,24 @@ export function parseManifest(input: unknown, host: HostKind): PluginManifest {
       throw new ExtensionError('invalid_package', 'Host entry must name a declared JavaScript module');
     }
   }
-  if (!manifest.hosts[host] || !satisfies(PLUGIN_API_VERSION, manifest.apiRange)) {
-    throw new ExtensionError('incompatible', 'Plugin API or host is not supported');
-  }
   const hosts: PluginManifest['hosts'] = {};
   if (manifest.hosts.desktop) hosts.desktop = manifest.hosts.desktop;
   if (manifest.hosts.worker) hosts.worker = manifest.hosts.worker;
   return { ...manifest, hosts };
+}
+
+export function pluginCompatibility(manifest: PluginManifest, host: HostKind) {
+  return { host, apiVersion: PLUGIN_API_VERSION, apiCompatible: satisfies(PLUGIN_API_VERSION, manifest.apiRange),
+    hostCompatible: manifest.hosts[host] !== undefined };
+}
+
+export function parseManifest(input: unknown, host: HostKind): PluginManifest {
+  const manifest = parsePackageManifest(input);
+  const compatibility = pluginCompatibility(manifest, host);
+  if (!compatibility.apiCompatible || !compatibility.hostCompatible) {
+    throw new ExtensionError('incompatible', 'Plugin API or host is not supported');
+  }
+  return manifest;
 }
 
 export type PreparedPackage = { manifest: PluginManifest; digest: string; files: ReadonlyMap<string, Uint8Array> };

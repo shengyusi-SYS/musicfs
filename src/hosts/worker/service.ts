@@ -37,7 +37,7 @@ export function createWorkerService(input: {
     }
   });
   app.route('/', createManagementApi({ host: 'worker', adminToken: input.adminToken, sources, library,
-    extensions: { list: () => store.installations(), remove: async id => { await input.changes.remove(id, new AbortController().signal); } },
+    extensions: { list: () => store.installations() },
     connection: { davPath: '/dav', ...input.dav }, maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
     install: (archive, signal) => input.changes.install(archive, signal),
     remove: (id, signal) => input.changes.remove(id, signal), pluginChange: id => input.changes.get(id) }));

@@ -1,6 +1,7 @@
 import { ZipReader, Uint8ArrayReader } from '@zip.js/zip.js/index-native.js';
 import type { HostKind } from '@musicfs/plugin-api';
-import { ExtensionError, isPackagePath, parseManifest, type PreparedPackage } from '../../core/extensions';
+import { ExtensionError, isPackagePath, parseManifest, parsePackageManifest, pluginCompatibility, type PreparedPackage } from '../../core/extensions';
+import type { PluginInspection } from '../../contracts/management';
 
 export type PackageLimits = { compressedBytes: number; totalBytes: number; entryBytes: number; entries: number };
 export const DEFAULT_PACKAGE_LIMITS: PackageLimits = {
@@ -11,6 +12,15 @@ export const DEFAULT_PACKAGE_LIMITS: PackageLimits = {
 export async function readPackage(
   archive: Uint8Array, host: HostKind, signal: AbortSignal, limits = DEFAULT_PACKAGE_LIMITS
 ): Promise<PreparedPackage> {
+  return readArchive(archive, host, signal, limits);
+}
+
+export async function inspectPackage(archive: Uint8Array, host: HostKind, signal: AbortSignal): Promise<PluginInspection> {
+  const prepared = await readArchive(archive, undefined, signal, DEFAULT_PACKAGE_LIMITS);
+  return { manifest: prepared.manifest, revision: prepared.digest, compatibility: pluginCompatibility(prepared.manifest, host) };
+}
+
+async function readArchive(archive: Uint8Array, host: HostKind | undefined, signal: AbortSignal, limits: PackageLimits): Promise<PreparedPackage> {
   signal.throwIfAborted();
   if (archive.byteLength > limits.compressedBytes) throw new ExtensionError('invalid_package', 'Plugin archive is too large');
   const reader = new ZipReader(new Uint8ArrayReader(archive), {
@@ -49,7 +59,8 @@ export async function readPackage(
     }
     const manifestBytes = files.get('manifest.json');
     if (!manifestBytes) throw new ExtensionError('invalid_package', 'Missing plugin manifest');
-    const manifest = parseManifest(JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(manifestBytes)), host);
+    const input: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(manifestBytes));
+    const manifest = host === undefined ? parsePackageManifest(input) : parseManifest(input, host);
     if (files.size !== manifest.files.length + 1 || manifest.files.some(path => !files.has(path))) {
       throw new ExtensionError('invalid_package', 'Archive files must exactly match the manifest');
     }

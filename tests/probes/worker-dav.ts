@@ -14,8 +14,9 @@ export default {
     const registry = createWorkerRegistry(store, [{ id: 'org.musicfs.sample', revision: bindings.PLUGIN_REVISION, module: sample }]);
     const sources = createSources(store, registry);
     const library = createLibrary(sources, store);
+    const extensions = createExtensions(store, async () => {});
     if (new URL(request.url).pathname.startsWith('/api/')) return createManagementApi({ host: 'worker', adminToken: 'fixture-admin', sources, library,
-      extensions: createExtensions(store, async () => {}), maxPackageBytes: 1024,
+      extensions, remove: id => extensions.remove(id), maxPackageBytes: 1024,
       install: async () => { throw new Error('Installation is unused in this probe'); } }).fetch(request);
     return createDav(library.files, { username: 'reader', password: 'fixture-password' }, {
       fixedLength: size => new FixedLengthStream(size) as unknown as TransformStream<Uint8Array, Uint8Array>

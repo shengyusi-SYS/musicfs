@@ -1,5 +1,5 @@
 import type { Json, PluginFault } from '@musicfs/plugin-api';
-import type { Status, SourceInstance, PluginInstallation, SourceConfiguration, ContentSources, DirectoryStatus, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
+import type { Status, SourceInstance, PluginInstallation, PluginInspection, SourceConfiguration, ContentSources, DirectoryStatus, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
 import type { PluginChange } from '../contracts/plugin-changes';
 import type { MountInput, MountView } from '../contracts/mounts';
 import type { RefreshScope, RefreshView } from '../contracts/refreshes';
@@ -43,6 +43,8 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     status: (signal?: AbortSignal) => request<Status>('/status', signal ? { signal } : {}),
     instances: (signal?: AbortSignal) => request<SourceInstance[]>('/instances', signal ? { signal } : {}),
     plugins: (signal?: AbortSignal) => request<PluginInstallation[]>('/plugins', signal ? { signal } : {}),
+    inspectPlugin: (file: File) => request<PluginInspection>('/plugins/inspect', { method: 'POST', body: file }),
+    inspectPluginUrl: (url: string) => request<PluginInspection>('/plugins/inspect-url', json('POST', { url })),
     install: (file: File) => request<PluginInstallation | PluginChange>('/plugins', { method: 'POST', body: file }),
     installUrl: (url: string) => request<PluginInstallation | PluginChange>('/plugins/from-url', json('POST', { url })),
     removePlugin: (id: string) => request<void | PluginChange>(`/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' }),

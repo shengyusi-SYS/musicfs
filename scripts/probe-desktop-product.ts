@@ -4,6 +4,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseArgs } from 'node:util';
 import { requestReady } from './helpers/refresh-http';
+import type { PluginInspection } from '../src/contracts/management';
 
 // Runs a generated native release, rather than src/desktop.ts or the dev service.
 const { values } = parseArgs({ args: Bun.argv.slice(2), options: { directory: { type: 'string' }, 'keep-running': { type: 'boolean' }, mount: { type: 'boolean' } } });
@@ -30,6 +31,13 @@ try {
   const json = { ...admin, 'Content-Type': 'application/json' };
   const page = await fetch(origin); assert.equal(page.status, 200); assert((await page.text()).includes('<div id="root">'));
   const initial = await fetch(origin + '/api/plugins', { headers: admin }); assert.deepEqual(await initial.json(), []);
+  const inspection = await fetch(origin + '/api/plugins/inspect', { method: 'POST', headers: admin,
+    body: await Bun.file(join(release, 'plugins/org.musicfs.sample.zip')).arrayBuffer() });
+  assert.equal(inspection.status, 200);
+  const preview = await inspection.json() as PluginInspection;
+  assert.equal(preview.manifest.id, 'org.musicfs.sample');
+  assert.deepEqual(preview.compatibility, { host: 'desktop', apiVersion: '0.1.5', apiCompatible: true, hostCompatible: true });
+  assert.deepEqual(await (await fetch(origin + '/api/plugins', { headers: admin })).json(), []);
   const installed = await fetch(origin + '/api/plugins', { method: 'POST', headers: admin, body: await Bun.file(join(release, 'plugins/org.musicfs.sample.zip')).arrayBuffer() });
   assert.equal(installed.status, 201); await installed.body?.cancel();
   const created = await fetch(origin + '/api/instances', { method: 'POST', headers: json,
@@ -90,7 +98,7 @@ try {
     keptForBrowser = true;
   }
   console.log(JSON.stringify({ target: native, nativeRelease: true, separateBackground: true, sharedWebUI: true,
-    externalPluginInstalled: true, davHead: 16044, exactRange: 'RIFF', repeatedLaunchReused: true,
+    compatibilityInspection: true, externalPluginInstalled: true, davHead: 16044, exactRange: 'RIFF', repeatedLaunchReused: true,
     mountsEndpoint: true, dependencyFailureTested, systemMountTested, ...(systemMountTested ? { mountedBytes: 16044, mountedRanges: 5 } : {}),
     ...(values['keep-running'] ? { origin, keptForBrowserVerification: true } : {}) }));
 } finally {

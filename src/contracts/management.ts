@@ -3,6 +3,8 @@ import type { AuthStep, Configuration, HostKind, Json, PluginFault, PluginManife
 /** JSON resources shared by the browser and HTTP boundary; no runtime or domain imports. */
 export type Status = { host: HostKind; version: string };
 export type PluginInstallation = { manifest: PluginManifest; revision: string; generation: number; status: 'active' | 'missing' };
+export type PluginInspection = { manifest: PluginManifest; revision: string;
+  compatibility: { host: HostKind; apiVersion: string; apiCompatible: boolean; hostCompatible: boolean } };
 export type SourceInstance = { id: string; pluginId: string; name: string; config: Json; epoch: number };
 export type SourceConfiguration = { configuration: Configuration; authentication: boolean; statistics?: Record<string, string> };
 export type LayoutNode = { id: string; name: string } & (
