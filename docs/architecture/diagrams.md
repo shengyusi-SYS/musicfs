@@ -6,7 +6,7 @@
 
 ## 当前链路
 
-描述正式代码与本地请求路径。Worker 模块组装与持久发布在本地 workerd/受控平台网络验证；rclone 完成真实读取及 RC 进程管理，系统挂载尚待对应环境。
+描述正式代码与本地请求路径。Worker模块组装与持久发布在本地workerd/受控平台网络验证；rclone已有Linux真实FUSE读取、RC进程管理和活动挂载崩溃恢复证据，其他系统仍待验。
 
 ```mermaid
 flowchart LR
@@ -416,6 +416,19 @@ sequenceDiagram
     L->>DB: 更新状态或代际；迟到提交条件不再匹配
   end
   Note over L,DB: 旧完整目录保留至新目录完整成功；刷新不写布局
+```
+
+目录失败状态由现有快照记录持有，不以最近一次任务的终态替代：
+
+```mermaid
+flowchart LR
+  Fail[A目录刷新失败] --> Saved[保留A完整内容 计数 时间并保存error]
+  Saved --> Header[共同SQL读取snapshotHeader]
+  Header --> DTO[DirectoryStatus 时间 计数 error]
+  DTO --> UI[页面显示保留最近成功内容]
+  Other[B目录成功或页面重开] --> Header
+  Success[A目录完整刷新成功] --> Clear[发布新内容并清除A的error]
+  Clear --> Header
 ```
 
 ## 音频读取

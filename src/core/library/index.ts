@@ -305,7 +305,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       const stamp = await sources.view(instanceId);
       const cached = await store.snapshotHeader(instanceId, { kind: 'directory', ref: directoryRef });
       if (!cached || !sameStamp(cached.stamp, stamp) || !await sources.current(stamp)) return null;
-      return { completedAt: cached.completedAt, statistics: cached.statistics ?? null };
+      return { completedAt: cached.completedAt, statistics: cached.statistics ?? null, error: cached.error };
     },
     async contentSources(instanceId: string, signal: AbortSignal) {
       const stamp = await sources.view(instanceId);

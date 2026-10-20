@@ -247,14 +247,15 @@ test('invalid, inconsistent and overflowing counters cannot replace the last suc
   const source = plugin({ list: async () => ({ ok: true, value: { items: [], statistics: { records: 4 } } }) });
   const { library, id } = await setup(source); await library.refresh(id, 'root', signal());
   const before = await library.directoryStatus(id, 'root');
+  if (!before) throw new Error('Missing initial directory status');
   for (const invalid of [-1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
     source.list = async () => ({ ok: true, value: { items: [], statistics: { records: invalid } } });
     await expect(library.refresh(id, 'root', signal())).rejects.toMatchObject({ code: 'invalid_source' });
-    expect(await library.directoryStatus(id, 'root')).toEqual(before);
+    expect(await library.directoryStatus(id, 'root')).toEqual({ ...before, error: 'invalid_source' });
   }
   source.list = async (_ctx, _ref, cursor) => ({ ok: true, value: cursor ? { items: [] } : { items: [], statistics: { records: 1 }, nextCursor: 'last' } });
   await expect(library.refresh(id, 'root', signal())).rejects.toMatchObject({ code: 'invalid_source' });
   source.list = async (_ctx, _ref, cursor) => ({ ok: true, value: { items: [], statistics: { records: Number.MAX_SAFE_INTEGER }, ...(cursor ? {} : { nextCursor: 'last' }) } });
   await expect(library.refresh(id, 'root', signal())).rejects.toMatchObject({ code: 'invalid_source' });
-  expect(await library.directoryStatus(id, 'root')).toEqual(before);
+  expect(await library.directoryStatus(id, 'root')).toEqual({ ...before, error: 'invalid_source' });
 });

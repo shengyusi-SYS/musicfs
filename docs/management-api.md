@@ -23,7 +23,7 @@
 | `GET /api/instances/:id/authentication` | 当前公开认证 `{operationId,step,error?}`，没有操作时为 null；不返回私有状态或内部来源戳 |
 | `POST /api/instances/:id/authentication` | start；poll/submit 带 operationId 与 challengeId，submit 另带 input；cancel 只带 operationId。成功返回公开结果，过期操作/挑战返回 409 |
 | `GET /api/instances/:id/roots` | 完整分页后的内容源；使用当前有效快照 |
-| `GET /api/instances/:id/directory-status?directoryRef=...` | 当前有效目录最近成功的 `{completedAt,statistics}`，未读取或代际已失效时为 null；只读快照，不请求来源 |
+| `GET /api/instances/:id/directory-status?directoryRef=...` | 当前有效目录最近成功的 `{completedAt,statistics,error}`；error为最近失败代码或null，未读取或代际已失效时为null；只读快照，不请求来源 |
 | `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例内容；`{directoryRef}` 刷新指定目录；兼容 `{}` 仅刷新内容入口。返回 202 + RefreshView，替换旧活动操作 |
 | `GET /api/instances/:id/refresh` | 当前/最近一次 RefreshView，无记录时为 null；只查询，不推进 |
 | `GET /api/refreshes/:operationId` | 查询同一操作的公开进度，不存在返回 404；不推进 |
@@ -49,6 +49,6 @@
 
 正式宿主的 roots、library 或 DAV 冷读取若尚无当前有效快照，会返回 `503 refresh_pending`、`Retry-After: 2` 和 `X-MusicFS-Refresh: <operationId>`。管理 JSON 还包含 operationId；重试复用同一有效活动操作，不反复替换任务。已有成功快照时直接读取它，后台刷新失败不抹空目录。共用页面可根据原操作 ID 恢复并推进；普通 DAV 客户端可以等待后台准备后重试，不获得管理权限。桌面后台持续续步；Worker 每个后台 HTTP/定时调用仅推进一页，见[Worker 指南](worker.md)。
 
-配置声明响应可带插件的可选 `statistics` 标签映射。目录状态只返回当前来源戳下的最近成功时间与计数，不暴露来源戳、私有状态或文件引用。旧快照没有计数时 statistics 为 null；失败刷新继续保留原计数。界面更新配置、安装/移除插件及刷新后使相关查询失效；计数的每页语义见[插件合同](architecture/plugin-interface.md#稳定身份分页与目录)。
+配置声明响应可带插件的可选 `statistics` 标签映射。目录状态返回当前来源戳下的最近成功时间、计数与该目录最近失败代码，不暴露来源戳、私有状态或文件引用。旧快照没有计数时statistics为null；失败刷新保留原内容与计数，并持续显示失败标记，直到该目录成功刷新。其他目录成功或重开页面不清除此标记。界面更新配置、安装/移除插件及刷新后使相关查询失效；计数的每页语义见[插件合同](architecture/plugin-interface.md#稳定身份分页与目录)。
 
 `/dav` 和 `/dav/*` 统一提供 OPTIONS、Depth 0/1 PROPFIND、GET/HEAD；单范围、条件验证器及不支持范围的行为见 [ADR 0004](adr/0004-shared-fetch-readonly-dav.md)。实际用户旅程验证见[P0 记录](verification/p0-library-dav.md)。

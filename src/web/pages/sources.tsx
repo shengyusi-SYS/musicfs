@@ -91,7 +91,8 @@ function Roots({ api, instance }: { api: Api; instance: SourceInstance }) {
     {roots.isPending ? <Skeleton active /> : roots.data?.length ? roots.data.map((root, index) => <div className="root-row" key={root.sourceId}><div><Typography.Text strong>{root.name}</Typography.Text><div className="secondary-id">{root.sourceId}</div>
       {statuses[index]?.data && <><div className="directory-statistics">{Object.entries(configuration.data?.statistics ?? {}).flatMap(([key, label]) => {
         const count = statuses[index]?.data?.statistics?.[key]; return count === undefined ? [] : [<span key={key}>{label} <strong>{count}</strong></span>];
-      })}</div><div className="secondary-id">最近成功：{new Date(statuses[index]!.data!.completedAt).toLocaleString()}</div></>}
+      })}</div>{statuses[index]!.data!.error && <div role="alert"><Typography.Text type="warning">刷新失败，保留最近成功内容</Typography.Text></div>}
+        <div className="secondary-id">最近成功：{new Date(statuses[index]!.data!.completedAt).toLocaleString()}</div></>}
       <Failure error={statuses[index]?.error ?? null} />
     </div>
       <Button size="small" icon={<ReloadOutlined />} disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'directory' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'directory', directoryRef: root.directoryRef })}>刷新目录</Button>

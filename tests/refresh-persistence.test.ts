@@ -93,7 +93,7 @@ for (const adapter of ['SQLite', 'D1'] as const) {
     const old: Snapshot = { stamp, id: 'old', kind: 'directory', completedAt: date, statistics: { exported: 1 }, items: [file('old')] };
     await rows('INSERT INTO directory_snapshots (instance_id, kind, ref, request_id, document) VALUES (?, ?, ?, ?, ?)',
       stamp.id, key.kind, key.ref, 'legacy', JSON.stringify(old));
-    expect(await fixture.store.snapshotHeader(stamp.id, key)).toEqual({ stamp, id: old.id, kind: old.kind, completedAt: old.completedAt, statistics: old.statistics! });
+    expect(await fixture.store.snapshotHeader(stamp.id, key)).toEqual({ stamp, id: old.id, kind: old.kind, completedAt: old.completedAt, statistics: old.statistics!, error: null });
     expect(await fixture.store.snapshotHeader(stamp.id, { kind: 'directory', ref: 'absent' })).toBeNull();
     const created = await fixture.store.createRefresh(record(stamp, 'paged'), true);
     const claimed = (await fixture.store.claimRefresh(created.operationId, 'first', now, now + 100))!;
@@ -114,7 +114,7 @@ for (const adapter of ['SQLite', 'D1'] as const) {
     expect((await rows<{ count: number }>('SELECT count(*) AS count FROM library_snapshot_entries'))[0]!.count).toBe(120);
     expect(await fixture.store.commitRefresh(second, completed, { items: [file('last')], publish: header(second, 'new') })).toBe('committed');
     expect((await fixture.store.snapshot(stamp.id, key))?.value).toEqual({ ...header(second, 'new'), kind: 'directory', items: [...items, file('last')] });
-    expect(await fixture.store.snapshotHeader(stamp.id, key)).toEqual(header(second, 'new'));
+    expect(await fixture.store.snapshotHeader(stamp.id, key)).toEqual({ ...header(second, 'new'), error: null });
     const persisted = (await rows<{ document: string; published_attempt_id: string }>('SELECT document, published_attempt_id FROM directory_snapshots'))[0]!;
     expect(JSON.parse(persisted.document)).not.toHaveProperty('items'); expect(persisted.published_attempt_id).toBe('paged-attempt');
     expect((await rows<{ count: number }>('SELECT count(*) AS count FROM library_refresh_cursors'))[0]!.count).toBe(0);
@@ -176,8 +176,11 @@ for (const adapter of ['SQLite', 'D1'] as const) {
     const failing = (await fixture.store.claimRefresh('instance-job', 'fail', now, now + 100))!;
     expect(await fixture.store.commitRefresh(failing, next(failing, { status: 'failed', task: null }), undefined, 'temporary')).toBe('committed');
     expect(await fixture.store.snapshot(stamp.id, key)).toEqual({ value: old, error: 'temporary' });
+    fixture.reopen();
+    expect(await fixture.store.snapshotHeader(stamp.id, key)).toEqual({ stamp, id: old.id, kind: old.kind, completedAt: old.completedAt, error: 'temporary' });
     expect((await rows<{ identity: string }>('SELECT identity FROM library_snapshot_entries'))).toEqual([{ identity: 'root' }]);
     await fixture.store.createRefresh(record(stamp, 'later'), true); await fixture.store.cancelRefresh('later', date);
     expect((await fixture.store.snapshot(stamp.id, { kind: 'roots', ref: '' }))?.value?.items).toEqual([root]);
+    expect((await fixture.store.snapshotHeader(stamp.id, key))?.error).toBe('temporary');
   });
 }

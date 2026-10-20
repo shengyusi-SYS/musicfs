@@ -74,7 +74,7 @@ test('42 pages resume across Library controllers, publish once, and preserve ord
   expect(published.id).not.toBe(previous.id);
   expect(published.items).toEqual(pages.flatMap(item => item.items));
   expect(published.statistics).toEqual({ records: 4158, exported: 1913, unavailable: 2245 });
-  expect(await fixture.rebuild().directoryStatus(fixture.id, directory)).toEqual({ completedAt: published.completedAt, statistics: published.statistics! });
+  expect(await fixture.rebuild().directoryStatus(fixture.id, directory)).toEqual({ completedAt: published.completedAt, statistics: published.statistics!, error: null });
   expect((await fixture.rebuild().files.list(path, signal())).map(item => item.name)).toEqual(pages.flatMap(item => item.items.map(value => value.name)));
   expect(await fixture.rebuild().refreshes.step(progress.operationId, signal())).toEqual(progress);
   expect(calls).toHaveLength(42);

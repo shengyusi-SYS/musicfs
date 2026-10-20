@@ -66,6 +66,44 @@ test('instance refresh reports partial failure, keeps last complete content and 
   expect((await f.library.files.list('/我的导出/已浏览', signal())).map(item => item.name)).toEqual(['recovered.wav']);
 });
 
+test('directory failure remains visible through management after another directory succeeds and controllers reopen', async () => {
+  const f = await setup();
+  f.source.roots = async () => ({ ok: true, value: { items: [
+    { sourceId: 'a', name: '目录 A', directoryRef: 'cached' },
+    { sourceId: 'b', name: '目录 B', directoryRef: 'lazy' }
+  ] } });
+  const path = '/实例 & #/目录 A';
+  expect((await f.api.library(path, signal())).map(item => item.name)).toEqual(['old.wav']);
+  const previous = await f.api.directoryStatus(f.id, 'cached', signal());
+  if (!previous) throw new Error('Missing initial directory status');
+  expect(previous?.error).toBeNull();
+  f.failures.add('cached');
+  const failed = await f.api.startRefresh(f.id, { kind: 'directory', directoryRef: 'cached' });
+  expect(await f.api.stepRefresh(failed.operationId)).toMatchObject({ status: 'failed' });
+  expect(await f.api.directoryStatus(f.id, 'cached', signal())).toEqual({ ...previous, error: 'temporary' });
+  const other = await f.finish(await f.api.startRefresh(f.id, { kind: 'directory', directoryRef: 'lazy' }));
+  expect(other.status).toBe('completed');
+  expect((await f.api.currentRefresh(f.id, signal()))?.operationId).toBe(other.operationId);
+
+  const library = createLibrary(f.sources, f.store, undefined, { execution: 'deferred' });
+  const extensions = createExtensions(f.store, async () => {});
+  const reopened = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin', sources: f.sources, library,
+    extensions, remove: id => extensions.remove(id), maxPackageBytes: 1024, install: async () => f.store.installations()[0]! });
+  const get = (url: string) => reopened.request(url, { headers: { Authorization: 'Bearer fixture-admin' } });
+  const statusPath = `/api/instances/${f.id}/directory-status?directoryRef=cached`;
+  const status = await get(statusPath);
+  expect(status.status).toBe(200); expect(await status.json()).toEqual({ ...previous, error: 'temporary' });
+  expect(await (await get(`/api/instances/${f.id}/directory-status?directoryRef=lazy`)).json()).toMatchObject({ error: null });
+  const oldContent = await get(`/api/library?path=${encodeURIComponent(path)}`);
+  expect(oldContent.status).toBe(200);
+  expect((await oldContent.json() as { name: string }[]).map(item => item.name)).toEqual(['old.wav']);
+
+  f.failures.clear(); f.content.set('cached', [file('recovered.wav')]);
+  expect((await f.finish(await f.api.startRefresh(f.id, { kind: 'directory', directoryRef: 'cached' }))).status).toBe('completed');
+  expect(await (await get(statusPath)).json()).toMatchObject({ error: null });
+  expect((await (await get(`/api/library?path=${encodeURIComponent(path)}`)).json() as { name: string }[]).map(item => item.name)).toEqual(['recovered.wav']);
+});
+
 test('instance refresh skips unreachable old snapshots, isolates instances and visits cycles only once', async () => {
   const f = await setup();
   await f.library.files.list('/实例 & #/集合/已浏览', signal());
@@ -127,5 +165,5 @@ test('the management caller gets plugin-defined labels and cached counters witho
   expect((await f.api.configuration('org.musicfs.sample', signal())).statistics).toEqual({ records: '项目' });
   const status = await f.api.directoryStatus(f.id, 'collection', signal());
   expect(status?.statistics).toEqual({ records: 7 });
-  expect(Object.keys(status ?? {}).sort()).toEqual(['completedAt', 'statistics']);
+  expect(Object.keys(status ?? {}).sort()).toEqual(['completedAt', 'error', 'statistics']);
 });

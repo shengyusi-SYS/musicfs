@@ -11,14 +11,14 @@ export type Snapshot = { stamp: SourceStamp; id: string; completedAt: string; st
   | { kind: 'roots'; items: Root[] }
   | { kind: 'directory'; items: Entry[] }
 );
-export type DirectoryStatus = { completedAt: string; statistics: Record<string, number> | null };
+export type DirectoryStatus = { completedAt: string; statistics: Record<string, number> | null; error: string | null };
 export type InstanceRefresh = { refreshedDirectories: number; failures: { directoryRef: string; error: { code: string; message: string; sourceFault?: PluginFault } }[] };
 type Stored<T> = T | Promise<T>;
 export interface LibraryStore {
   layout(): Stored<Layout>;
   saveLayout(expectedRevision: number, nodes: LayoutNode[] | null): Stored<boolean>;
   snapshot(instanceId: string, key: SnapshotKey): Stored<{ value: Snapshot | null; error: string | null } | undefined>;
-  snapshotHeader(instanceId: string, key: SnapshotKey): Stored<Omit<Snapshot, 'items'> | null>;
+  snapshotHeader(instanceId: string, key: SnapshotKey): Stored<(Omit<Snapshot, 'items'> & { error: string | null }) | null>;
   knownDirectoryRefs(instanceId: string): Stored<string[]>;
 }
 

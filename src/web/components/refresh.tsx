@@ -77,7 +77,12 @@ export function usePersistentRefresh(api: Api, input: {
   useEffect(() => {
     if (!view) return;
     if (active(view)) { watched.current.add(view.operationId); return; }
-    if (!watched.current.delete(view.operationId) || view.status !== 'completed') return;
+    if (!watched.current.delete(view.operationId)) return;
+    if (view.status === 'failed') {
+      void client.invalidateQueries({ queryKey: ['directory-status', view.instanceId] });
+      return;
+    }
+    if (view.status !== 'completed') return;
     void Promise.all([
       client.invalidateQueries({ queryKey: ['roots', view.instanceId] }),
       client.invalidateQueries({ queryKey: ['library'] }),
