@@ -426,6 +426,11 @@ flowchart LR
   Saved --> Header[共同SQL读取snapshotHeader]
   Header --> DTO[DirectoryStatus 时间 计数 error]
   DTO --> UI[页面显示保留最近成功内容]
+  Path[已发布路径] --> Browse[library一次解析并列目录]
+  Browse --> Header
+  Browse --> Listing[DirectoryListing 条目与当前目录状态]
+  DTO --> Listing
+  Listing --> Browser[含嵌套目录的浏览器警告]
   Other[B目录成功或页面重开] --> Header
   Success[A目录完整刷新成功] --> Clear[发布新内容并清除A的error]
   Clear --> Header

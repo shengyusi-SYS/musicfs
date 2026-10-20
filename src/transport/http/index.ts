@@ -4,7 +4,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import type { HostKind, Json, Outcome } from '@musicfs/plugin-api';
-import type { Result, Connection, Status, PluginInstallation, SourceInstance, SourceConfiguration, Layout, ViewEntry, AuthenticationSession } from '../../contracts/management';
+import type { Result, Connection, Status, PluginInstallation, SourceInstance, SourceConfiguration, Layout, ViewEntry, DirectoryListing, AuthenticationSession } from '../../contracts/management';
 import type { PluginChange } from '../../contracts/plugin-changes';
 import type { MountInput, MountManager } from '../../contracts/mounts';
 import type { RefreshView } from '../../contracts/refreshes';
@@ -159,5 +159,6 @@ export function createManagementApi(input: {
     const value = layoutInput.parse(await json(c)); return c.json(await library.saveLayout(value.expectedRevision, value.nodes));
   });
   app.get('/api/library', async c => c.json((await library.files.list(c.req.query('path') ?? '/', c.req.raw.signal)) satisfies ViewEntry[]));
+  app.get('/api/library/directory', async c => c.json((await library.browseDirectory(c.req.query('path') ?? '/', c.req.raw.signal)) satisfies DirectoryListing));
   return app;
 }

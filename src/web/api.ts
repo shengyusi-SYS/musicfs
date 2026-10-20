@@ -1,5 +1,5 @@
 import type { Json, PluginFault } from '@musicfs/plugin-api';
-import type { Status, SourceInstance, PluginInstallation, PluginInspection, SourceConfiguration, ContentSources, DirectoryStatus, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
+import type { Status, SourceInstance, PluginInstallation, PluginInspection, SourceConfiguration, ContentSources, DirectoryStatus, DirectoryListing, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
 import type { PluginChange } from '../contracts/plugin-changes';
 import type { MountInput, MountView } from '../contracts/mounts';
 import type { RefreshScope, RefreshView } from '../contracts/refreshes';
@@ -68,6 +68,7 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     layout: (signal: AbortSignal) => request<Layout>('/layout', { signal }),
     saveLayout: (expectedRevision: number, nodes: LayoutNode[] | null) => request<Layout>('/layout', json('PUT', { expectedRevision, nodes })),
     library: (path: string, signal: AbortSignal) => request<ViewEntry[]>(`/library?path=${encodeURIComponent(path)}`, { signal }),
+    browseDirectory: (path: string, signal: AbortSignal) => request<DirectoryListing>(`/library/directory?path=${encodeURIComponent(path)}`, { signal }),
     connection: (signal: AbortSignal) => request<Connection>('/connection', { signal }),
     authentication: (id: string, signal: AbortSignal) => request<AuthenticationSession | null>(`/instances/${encodeURIComponent(id)}/authentication`, { signal }),
     authenticate: (id: string, action: AuthenticationAction, signal?: AbortSignal) => request<Result<AuthenticationSession>>(`/instances/${encodeURIComponent(id)}/authentication`, { ...json('POST', action), ...(signal ? { signal } : {}) })

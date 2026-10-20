@@ -149,6 +149,18 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     const result = await drain(await refreshes.start(instanceId, { kind: 'instance' }), signal);
     return { refreshedDirectories: result.refreshedDirectories, failures: result.failures };
   }
+  async function rootsSnapshot(instanceId: string, signal: AbortSignal) {
+    const stamp = await sources.view(instanceId);
+    const value = await snapshot(stamp, { kind: 'roots', ref: '' }, signal);
+    if (value.kind !== 'roots') throw new LibraryError('invalid_source', 'Invalid root snapshot');
+    return { stamp, value };
+  }
+  async function sourceDirectory(target: Extract<Target, { kind: 'source' }>, signal: AbortSignal): Promise<Extract<Target, { kind: 'directory' }>> {
+    const { stamp, value } = await rootsSnapshot(target.instanceId, signal);
+    const root = value.items.find(item => item.sourceId === target.sourceId);
+    if (!root) throw new LibraryError('not_found', 'Content source no longer exists');
+    return { kind: 'directory', stamp, ref: root.directoryRef };
+  }
   async function children(target: Target, signal: AbortSignal): Promise<Child[]> {
     if (target.kind === 'instances') return (await sources.instances()).map(instance => ({
       id: instance.id, name: instance.name, target: { kind: 'instance', instanceId: instance.id }, modifiedAt: epochDate
@@ -156,15 +168,9 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     if (target.kind === 'layout') return target.nodes.map(node => ({ id: node.id, name: node.name, modifiedAt: epochDate,
       target: node.kind === 'group' ? { kind: 'layout', nodes: node.children, revision: target.revision }
         : { kind: 'source', instanceId: node.instanceId, sourceId: node.sourceId } }));
-    if (target.kind === 'instance' || target.kind === 'source') {
-      const stamp = await sources.view(target.instanceId);
-      const value = await snapshot(stamp, { kind: 'roots', ref: '' }, signal);
-      if (value.kind !== 'roots') throw new LibraryError('invalid_source', 'Invalid root snapshot');
-      if (target.kind === 'source') {
-        const root = value.items.find(item => item.sourceId === target.sourceId);
-        if (!root) throw new LibraryError('not_found', 'Content source no longer exists');
-        return children({ kind: 'directory', stamp, ref: root.directoryRef }, signal);
-      }
+    if (target.kind === 'source') return children(await sourceDirectory(target, signal), signal);
+    if (target.kind === 'instance') {
+      const { stamp, value } = await rootsSnapshot(target.instanceId, signal);
       return value.items.map(root => ({ id: root.sourceId, name: root.name, modifiedAt: value.completedAt,
         target: { kind: 'directory', stamp, ref: root.directoryRef } }));
     }
@@ -195,6 +201,19 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   // A listed entry keeps its resolved target only while its caller retains that object.
   // Serialized or externally created entries still resolve through the ordinary path boundary.
   const listedEntries = new WeakMap<ViewEntry, Resolved>();
+  async function listResolved(resolved: Resolved, signal: AbortSignal): Promise<ViewEntry[]> {
+    return (await nameEntries(await children(resolved.target, signal))).map(entry => {
+      const view: ViewEntry = { kind: entry.target.kind === 'file' ? 'file' : 'directory', name: entry.pathName,
+        path: `${resolved.path === '/' ? '' : resolved.path}/${entry.pathName}`, modifiedAt: entry.modifiedAt };
+      listedEntries.set(view, { target: entry.target, name: view.name, path: view.path, modifiedAt: view.modifiedAt });
+      return view;
+    });
+  }
+  async function publishedStatus(stamp: SourceStamp, directoryRef: string): Promise<DirectoryStatus | null> {
+    const cached = await store.snapshotHeader(stamp.id, { kind: 'directory', ref: directoryRef });
+    if (!cached || !sameStamp(cached.stamp, stamp) || !await sources.current(stamp)) return null;
+    return { completedAt: cached.completedAt, statistics: cached.statistics ?? null, error: cached.error };
+  }
   async function describe(resolved: Resolved, content?: FileInfo): Promise<Description> {
     const { target, ...base } = resolved;
     if (target.kind !== 'file') return { ...base, kind: 'directory', etag: await digest([base.path, target]) };
@@ -204,15 +223,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   }
   const metadataError = (error: unknown) => error instanceof Error ? error : new Error('File metadata is unavailable');
   const files: FileView = {
-    async list(path, signal): Promise<ViewEntry[]> {
-      const resolved = await resolve(path, signal);
-      return (await nameEntries(await children(resolved.target, signal))).map(entry => {
-        const view: ViewEntry = { kind: entry.target.kind === 'file' ? 'file' : 'directory', name: entry.pathName,
-          path: `${resolved.path === '/' ? '' : resolved.path}/${entry.pathName}`, modifiedAt: entry.modifiedAt };
-        listedEntries.set(view, { target: entry.target, name: view.name, path: view.path, modifiedAt: view.modifiedAt });
-        return view;
-      });
-    },
+    list: async (path, signal) => listResolved(await resolve(path, signal), signal),
     async stat(entry, signal): Promise<Description> {
       signal.throwIfAborted();
       const resolved = typeof entry === 'string' ? await resolve(entry, signal)
@@ -301,17 +312,16 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     files,
     refreshes,
     refreshInstance,
-    async directoryStatus(instanceId: string, directoryRef: string): Promise<DirectoryStatus | null> {
-      const stamp = await sources.view(instanceId);
-      const cached = await store.snapshotHeader(instanceId, { kind: 'directory', ref: directoryRef });
-      if (!cached || !sameStamp(cached.stamp, stamp) || !await sources.current(stamp)) return null;
-      return { completedAt: cached.completedAt, statistics: cached.statistics ?? null, error: cached.error };
+    directoryStatus: async (instanceId: string, directoryRef: string) => publishedStatus(await sources.view(instanceId), directoryRef),
+    async browseDirectory(path: string, signal: AbortSignal) {
+      const resolved = await resolve(path, signal);
+      if (resolved.target.kind === 'source') resolved.target = await sourceDirectory(resolved.target, signal);
+      const entries = await listResolved(resolved, signal);
+      const status = resolved.target.kind === 'directory' ? await publishedStatus(resolved.target.stamp, resolved.target.ref) : null;
+      return { entries, status };
     },
     async contentSources(instanceId: string, signal: AbortSignal) {
-      const stamp = await sources.view(instanceId);
-      const value = await snapshot(stamp, { kind: 'roots', ref: '' }, signal);
-      if (value.kind !== 'roots') throw new LibraryError('invalid_source', 'Invalid root snapshot');
-      return value.items;
+      return (await rootsSnapshot(instanceId, signal)).value.items;
     },
     layout: () => store.layout(),
     async saveLayout(expectedRevision: number, nodes: unknown) {

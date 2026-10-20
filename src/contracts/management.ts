@@ -15,6 +15,7 @@ export type Layout = { revision: number; nodes: LayoutNode[] | null };
 export type ViewEntry = { kind: 'file' | 'directory'; path: string; name: string; modifiedAt: string };
 export type ContentSources = Root[];
 export type DirectoryStatus = { completedAt: string; statistics: Record<string, number> | null; error: string | null };
+export type DirectoryListing = { entries: ViewEntry[]; status: DirectoryStatus | null };
 export type Result<T> = { ok: true; value: T } | { ok: false; error: PluginFault };
 export type Connection = { davPath: string; username: string; password: string };
 export type AuthenticationSession = { operationId: string; step: AuthStep | null; error?: PluginFault };

@@ -76,14 +76,16 @@ function SourcePicker({ api, instances, close, add }: { api: Api; instances: Sou
 
 function DirectoryBrowser({ api }: { api: Api }) {
   const [path, setPath] = useState('/');
-  const directory = useQuery({ queryKey: ['library', path], queryFn: ({ signal }) => api.library(path, signal), retry: false });
+  const directory = useQuery({ queryKey: ['library', 'directory', path], queryFn: ({ signal }) => api.browseDirectory(path, signal), retry: false });
   const pending = pendingRefreshId(directory.error);
   const refresh = usePersistentRefresh(api, { operationId: pending });
   const parent = path.slice(0, path.lastIndexOf('/')) || '/';
   return <><div className="section-heading"><Typography.Title level={3}>已发布目录</Typography.Title><Button disabled={path === '/'} type="text" icon={<ArrowLeftOutlined />} onClick={() => setPath(parent)}>上一级</Button></div>
     <Breadcrumb items={[{ title: <button className="text-button" onClick={() => setPath('/')}>根目录</button> }, ...(path === '/' ? [] : [{ title: path }])]} />
     <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh} reload={() => void directory.refetch()} />
-    {directory.isPending ? <Skeleton active /> : directory.data?.length ? <div className="directory-list">{directory.data.map(entry => <button key={entry.path} className="directory-entry" disabled={entry.kind === 'file'} onClick={() => setPath(entry.path)}>{entry.kind === 'directory' ? <FolderOutlined /> : <FileOutlined />}<span>{entry.name}</span>{entry.kind === 'file' && <Tag>音频文件</Tag>}</button>)}</div> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个目录暂时没有内容" />}
+    {directory.data?.status?.error && <Alert type="warning" showIcon title="刷新失败，保留最近成功内容"
+      description={`最近成功：${new Date(directory.data.status.completedAt).toLocaleString()}`} />}
+    {directory.isPending ? <Skeleton active /> : directory.data?.entries.length ? <div className="directory-list">{directory.data.entries.map(entry => <button key={entry.path} className="directory-entry" disabled={entry.kind === 'file'} onClick={() => setPath(entry.path)}>{entry.kind === 'directory' ? <FolderOutlined /> : <FileOutlined />}<span>{entry.name}</span>{entry.kind === 'file' && <Tag>音频文件</Tag>}</button>)}</div> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个目录暂时没有内容" />}
     <p className="page-footnote">这里显示当前 WebDAV 目录。草稿保存成功后才对客户端生效。</p>
   </>;
 }

@@ -104,6 +104,43 @@ test('directory failure remains visible through management after another directo
   expect((await (await get(`/api/library?path=${encodeURIComponent(path)}`)).json() as { name: string }[]).map(item => item.name)).toEqual(['recovered.wav']);
 });
 
+test('published nested directory browsing retains its own failed refresh status without loading its entries twice', async () => {
+  const f = await setup();
+  await f.api.saveLayout(0, [{ kind: 'group', id: 'group', name: '已发布', children: [
+    { kind: 'source', id: 'source', name: '我的集合', instanceId: f.id, sourceId: 'collection' }
+  ] }]);
+  const path = '/已发布/我的集合/已浏览';
+  expect((await f.api.library(path, signal())).map(item => item.name)).toEqual(['old.wav']);
+  const previous = await f.api.directoryStatus(f.id, 'cached', signal());
+  if (!previous) throw new Error('Missing initial nested directory status');
+  f.failures.add('cached');
+  const failed = await f.api.startRefresh(f.id, { kind: 'directory', directoryRef: 'cached' });
+  expect(await f.api.stepRefresh(failed.operationId)).toMatchObject({ status: 'failed' });
+  const other = await f.finish(await f.api.startRefresh(f.id, { kind: 'directory', directoryRef: 'lazy' }));
+  expect((await f.api.currentRefresh(f.id, signal()))?.operationId).toBe(other.operationId);
+
+  const library = createLibrary(f.sources, f.store, undefined, { execution: 'deferred' });
+  const extensions = createExtensions(f.store, async () => {});
+  const reopened = createManagementApi({ host: 'desktop', adminToken: 'fixture-admin', sources: f.sources, library,
+    extensions, remove: id => extensions.remove(id), maxPackageBytes: 1024, install: async () => f.store.installations()[0]! });
+  const fetcher = ((input, init) => reopened.request(new Request(new URL(String(input), 'http://fixture'), init))) as typeof fetch;
+  const api = createApi('fixture-admin', fetcher);
+  const reads: string[] = []; const snapshot = f.store.snapshot;
+  f.store.snapshot = (...args) => { reads.push(`${args[1].kind}:${args[1].ref}`); return snapshot(...args); };
+  const result = await api.browseDirectory(path, signal());
+  expect(result.status).toEqual({ ...previous, error: 'temporary' });
+  expect(result.entries.map(item => item.name)).toEqual(['old.wav']);
+  expect(Object.keys(result.entries[0]!).sort()).toEqual(['kind', 'modifiedAt', 'name', 'path']);
+  expect(reads).toEqual(['roots:', 'directory:collection', 'directory:cached']);
+
+  reads.length = 0;
+  const source = await api.browseDirectory('/已发布/我的集合', signal());
+  expect(source.status?.error).toBeNull();
+  expect(source.entries.map(item => item.name)).toEqual(['已浏览', 'lazy']);
+  expect(reads).toEqual(['roots:', 'directory:collection']);
+  expect((await api.browseDirectory('/已发布', signal())).status).toBeNull();
+});
+
 test('instance refresh skips unreachable old snapshots, isolates instances and visits cycles only once', async () => {
   const f = await setup();
   await f.library.files.list('/实例 & #/集合/已浏览', signal());

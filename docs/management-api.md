@@ -24,6 +24,7 @@
 | `POST /api/instances/:id/authentication` | start；poll/submit 带 operationId 与 challengeId，submit 另带 input；cancel 只带 operationId。成功返回公开结果，过期操作/挑战返回 409 |
 | `GET /api/instances/:id/roots` | 完整分页后的内容源；使用当前有效快照 |
 | `GET /api/instances/:id/directory-status?directoryRef=...` | 当前有效目录最近成功的 `{completedAt,statistics,error}`；error为最近失败代码或null，未读取或代际已失效时为null；只读快照，不请求来源 |
+| `GET /api/library/directory?path=...` | 已发布路径的 `{entries,status}`，status为同一目录的DirectoryStatus，虚拟分组/实例容器为null；供目录浏览器显示保留的旧内容，不暴露来源引用 |
 | `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例内容；`{directoryRef}` 刷新指定目录；兼容 `{}` 仅刷新内容入口。返回 202 + RefreshView，替换旧活动操作 |
 | `GET /api/instances/:id/refresh` | 当前/最近一次 RefreshView，无记录时为 null；只查询，不推进 |
 | `GET /api/refreshes/:operationId` | 查询同一操作的公开进度，不存在返回 404；不推进 |
