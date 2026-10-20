@@ -1,6 +1,6 @@
 # Worker 构建与部署
 
-日期：2026-10-20。状态：[真实云端](verification/p4-worker-cloud.md)的WebUI/API/DAV、后台插件生命周期、绑定保留、核心升级、双示例有限内容/音质、代表客户端及一次切换观察已有证据。真实失效重登、免费计划与大目录资源仍待收口。架构取舍见[ADR 0006](adr/0006-worker-code-publication.md)。本页也随Worker包保存为`WORKER.md`；代码/验收等相对链接对应项目源码包中的文档位置。
+日期：2026-10-20。状态：[真实云端](verification/p4-worker-cloud.md)的WebUI/API/DAV、后台插件生命周期、绑定保留、核心升级、双示例有限内容/音质、代表客户端、一次切换观察及退出后重新扫码已有证据。本次开发预览按用户决定跳过QQ真实续期、免费计划和大目录资源验证，保留未验证状态。架构取舍见[ADR 0006](adr/0006-worker-code-publication.md)。本页也随Worker包保存为`WORKER.md`；代码/验收等相对链接对应项目源码包中的文档位置。
 
 正式入口是 [`src/worker.ts`](../src/worker.ts)，由 [`createWorkerService`](../src/hosts/worker/service.ts) 接线 D1、插件注册表、来源实例、目录快照、管理 API、只读 DAV 和静态 WebUI。它与桌面使用同一业务模块和协议实现；发布器通过安装/移除用例接入管理 API，安装不在运行时执行 `eval` 或动态导入未知源码。
 
@@ -143,4 +143,4 @@ bun test tests/worker-publishing.test.ts
 |---|---|---|
 | [正式入口探针](../scripts/probe-worker-service.ts) | 实际产品 core/薄入口/注册表在本地 workerd 的接线、页面、D1 与 DAV | Cloudflare 控制面接受实际上传及真实流量行为 |
 | [6项发布集成测试](../tests/worker-publishing.test.ts) | 真实Miniflare D1 +官方SDK，仅平台Fetch受控；multipart、安装/移除、响应丢失、精确新调用迁移/原子激活、失败保留及暂存中断 | 真平台配置保留、权限、传播时序与资源额度 |
-| [真实云端验收](verification/p4-worker-cloud.md) | 付费账号单Worker/D1；发布/失败保留/移除重装、绑定保留、核心升级、双示例内容/音质、代表音频/客户端及实际切换观察 | 免费/大目录资源、真实会话重登及其他OS；响应丢失恢复沿用正式D1+SDK证据 |
+| [真实云端验收](verification/p4-worker-cloud.md) | 付费账号单Worker/D1；发布/失败保留/移除重装、绑定保留、核心升级、双示例内容/音质、代表音频/客户端、实际切换观察及退出重登 | 免费/大目录资源、QQ真实续期及其他OS，本次跳过；响应丢失恢复沿用正式D1+SDK证据 |

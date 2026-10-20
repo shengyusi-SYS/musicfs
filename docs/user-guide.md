@@ -1,6 +1,6 @@
 # MusicFS 使用说明
 
-本包是开发预览，提供插件式只读音乐文件服务。Linux发行程序已在WSL完成运行与FUSE挂载；真实付费Cloudflare的发布、双示例和代表性客户端已有验证。Windows、两种macOS、原生Linux图形入口及免费Worker资源仍待相应环境验收。
+本包是`0.1.0-dev.0`开发预览，提供插件式只读音乐文件服务。Linux发行程序已在WSL完成运行与FUSE挂载；真实付费Cloudflare的发布、双示例、代表性客户端，以及本地/云端退出后重新扫码已有验证。本次发行按用户决定跳过Windows、两种macOS、原生Linux图形入口、QQ真实续期及免费Worker/大目录资源验收，这些范围仍未实测确认。
 
 下列文件路径均相对解压后的发行目录。普通桌面使用不需要安装 Bun、Node.js 或 rclone；rclone 已随包提供。
 
