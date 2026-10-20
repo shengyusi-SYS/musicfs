@@ -105,12 +105,14 @@ export function usePersistentRefresh(api: Api, input: {
   };
 }
 
-export function RefreshProgress({ operation, labels, reload }: {
+export function RefreshProgress({ operation, labels, reload, reauthorize }: {
   operation: ReturnType<typeof usePersistentRefresh>;
   labels?: Record<string, string> | undefined;
   reload?: (() => void) | undefined;
+  reauthorize?: (() => void) | undefined;
 }) {
   const value = operation.view;
+  const needsAuth = value?.error?.sourceFault?.kind === 'needs_auth' || value?.failures.some(item => item.error.sourceFault?.kind === 'needs_auth');
   const title = !value ? '正在读取刷新状态' : value.status === 'queued' ? '目录已加入准备队列'
     : value.status === 'running' ? '正在准备目录' : value.status === 'completed' ? (value.failures.length ? '刷新完成，部分目录保留上次内容' : '目录刷新完成')
       : value.status === 'cancelled' ? '刷新已取消' : value.status === 'superseded' ? '刷新已被较新的操作替代' : '刷新失败，已保留上次成功内容';
@@ -129,7 +131,8 @@ export function RefreshProgress({ operation, labels, reload }: {
         {value.failures.length > 0 && <div role="alert">{value.failures.length} 个目录失败：{[...new Set(value.failures.map(item => item.error.message))].join('；')}</div>}
       </>}
       action={operation.active ? <Button size="small" loading={operation.cancelling} onClick={operation.cancel}>取消刷新</Button>
+        : needsAuth && reauthorize ? <Button size="small" onClick={reauthorize}>重新授权</Button>
         : value && value.status !== 'completed' && reload ? <Button size="small" loading={operation.starting} onClick={reload}>重新读取目录</Button> : undefined} />}
-    <Failure error={operation.error} retry={operation.retry} />
+    <Failure error={operation.error} retry={operation.retry} reauthorize={reauthorize} />
   </>;
 }

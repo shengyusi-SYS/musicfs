@@ -18,7 +18,7 @@ export default function Sources({ api, showPlugins }: { api: Api; showPlugins: (
   const plugins = useQuery({ queryKey: ['plugins'], queryFn: ({ signal }) => api.plugins(signal) });
   const [editing, setEditing] = useState<SourceInstance | 'create' | null>(null);
   const [inspecting, setInspecting] = useState<SourceInstance | null>(null);
-  const [authenticating, setAuthenticating] = useState<SourceInstance | null>(null);
+  const [authenticating, setAuthenticating] = useState<{ instance: SourceInstance; needsReauthorization: boolean } | null>(null);
   const activePlugins = plugins.data?.filter(value => value.status === 'active') ?? [];
   const capabilities = useQueries({ queries: activePlugins.map(plugin => ({ queryKey: ['configuration', plugin.manifest.id], queryFn: ({ signal }: { signal: AbortSignal }) => api.configuration(plugin.manifest.id, signal) })) });
   const withAuthentication = new Set(activePlugins.filter((_plugin, index) => capabilities[index]?.data?.authentication).map(plugin => plugin.manifest.id));
@@ -36,13 +36,14 @@ export default function Sources({ api, showPlugins }: { api: Api; showPlugins: (
           <Typography.Text type="secondary">{plugin?.manifest.name ?? instance.pluginId}</Typography.Text><div className="secondary-id">{instance.id}</div></div>
           <div className="instance-actions"><Tag color={available ? 'success' : 'default'}>{available ? '插件可用' : '等待重装插件'}</Tag><Space wrap>
             <Button disabled={!available} onClick={() => setInspecting(instance)}>内容源</Button><Button disabled={!available} onClick={() => setEditing(instance)}>配置</Button>
-            {withAuthentication.has(instance.pluginId) && <Button onClick={() => setAuthenticating(instance)}>授权</Button>}
+            {withAuthentication.has(instance.pluginId) && <Button onClick={() => setAuthenticating({ instance, needsReauthorization: false })}>授权</Button>}
             <Button type="text" danger disabled={remove.isPending} onClick={() => modal.confirm({ title: `删除实例“${instance.name}”？`, content: '此实例的配置、授权和缓存将删除。其他实例不受影响；目录布局中的引用会保留为失效引用。', okText: '删除实例', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => remove.mutateAsync(instance.id) })}>删除</Button>
           </Space></div></article>;
       })}</div>}
     {editing && <InstanceEditor api={api} instance={editing === 'create' ? undefined : editing} close={() => setEditing(null)} showPlugins={() => { setEditing(null); showPlugins(); }} />}
-    <Drawer title={inspecting ? `${inspecting.name} · 内容源` : '内容源'} open={inspecting !== null} onClose={() => setInspecting(null)} size="large" destroyOnHidden>{inspecting && <Roots api={api} instance={inspecting} />}</Drawer>
-    {authenticating && <Suspense fallback={<Skeleton active />}><Authentication api={api} instance={authenticating} close={() => setAuthenticating(null)} /></Suspense>}
+    <Drawer title={inspecting ? `${inspecting.name} · 内容源` : '内容源'} open={inspecting !== null} onClose={() => setInspecting(null)} size="large" destroyOnHidden>{inspecting && <Roots api={api} instance={inspecting}
+      reauthorize={withAuthentication.has(inspecting.pluginId) ? () => setAuthenticating({ instance: inspecting, needsReauthorization: true }) : undefined} />}</Drawer>
+    {authenticating && <Suspense fallback={<Skeleton active />}><Authentication api={api} instance={authenticating.instance} needsReauthorization={authenticating.needsReauthorization} close={() => setAuthenticating(null)} /></Suspense>}
   </>;
 }
 
@@ -71,7 +72,7 @@ function InstanceEditor({ api, instance, close, showPlugins }: { api: Api; insta
   </Modal>;
 }
 
-function Roots({ api, instance }: { api: Api; instance: SourceInstance }) {
+function Roots({ api, instance, reauthorize }: { api: Api; instance: SourceInstance; reauthorize?: (() => void) | undefined }) {
   const { message } = App.useApp();
   const roots = useQuery({ queryKey: ['roots', instance.id, instance.epoch], queryFn: ({ signal }) => api.roots(instance.id, signal), retry: false });
   const pending = pendingRefreshId(roots.error);
@@ -86,8 +87,8 @@ function Roots({ api, instance }: { api: Api; instance: SourceInstance }) {
   const busy = refresh.active || refresh.starting || refresh.preparing || roots.isFetching;
   return <><div className="page-actions"><Typography.Text type="secondary">可添加到目录布局的内容入口</Typography.Text><Button icon={<ReloadOutlined />} loading={refresh.starting || refresh.active && refresh.view?.scope.kind === 'instance'} disabled={busy} onClick={() => refresh.start({ kind: 'instance' })}>刷新实例内容</Button></div>
     <p className="page-footnote">刷新各内容入口及已浏览的子目录；新子目录首次打开时加载。刷新失败的目录保留上次成功内容。</p>
-    <Failure error={pending ? null : roots.error} retry={() => void roots.refetch()} /><Failure error={configuration.error} />
-    <RefreshProgress operation={refresh} labels={configuration.data?.statistics} reload={() => refresh.view && refresh.start(refresh.view.scope)} />
+    <Failure error={pending ? null : roots.error} retry={() => void roots.refetch()} reauthorize={reauthorize} /><Failure error={configuration.error} />
+    <RefreshProgress operation={refresh} labels={configuration.data?.statistics} reload={() => refresh.view && refresh.start(refresh.view.scope)} reauthorize={reauthorize} />
     {roots.isPending ? <Skeleton active /> : roots.data?.length ? roots.data.map((root, index) => <div className="root-row" key={root.sourceId}><div><Typography.Text strong>{root.name}</Typography.Text><div className="secondary-id">{root.sourceId}</div>
       {statuses[index]?.data && <><div className="directory-statistics">{Object.entries(configuration.data?.statistics ?? {}).flatMap(([key, label]) => {
         const count = statuses[index]?.data?.statistics?.[key]; return count === undefined ? [] : [<span key={key}>{label} <strong>{count}</strong></span>];

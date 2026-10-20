@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Alert, App, Button, Modal, QRCode, Result, Skeleton, Space, Typography } from 'antd';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,26 +16,31 @@ async function perform(api: Api, id: string, action: AuthenticationAction, signa
   return outcome.value;
 }
 
-export default function Authentication({ api, instance, close }: { api: Api; instance: SourceInstance; close: () => void }) {
+export default function Authentication({ api, instance, close, needsReauthorization = false }: { api: Api; instance: SourceInstance; close: () => void; needsReauthorization?: boolean }) {
   const client = useQueryClient(); const { message } = App.useApp();
+  const [startedHere, setStartedHere] = useState(false);
   const session = useQuery({ queryKey: keyOf(instance.id), queryFn: ({ signal }) => api.authentication(instance.id, signal) });
   const action = useMutation({ mutationFn: (value: AuthenticationAction) => perform(api, instance.id, value),
     onMutate: async () => { await client.cancelQueries({ queryKey: pollKey(instance.id) }); await client.cancelQueries({ queryKey: keyOf(instance.id) }); },
-    onSuccess: async value => {
+    onSuccess: async (value, requested) => {
+      if (requested.kind === 'start' || value.step?.kind === 'complete') setStartedHere(true);
       client.setQueryData(keyOf(instance.id), value);
       await client.invalidateQueries({ queryKey: ['instances'] }); await client.invalidateQueries({ queryKey: ['roots', instance.id] });
       await client.invalidateQueries({ queryKey: ['library'] });
+      await client.invalidateQueries({ queryKey: ['directory-status', instance.id] });
       if (value.step?.kind === 'complete') message.success('来源授权已保存');
     }
   });
   const current = session.data; const step = current?.step;
   const active = current && (!step || step.kind === 'waiting' || step.kind === 'input');
+  const showReauthorization = needsReauthorization && !startedHere && step?.kind !== 'waiting' && step?.kind !== 'input';
   return <Modal open title={`${instance.name} · 来源授权`} onCancel={close} footer={null} width={560} destroyOnHidden>
     <Typography.Paragraph type="secondary">授权由来源插件处理，凭据只保存在此实例中。关闭窗口后可以重新打开，继续尚未过期的步骤。</Typography.Paragraph>
     <Failure error={session.error} retry={() => void session.refetch()} /><Failure error={action.error} />
     {session.isPending ? <Skeleton active /> : <>
+      {showReauthorization && <Alert type="warning" showIcon title="来源要求重新授权" description="上次授权操作的成功记录不代表当前授权仍有效，请重新开始授权。" />}
       {(!current || !step) && <Alert type="info" showIcon title={current ? '授权准备尚未完成，可重新开始。' : '尚未开始来源授权。'} />}
-      {step?.kind === 'waiting' && current && <Waiting api={api} instance={instance} session={current} paused={action.isPending} reload={() => void session.refetch()} />}
+      {step?.kind === 'waiting' && current && <Waiting api={api} instance={instance} session={current} paused={action.isPending} completed={() => setStartedHere(true)} reload={() => void session.refetch()} />}
       {step?.kind === 'input' && current && <div className="auth-input"><Typography.Paragraph>{step.message}</Typography.Paragraph>
         <Typography.Paragraph type="secondary">此步骤有效至 {new Date(step.expiresAt).toLocaleString()}</Typography.Paragraph>
         {current.error && !action.error && <Alert showIcon type="error" title={current.error.message} />}
@@ -44,7 +49,8 @@ export default function Authentication({ api, instance, close }: { api: Api; ins
             onSubmit={input => action.mutate({ kind: 'submit', operationId: current.operationId, challengeId: step.challengeId, input })} />
         </Suspense></ErrorBoundary>
       </div>}
-      {step?.kind === 'complete' && <Result status="success" title="授权已完成" subTitle={step.accountName ? `来源账号：${step.accountName}` : '来源返回的授权状态已保存。'} />}
+      {step?.kind === 'complete' && !showReauthorization && <Result status="success" title={startedHere ? '授权已完成' : '上次授权流程已完成'}
+        subTitle={<>{step.accountName ? `来源账号：${step.accountName}` : '来源返回的授权状态已保存。'}{!startedHere && <div>如内容读取提示授权失效，请重新开始授权。</div>}</>} />}
       {step?.kind === 'expired' && <Result status="warning" title="授权已过期" subTitle={step.message} />}
       {step?.kind === 'cancelled' && <Result status="info" title="本次授权已取消" />}
       <Space wrap className="auth-actions"><Button disabled={action.isPending || session.isError} loading={action.isPending && action.variables?.kind === 'start'} type={active ? 'default' : 'primary'} onClick={() => action.mutate({ kind: 'start' })}>{current ? '重新开始授权' : '开始授权'}</Button>
@@ -54,7 +60,7 @@ export default function Authentication({ api, instance, close }: { api: Api; ins
   </Modal>;
 }
 
-function Waiting({ api, instance, session, paused, reload }: { api: Api; instance: SourceInstance; session: AuthenticationSession; paused: boolean; reload: () => void }) {
+function Waiting({ api, instance, session, paused, reload, completed }: { api: Api; instance: SourceInstance; session: AuthenticationSession; paused: boolean; reload: () => void; completed: () => void }) {
   const client = useQueryClient(); const step = session.step;
   const challenge = step?.kind === 'waiting' ? step.challengeId : '';
   const poll = useQuery({ queryKey: [...pollKey(instance.id), session.operationId, challenge], enabled: !paused && !!challenge,
@@ -63,8 +69,10 @@ function Waiting({ api, instance, session, paused, reload }: { api: Api; instanc
       signal.throwIfAborted();
       client.setQueryData<AuthenticationSession | null>(keyOf(instance.id), previous => previous?.operationId === session.operationId && previous.step?.kind === 'waiting' && previous.step.challengeId === challenge ? value : previous);
       if (value.step?.kind === 'complete') {
+        completed();
         await client.invalidateQueries({ queryKey: ['instances'] }); await client.invalidateQueries({ queryKey: ['roots', instance.id] });
         await client.invalidateQueries({ queryKey: ['library'] });
+        await client.invalidateQueries({ queryKey: ['directory-status', instance.id] });
       }
       return value;
     }, retry: false, refetchInterval: query => query.state.error || query.state.data?.step?.kind !== 'waiting' ? false : 3000
