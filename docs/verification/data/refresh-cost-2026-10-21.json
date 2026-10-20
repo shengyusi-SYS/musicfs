@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-21",
+  "baseline": "80c38f2",
+  "plugin": "org.musicfs.netease@0.1.0-alpha.9",
+  "scope": "Offline, first two pages only, real catalog/metadata/tag-plan implementation with controlled client transport. No real platform requests, HTTP, SDK encryption or database. 4000 single-quality available MP3s; distinct album per song. Counts are mechanism evidence, not real network latency or actual account/album distribution.",
+  "singleQualityTracksPerPage": 8,
+  "pagesFor4000": 500,
+  "defaultPageBudget": 1000,
+  "repeatedFullIdVisitsFor4000": 2000000,
+  "phases": [
+    {
+      "phase": "cold",
+      "entries": 16,
+      "pageEntries": [8, 8],
+      "calls": { "user-playlists": 1, "playlist": 2, "song-detail": 2, "playback": 2, "album": 16, "lyrics": 16, "cover": 16, "audio-range": 48 },
+      "totalCalls": 103
+    },
+    {
+      "phase": "warm",
+      "entries": 16,
+      "pageEntries": [8, 8],
+      "calls": { "user-playlists": 1, "playlist": 2, "song-detail": 2, "playback": 2 },
+      "totalCalls": 7
+    },
+    {
+      "phase": "assets-expired-plans-retained",
+      "entries": 16,
+      "pageEntries": [8, 8],
+      "calls": { "user-playlists": 1, "playlist": 2, "song-detail": 2, "playback": 2, "album": 16, "lyrics": 16, "cover": 16 },
+      "totalCalls": 55
+    }
+  ],
+  "hypotheticalFullRefreshCalls": {
+    "assumptions": "All 4000 tracks available at the single selected target; no extra quality fallback; warm metadata and tag plans. Not a real full-refresh measurement.",
+    "warm": 1501,
+    "cold": "1 + 3*500 + 4000 lyrics + A albums + A covers + 12000 audio ranges; A is distinct uncached albums"
+  },
+  "redundantPlaylistFetch": true,
+  "probeVerdict": "BASELINE_RED: the second small page fetched the entire 4000-ID playlist again"
+}
