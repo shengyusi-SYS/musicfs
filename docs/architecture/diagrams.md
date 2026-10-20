@@ -500,7 +500,7 @@ sequenceDiagram
 
 ## 可选标签处理设计
 
-三种插件实现通过同一个文件 Interface 接入，核心不增加强制处理阶段。共用工具尚未接线；设计与证据见[可选补标签设计](audio-tags.md)。
+三种插件实现通过同一个文件 Interface 接入，核心不增加强制处理阶段。QQ、网易云已选用共用工具；其他插件保持自主选择。设计见[可选补标签设计](audio-tags.md)，当前证据见[实现记录](../verification/metadata-implementation.md)。
 
 ```mermaid
 flowchart LR
@@ -520,3 +520,25 @@ flowchart LR
 ```
 
 共用工具可以复用准备后的音乐资料，但不解释平台请求或认证；核心只核对最终大小、内容身份和实际范围。未选择补标签的插件不依赖该工具；它的格式集合不限制其他插件。
+
+```mermaid
+sequenceDiagram
+  participant P as 示例插件
+  participant C as 实例缓存 SQLite/D1
+  participant U as 来源接口与原音频
+  participant T as 可选音频工具
+  participant L as 核心快照 / DAV
+  P->>C: 查询歌曲/专辑资料及表示计划
+  opt 冷准备
+    P->>U: 缺少的资料、封面、歌词与头尾范围
+    P->>T: prepare(资料, 原文件范围读取)
+    T-->>P: 最终 FileInfo 与区段计划
+    P->>C: 保存小资料与计划
+  end
+  P-->>L: 分页返回最终描述和版本化引用
+  L->>P: stat / open(最终范围)
+  P->>C: 取得已有计划
+  P->>U: open 时取得媒体地址和所需范围
+  P->>T: open(计划, 原文件读取, 最终范围)
+  T-->>L: 小标签区段与原音频流
+```
