@@ -6,6 +6,8 @@ import type { LayoutNode, LibraryStore } from '../../core/library/types';
 import type { RefreshStore } from '../../core/library/refresh-types';
 import type { PluginChangeStore } from '../../application/change-plugin';
 import type { RenewalStore } from '../../core/sources/renewal';
+import type { PluginCacheStore } from '../../core/sources/cache';
+import { cachedPluginDataStatement, cachePluginDataPlan } from './plugin-cache-sql';
 import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import { changeFromRow, changeLeaseFromRow, changeInputFromRow, changeRecordSQL, nextChangeInstanceSQL, readyChangesSQL,
   createChangeStatement, claimChangeStatement, releaseChangeStatement, commitChangePlan, type ChangeRow, type ChangeInputRow } from './plugin-change-sql';
@@ -93,6 +95,13 @@ export function createD1Store(db: D1Database) {
       return result.meta.changes === 1;
     },
     async deleteInstance(id) { await db.prepare('DELETE FROM instances WHERE id = ?').bind(id).run(); },
+    async cachedPluginData(source, key, now) {
+      return (await prepare(cachedPluginDataStatement(source, key, now)).first<{ document: string }>())?.document;
+    },
+    async cachePluginData(source, key, document, expiresAt, now) {
+      const result = await db.batch<{ written: number }>(cachePluginDataPlan(source, key, document, expiresAt, now).map(prepare));
+      return result.at(-1)!.results.length === 1;
+    },
     async claimRenewal(expected, token, now, until) {
       const results = await db.batch<RenewalClaimRow>(claimRenewalPlan(expected, token, now, until).map(prepare));
       return renewalClaimFromRow(results.at(-1)?.results[0]);
@@ -156,5 +165,5 @@ export function createD1Store(db: D1Database) {
       const rows = await db.prepare(readyRefreshesSQL).bind(now, limit).all<{ operation_id: string }>();
       return rows.results.map(row => row.operation_id);
     }
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & RenewalStore;
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & RenewalStore & PluginCacheStore;
 }

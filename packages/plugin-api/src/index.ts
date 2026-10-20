@@ -39,6 +39,15 @@ export interface Context {
   privateState: Json;
   signal: AbortSignal;
   fetch: typeof fetch;
+  /** Optional host storage for small, serializable plugin data, isolated to this source revision. */
+  cache?: PluginCache;
+}
+
+export interface PluginCache {
+  /** undefined means missing or expired; a cached null is a valid value. */
+  get(key: string): Promise<Json | undefined>;
+  /** Omit expiresAt for immutable data needed by published file references. Times are Unix milliseconds. */
+  put(key: string, value: Json, options?: { expiresAt?: number }): Promise<void>;
 }
 
 export interface Configuration {

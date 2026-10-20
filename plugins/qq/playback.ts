@@ -16,7 +16,7 @@ export function decodeFile(file: string): MediaReference {
 }
 type Candidate = { track: Track; quality: Quality };
 type Location = { quality: Quality; filename: string; purl: string; sip: string[] };
-type Variant = { quality: Quality; fileRef: string; targets: Quality[]; info: FileInfo };
+type Variant = { quality: Quality; fileRef: string; targets: Quality[]; info: FileInfo; location: URL };
 type Resolution = { variants: Variant[]; missingVersions: number; fallbackVersions: number; deduplicatedVersions: number };
 const candidateKey = ({ track, quality }: Candidate) => `${trackKey(track)}:${quality}`;
 const filenameOf = ({ track, quality }: Candidate) => `${MUSIC_FILE_TYPES[quality].prefix}${track.mid}${track.file.media_mid}${MUSIC_FILE_TYPES[quality].extension}`;
@@ -110,7 +110,7 @@ export async function resolveVariants(client: QqClient, tracks: Track[]): Promis
     }
   }
   const resolved = new Map<string, Resolution>();
-  const prepared = new Map<string, FileInfo>();
+  const prepared = new Map<string, { url: URL; info: FileInfo }>();
   for (const [key, track] of unique) {
     const variants = new Map<string, Variant>(); let missingVersions = 0; let fallbackVersions = 0; let deduplicatedVersions = 0;
     for (const slot of slots.filter(slot => trackKey(slot.track) === key)) {
@@ -120,9 +120,9 @@ export async function resolveVariants(client: QqClient, tracks: Track[]): Promis
       if (previous) { previous.targets.push(slot.target); deduplicatedVersions++; continue; }
       const reference = fileSchema.parse({ version: 1, mid: track.mid, mediaId: track.file.media_mid,
         quality: slot.found.quality, filename: slot.found.filename });
-      let info = prepared.get(reference.filename);
-      if (!info) { info = (await selectLocation(client, slot.found)).info; prepared.set(reference.filename, info); }
-      variants.set(reference.filename, { quality: reference.quality, targets: [slot.target], fileRef: JSON.stringify(reference), info });
+      let located = prepared.get(reference.filename);
+      if (!located) { located = await selectLocation(client, slot.found); prepared.set(reference.filename, located); }
+      variants.set(reference.filename, { quality: reference.quality, targets: [slot.target], fileRef: JSON.stringify(reference), info: located.info, location: located.url });
     }
     resolved.set(key, { variants: [...variants.values()], missingVersions, fallbackVersions, deduplicatedVersions });
   }

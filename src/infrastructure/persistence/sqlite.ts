@@ -9,6 +9,9 @@ import workerChangesSchema from './migrations/0004.sql' with { type: 'text' };
 import refreshSchema from './migrations/0005.sql' with { type: 'text' };
 import pluginChangesSchema from './migrations/0006.sql' with { type: 'text' };
 import renewalsSchema from './migrations/0007.sql' with { type: 'text' };
+import pluginCacheSchema from './migrations/0008.sql' with { type: 'text' };
+import type { PluginCacheStore } from '../../core/sources/cache';
+import { cachedPluginDataStatement, cachePluginDataPlan } from './plugin-cache-sql';
 import type { RenewalStore } from '../../core/sources/renewal';
 import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
@@ -32,15 +35,16 @@ export function openSqlite(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = db.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version;
-  if (version === undefined || version < 0 || version > 7) { db.close(); throw new Error('Unsupported MusicFS database version'); }
-  if (version < 7) db.transaction(() => {
+  if (version === undefined || version < 0 || version > 8) { db.close(); throw new Error('Unsupported MusicFS database version'); }
+  if (version < 8) db.transaction(() => {
     if (version === 0) db.exec(initialSchema);
     if (version < 2) db.exec(librarySchema);
     if (version < 3) db.exec(authenticationSchema);
     if (version < 4) db.exec(workerChangesSchema);
     if (version < 5) db.exec(refreshSchema);
     if (version < 6) db.exec(pluginChangesSchema);
-    db.exec(renewalsSchema); db.exec('PRAGMA user_version = 7');
+    if (version < 7) db.exec(renewalsSchema);
+    db.exec(pluginCacheSchema); db.exec('PRAGMA user_version = 8');
   })();
 
   const installation = (id: string): Installation | undefined => {
@@ -105,6 +109,10 @@ export function openSqlite(path: string) {
           stateRevision: snapshot.stateRevision, expected: snapshot.authentication === null ? null : JSON.stringify(snapshot.authentication) }).changes === 1;
     },
     deleteInstance: id => { db.query('DELETE FROM instances WHERE id = ?').run(id); },
+    cachedPluginData(source, key, now) { return execute<{ document: string }>(cachedPluginDataStatement(source, key, now))[0]?.document; },
+    cachePluginData(source, key, document, expiresAt, now) {
+      return batch(cachePluginDataPlan(source, key, document, expiresAt, now)).at(-1)!.length === 1;
+    },
     claimRenewal(expected, token, now, until) {
       return renewalClaimFromRow(batch<RenewalClaimRow>(claimRenewalPlan(expected, token, now, until)).at(-1)?.[0]);
     },
@@ -168,5 +176,5 @@ export function openSqlite(path: string) {
           WHERE operation_id IN (${readyRefreshesSQL}))`).get(Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1)?.instant ?? null;
     },
     close: () => db.close()
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & RenewalStore & { close(): void; nextBackgroundWorkAt(): number | null };
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & RenewalStore & PluginCacheStore & { close(): void; nextBackgroundWorkAt(): number | null };
 }

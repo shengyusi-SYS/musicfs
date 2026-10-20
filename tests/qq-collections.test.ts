@@ -1,3 +1,4 @@
+import { mediaBytes, memoryCache, metadataFetch, qqTrackFields } from './helpers/source-metadata';
 import { expect, test } from 'bun:test';
 import type { Context, Entry, Json, Outcome } from '@musicfs/plugin-api';
 import { createQqPlugin } from '../plugins/qq';
@@ -7,7 +8,7 @@ import type { QqHandler } from '../plugins/qq/client';
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const value = <T>(outcome: Outcome<T>): T => { if (!outcome.ok) throw new Error(outcome.error.message); return outcome.value; };
 const directory = (item: Entry | undefined) => { if (item?.kind !== 'directory') throw new Error('Expected directory'); return item.directoryRef; };
-const song = (mid: string) => ({ mid, title: '歌曲', singer: [{ name: '歌手' }], file: { media_mid: 'media' + mid } });
+const song = (mid: string) => ({ ...qqTrackFields, mid, title: '歌曲', singer: [{ name: '歌手' }], file: { media_mid: 'media' + mid } });
 async function fixture(account = '123') {
   const secret = 'native-sdk-fixture-secret-32-characters-' + account;
   const credential = { musicid: account, str_musicid: account, musickey: 'private-native-key-' + account, loginType: 2, encryptUin: 'encrypted-' + account };
@@ -22,7 +23,7 @@ async function fixture(account = '123') {
   let started!: () => void; const start = new Promise<void>(resolve => { started = resolve; });
   let cancelled = false; let recommendedCalls = 0;
   const fetcher = (async (_input, init) => {
-    if (!init?.body) return new Response(new Uint8Array([1]), { status: 206, headers: { 'Content-Range': 'bytes 0-0/123', 'Content-Length': '1', ETag: '"fixture-file"' } });
+    if (!init?.body) { const range = /^bytes=(\d+)-(\d+)$/.exec(new Headers(init?.headers).get('range') ?? '')!; const start = Number(range[1]); const end = Number(range[2]); return new Response(mediaBytes.mp3.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/${mediaBytes.mp3.length}`, 'Content-Length': String(end - start + 1), ETag: '"fixture-file"' } }); }
     const rpc = JSON.parse(String(init?.body)); const request = rpc.req_0; nativeCalls.push({ method: request.method, param: request.param, cookie: new Headers(init?.headers).get('cookie') });
     started();
     if (block) return new Promise<Response>((_resolve, reject) => { init!.signal!.addEventListener('abort', () => { cancelled = true; reject(init!.signal!.reason); }, { once: true }); });
@@ -49,7 +50,7 @@ async function fixture(account = '123') {
     return json({}, 404);
   };
   const controller = new AbortController();
-  const ctx: Context = { instanceId: 'fixture-' + account, config: {}, privateState: state, fetch: fetcher, signal: controller.signal };
+  const ctx: Context = { instanceId: 'fixture-' + account, config: {}, privateState: state, fetch: metadataFetch(fetcher), cache: memoryCache(), signal: controller.signal };
   return { plugin: createQqPlugin(handler), ctx, nativeCalls, controller, start, get cancelled() { return cancelled; }, get recommendedCalls() { return recommendedCalls; },
     setCreated(next: Record<string, unknown>) { created = next; }, setFavorites(next: unknown[]) { favorites = next; }, setEmptyMore() { favoriteMoreEmpty = true; },
     setCode(next: number) { code = next; }, setBlock() { block = true; }, setSongs(next: ReturnType<typeof song>[], total = next.length) { songs = next; totalSongs = total; }, corruptSongs() { corruptSongs = true; } };
@@ -78,7 +79,7 @@ test('QQ uses the authenticated owner endpoint for private own playlists and the
   const favorite = directory(value(await f.plugin.list(f.ctx, 'favorites')).items[0]);
   const first = value(await f.plugin.list(f.ctx, own)); const last = value(await f.plugin.list(f.ctx, own, first.nextCursor));
   expect([...first.items, ...last.items].map(item => item.name.slice(0, 4))).toEqual(['0001', '0002', '0003']); expect(last.nextCursor).toBeUndefined();
-  const ownCall = f.nativeCalls.find(call => call.method === 'CgiGetDiss'); expect(ownCall?.param).toMatchObject({ disstid: 7, dirid: 1, enc_host_uin: 'encrypted-123', song_begin: 0, song_num: 6 });
+  const ownCall = f.nativeCalls.find(call => call.method === 'CgiGetDiss'); expect(ownCall?.param).toMatchObject({ disstid: 7, dirid: 1, enc_host_uin: 'encrypted-123', song_begin: 0, song_num: 4 });
   await f.plugin.list(f.ctx, favorite); expect(f.nativeCalls.findLast(call => call.method === 'uniform_get_Dissinfo')).toMatchObject({ method: 'uniform_get_Dissinfo', param: { disstid: 7, enc_host_uin: '', song_begin: 0 } });
   expect(JSON.stringify(first)).not.toContain('vkey=');
 });

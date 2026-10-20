@@ -75,7 +75,8 @@
     "fflate": "0.8.3",
     "miniflare": "4.20260730.0",
     "typescript": "6.0.3",
-    "vite": "8.3.4"
+    "vite": "8.3.4",
+    "music-metadata": "12.2.3"
   },
   "license": "GPL-3.0-only"
 }

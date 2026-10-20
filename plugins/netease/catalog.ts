@@ -1,9 +1,12 @@
-import type { Entry, Page, Root } from '@musicfs/plugin-api';
+import type { Entry, Json, Page, Root } from '@musicfs/plugin-api';
+import type { AudioFormat } from '@musicfs/audio-tags';
 import { z } from 'zod';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
-import { info, resolveVariants } from './media';
-import { labels } from './configuration';
+import { info, sourceReader, resolveVariants } from './media';
+import { audioPolicy, labels } from './configuration';
+import { musicTags } from './metadata';
+import { tagFile } from './tagged';
 
 const rootsList = [ ['liked', '喜欢的歌曲'], ['daily', '每日推荐歌曲'], ['created', '自建歌单'], ['favorites', '收藏歌单'], ['recommended', '每日推荐歌单'] ] as const;
 const playlistRef = z.object({ kind: z.literal('playlist'), id: z.string().regex(/^[1-9]\d*$/) }).strict();
@@ -52,9 +55,13 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
     if (!Array.isArray(artists)) fail('temporary', '网易云未返回完整歌曲名称信息。');
     const artist = artists.map(item => label(object(item).name)).join('、');
     const position = offset + index + 1;
+    const tags = await musicTags(client, song);
     for (const variant of resolution.variants) {
       const media = variant.reference;
-      items.push({ kind: 'file', entryId: `${position}:${songId}:${media.level}`, name: `${String(position).padStart(4, '0')}. ${label(song.name)} - ${artist} [${labels[media.level]}].${media.type}`, fileRef: JSON.stringify(media), info: info(media) });
+      const sourceInfo = info(media);
+      const prepared = await tagFile(client, media, sourceInfo, media.type as AudioFormat, tags,
+        sourceReader(client, media, variant.location));
+      items.push({ kind: 'file', entryId: `${position}:${songId}:${media.level}`, name: `${String(position).padStart(4, '0')}. ${label(song.name)} - ${artist} [${labels[media.level]}].${media.type}`, ...prepared });
     }
   }
   statistics.files = items.length; return { items, statistics };
@@ -77,15 +84,20 @@ export async function list(client: NeteaseClient, directory: string, value?: str
     return { items: result.recommend.map(directoryEntry) };
   }
   if (directory === 'daily') {
-    if (page.offset) fail('invalid_config', '每日推荐歌曲是一次有限集合。');
-    const result = object((await client.call(endpoints.daily)).data);
-    if (!Array.isArray(result.dailySongs)) fail('temporary', '网易云未返回完整每日推荐歌曲。');
-    // Bound API batches without truncating the finite recommendation snapshot.
-    const pages: Page<Entry>[] = [];
-    for (let offset = 0; offset < result.dailySongs.length; offset += 100) pages.push(await songPage(client, result.dailySongs.slice(offset, offset + 100), offset));
-    const statistics = emptyStatistics();
-    for (const page of pages) for (const key of Object.keys(statistics) as (keyof typeof statistics)[]) statistics[key] += page.statistics?.[key] ?? 0;
-    return { items: pages.flatMap(page => page.items), statistics };
+    if (!client.ctx.cache) fail('not_supported', '网易云补标签需要支持插件资料缓存的宿主。');
+    let tracks: unknown; let revision = page.revision;
+    if (revision) tracks = await client.ctx.cache.get(`daily:${revision}`);
+    else {
+      tracks = object((await client.call(endpoints.daily)).data).dailySongs;
+      if (!Array.isArray(tracks)) fail('temporary', '网易云未返回完整每日推荐歌曲。');
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(tracks)));
+      revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      await client.ctx.cache.put(`daily:${revision}`, tracks as Json, { expiresAt: Date.now() + 30 * 60_000 });
+    }
+    if (!Array.isArray(tracks)) fail('content_changed', '网易云每日推荐分页资料已失效，请重新刷新。');
+    const count = Math.max(1, Math.floor(8 / audioPolicy(client.ctx.config).qualities.length));
+    const content = await songPage(client, tracks.slice(page.offset, page.offset + count), page.offset);
+    return { ...content, ...(page.offset + count < tracks.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + count, revision }) } : {}) };
   }
   let playlistId: string;
   if (directory === 'liked') {
@@ -113,7 +125,7 @@ export async function list(client: NeteaseClient, directory: string, value?: str
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(ids)));
   const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
   if (page.revision && page.revision !== revision) fail('content_changed', '网易云歌单在分页期间已变化，请重新刷新。');
-  const selected = ids.slice(page.offset, page.offset + 100);
+  const selected = ids.slice(page.offset, page.offset + Math.max(1, Math.floor(8 / audioPolicy(client.ctx.config).qualities.length)));
   if (!selected.length) return { items: [], statistics: emptyStatistics() };
   const details = await client.call(endpoints.songs, { ids: [...new Set(selected)].join(',') });
   if (!Array.isArray(details.songs)) fail('temporary', '网易云未返回完整歌曲详情。');

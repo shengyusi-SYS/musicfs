@@ -44,7 +44,7 @@ try {
   assert.equal(inspection.status, 200);
   const preview = await inspection.json() as PluginInspection;
   assert.equal(preview.manifest.id, 'org.musicfs.sample');
-  assert.deepEqual(preview.compatibility, { host: 'worker', apiVersion: '0.1.5', apiCompatible: true, hostCompatible: true });
+  assert.deepEqual(preview.compatibility, { host: 'worker', apiVersion: '0.1.6', apiCompatible: true, hostCompatible: true });
   assert.deepEqual(await (await mf.dispatchFetch('http://musicfs/api/plugins', { headers })).json(), []);
   const unavailable = await mf.dispatchFetch('http://musicfs/api/plugins', { method: 'POST', headers: { Authorization: headers.Authorization },
     body: await Bun.file(archive).arrayBuffer() });

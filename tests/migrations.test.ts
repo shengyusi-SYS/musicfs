@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { openSqlite } from '../src/infrastructure/persistence/sqlite';
 
-for (const version of [1, 2, 3, 4, 5, 6]) test(`version-${version} data survives current migrations and subsequent reopening`, async () => {
+for (const version of [1, 2, 3, 4, 5, 6, 7]) test(`version-${version} data survives current migrations and subsequent reopening`, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-migration-')); const path = join(directory, 'state.sqlite');
   const snapshot = { id: 'legacy-snapshot', kind: 'roots' as const, items: [], completedAt: '2026-10-20T00:00:00.000Z',
     stamp: { id: 'instance', pluginId: 'legacy', epoch: 1, pluginRevision: 'old', pluginGeneration: 1 } };
@@ -17,6 +17,7 @@ for (const version of [1, 2, 3, 4, 5, 6]) test(`version-${version} data survives
     if (version >= 4) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0004.sql').text());
     if (version >= 5) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0005.sql').text());
     if (version >= 6) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0006.sql').text());
+    if (version >= 7) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0007.sql').text());
     legacy.exec(`PRAGMA user_version = ${version}`);
     legacy.query('INSERT INTO installations (id, manifest, revision, generation, status) VALUES (?, ?, ?, 1, ?)').run('legacy', '{}', 'old', 'active');
     legacy.query('INSERT INTO instances (id, plugin_id, name, config, private_state, epoch, state_revision) VALUES (?, ?, ?, ?, ?, 1, 1)')
@@ -38,7 +39,7 @@ for (const version of [1, 2, 3, 4, 5, 6]) test(`version-${version} data survives
     expect(current.layout()).toEqual({ revision: 0, nodes: null }); expect(current.saveLayout(0, [])).toBe(true); current.close();
     current = openSqlite(path); expect(current.layout()).toEqual({ revision: 1, nodes: [] }); expect(current.instances()).toHaveLength(1); current.close();
     const migrated = new Database(path);
-    expect(migrated.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version).toBe(7);
+    expect(migrated.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version).toBe(8);
     if (version >= 4) {
       expect(migrated.query<{ document: string; revision: number }, []>('SELECT document, revision FROM plugin_changes').get()).toEqual({ document: oldChange, revision: 0 });
       expect(migrated.query<{ table: string }, []>('PRAGMA foreign_key_list(worker_plugin_change_files)').get()?.table).toBe('plugin_changes');

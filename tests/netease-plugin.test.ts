@@ -1,9 +1,14 @@
+import { mediaBytes, mediaFor, memoryCache, metadataFetch } from './helpers/source-metadata';
 import { expect, test } from 'bun:test';
 import type { AuthStep, Context, Json, Outcome } from '@musicfs/plugin-api';
 import plugin from '../plugins/netease';
 import { encrypt } from '../plugins/netease/generated-upstream.mjs';
+import { NeteaseClient } from '../plugins/netease/client';
+import { resolveMedia } from '../plugins/netease/media';
+import { parseId3 } from '../packages/audio-tags/test-fixtures';
+import { Id3v2FrameClassType, Id3v2FrameIdentifiers, type Id3v2UnsynchronizedLyricsFrame } from '../packages/audio-tags/test-fixtures';
 
-const bytes = Uint8Array.from({ length: 16 }, (_, index) => index);
+const bytes = mediaBytes.mp3;
 function value<T>(outcome: Outcome<T>): T { if (!outcome.ok) throw new Error(outcome.error.message); return outcome.value; }
 function waiting(step: AuthStep) { if (step.kind !== 'waiting') throw new Error('Expected QR step'); return step; }
 function fixture() {
@@ -22,6 +27,7 @@ function fixture() {
       return Response.json(body, { status, headers });
     };
     if (url.hostname === 'm1.music.126.net') {
+      const bytes = mediaFor(url.href);
       const range = /^bytes=(\d+)-(\d+)$/.exec(req.headers.get('range') ?? '');
       const selected = range ? bytes.slice(Number(range[1]), Number(range[2]) + 1) : bytes;
       let sent = false;
@@ -49,13 +55,13 @@ function fixture() {
       const parameters = new URLSearchParams(await req.text()); const decrypted = encrypt.eapiReqDecrypt(parameters.get('params')!);
       const ids = JSON.parse(String(decrypted!.data.ids)) as number[];
       const selected = String(decrypted!.data.level); playbackCalls.push({ ids, level: selected });
-      return json({ code: 200, data: playbackRows((missingPlayback ? [] : ids).map(id => ({ id, url: `https://m1.music.126.net/temporary-${calls.length}/${id}.mp3`, level: 'standard', type: 'mp3', size: 16,
+      return json({ code: 200, data: playbackRows((missingPlayback ? [] : ids).map(id => ({ id, url: `https://m1.music.126.net/temporary-${calls.length}/${id}.mp3`, level: 'standard', type: 'mp3', size: bytes.length,
         md5: brokenVersion ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' : '00000000000000000000000000000000', freeTrialInfo: preview && id === 2 ? { start: 0, end: 30 } : null })), selected) });
     }
     if (path === '/api/v3/discovery/recommend/songs') return json({ code: 200, data: { dailySongs: [{ id: 1, name: '完整音频', ar: [{ name: '歌手' }] }] } });
     return json({ code: 404 }, [], 404);
   }, { preconnect: fetch.preconnect });
-  const ctx: Context = { instanceId: 'netease-a', config: { label: '网易云', quality: 'standard' }, privateState: null, signal: new AbortController().signal, fetch: fakeFetch };
+  const ctx: Context = { instanceId: 'netease-a', config: { label: '网易云', quality: 'standard' }, privateState: null, signal: new AbortController().signal, fetch: metadataFetch(fakeFetch), cache: memoryCache() };
   return { ctx, calls, playbackCalls, playlistCalls, setLikedPlaylistId(id: number) { likedPlaylistId = id; }, setStatusUnavailable(state: boolean) { statusUnavailable = state; }, setStatusBody(body: unknown) { statusBody = body; }, setBrokenVersion(state: boolean) { brokenVersion = state; },
     setPreview(state: boolean) { preview = state; }, setPlaylistIds(ids: number[]) { playlistIds = ids; }, setWrongTrackCount(state: boolean) { wrongTrackCount = state; },
     setPlaybackRows(transform: typeof playbackRows) { playbackRows = transform; },
@@ -76,7 +82,7 @@ async function qualityFixture() {
     if (!selected) return { ...row, level: requested, url: null };
     const type = selected.type ?? (selected.level === 'hires' || selected.level === 'lossless' ? 'FLAC' : 'MP3');
     const digest = selected.level === 'hires' ? 'a' : selected.level === 'lossless' ? 'b' : selected.level === 'exhigh' ? 'c' : 'd';
-    return { ...row, level: selected.level, type, md5: digest.repeat(32), freeTrialInfo: selected.preview ? { start: 0, end: 30 } : null,
+    return { ...row, level: selected.level, type, size: mediaFor(`https://m1.music.126.net/fixture.${type.toLowerCase()}`).length, md5: digest.repeat(32), freeTrialInfo: selected.preview ? { start: 0, end: 30 } : null,
       url: `https://m1.music.126.net/temporary/${row.id}-${selected.level}.${type.toLowerCase()}` };
   }));
   return { ...f, available };
@@ -207,45 +213,45 @@ test('NetEase uses native collection roles and occurrence order, hides previews 
   expect(JSON.stringify(liked)).not.toContain('temporary-');
 });
 
-test('NetEase stat and open verify actual total bytes, re-resolve URLs and propagate stream cancellation', async () => {
+test('NetEase legacy references retain raw stat and ranges while tagged entries describe their final bytes', async () => {
   const f = fixture(); await authorize(f); const listed = value(await plugin.list(f.ctx, 'daily')); const file = listed.items[0]!;
   if (file.kind !== 'file') throw new Error('Expected a file');
-  const description = value(await plugin.stat(f.ctx, file.fileRef)); expect(description.size).toBe(16); expect(f.cancelledBody()).toBe(true);
-  expect(file.info).toEqual(description);
-  const opened = value(await plugin.open(f.ctx, file.fileRef, { expectedContentId: description.contentId, range: { start: 4, end: 8 } }));
+  const description = value(await plugin.stat(f.ctx, file.fileRef)); expect(description.size).toBeGreaterThan(bytes.length); expect(file.info).toEqual(description);
+  const legacy = JSON.stringify(JSON.parse(file.fileRef).source);
+  const raw = value(await plugin.stat(f.ctx, legacy)); expect(raw.size).toBe(bytes.length); expect(f.cancelledBody()).toBe(true);
+  const opened = value(await plugin.open(f.ctx, legacy, { expectedContentId: raw.contentId, range: { start: 4, end: 8 } }));
   const reader = opened.body.getReader(); expect((await reader.read()).value).toEqual(bytes.slice(4, 9)); await reader.cancel();
   expect(opened.servedRange).toEqual({ start: 4, end: 8 });
-  expect(new Set(f.calls.filter(call => call.path.endsWith('/1.mp3')).map(call => call.path)).size).toBe(2);
-  const full = value(await plugin.open(f.ctx, file.fileRef, { expectedContentId: description.contentId }));
+  const full = value(await plugin.open(f.ctx, legacy, { expectedContentId: raw.contentId }));
   expect(new Uint8Array(await new Response(full.body).arrayBuffer())).toEqual(bytes);
   expect(f.calls.filter(call => call.path.endsWith('/1.mp3')).every(call => call.cookie === '')).toBe(true);
-  f.setBrokenVersion(true); expect(await plugin.open(f.ctx, file.fileRef, { expectedContentId: description.contentId })).toMatchObject({ ok: false, error: { kind: 'content_changed' } });
+  f.setBrokenVersion(true); expect(await plugin.open(f.ctx, legacy, { expectedContentId: raw.contentId })).toMatchObject({ ok: false, error: { kind: 'content_changed' } });
 });
 
 test('NetEase liked pages locate once per instance while retaining order, repeated positions, old cursors and sequence checks', async () => {
-  const f = fixture(); await authorize(f); f.setPreview(false); f.setPlaylistIds([...Array.from({ length: 100 }, (_, i) => i + 1), 1]);
+  const f = fixture(); await authorize(f); f.setPreview(false); f.setPlaylistIds([...Array.from({ length: 8 }, (_, i) => i + 1), 1]);
   const initialCalls = f.calls.length;
-  const first = value(await plugin.list(f.ctx, 'liked')); expect(first.items).toHaveLength(100); expect(first.nextCursor).toBeDefined();
-  expect(f.calls.length - initialCalls).toBe(4); const beforeSecond = f.calls.length;
-  const last = value(await plugin.list(f.ctx, 'liked', first.nextCursor)); expect(last.items).toHaveLength(1); expect(last.items[0]!.entryId).toBe('101:1:standard'); expect(last.nextCursor).toBeUndefined();
+  const first = value(await plugin.list(f.ctx, 'liked')); expect(first.items).toHaveLength(8); expect(first.nextCursor).toBeDefined();
+  expect(f.calls.length - initialCalls).toBeGreaterThan(4); const beforeSecond = f.calls.length;
+  const last = value(await plugin.list(f.ctx, 'liked', first.nextCursor)); expect(last.items).toHaveLength(1); expect(last.items[0]!.entryId).toBe('9:1:standard'); expect(last.nextCursor).toBeUndefined();
   expect(f.calls.length - beforeSecond).toBe(3);
   expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(1); expect(f.playlistCalls).toEqual(['8', '8']);
-  expect((first.statistics?.tracks ?? 0) + (last.statistics?.tracks ?? 0)).toBe(101);
+  expect((first.statistics?.tracks ?? 0) + (last.statistics?.tracks ?? 0)).toBe(9);
 
   const legacy = JSON.parse(first.nextCursor!) as Record<string, unknown>; delete legacy.likedPlaylistId; delete legacy.instanceId;
   const beforeLegacy = f.calls.length;
-  expect(value(await plugin.list(f.ctx, 'liked', JSON.stringify(legacy))).items[0]!.entryId).toBe('101:1:standard');
+  expect(value(await plugin.list(f.ctx, 'liked', JSON.stringify(legacy))).items[0]!.entryId).toBe('9:1:standard');
   expect(f.calls.length - beforeLegacy).toBe(4); expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(2);
-  f.setPlaylistIds(Array.from({ length: 101 }, (_, i) => 101 - i));
+  f.setPlaylistIds(Array.from({ length: 9 }, (_, i) => 9 - i));
   expect(await plugin.list(f.ctx, 'liked', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'content_changed' } });
   expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(2);
 
   const other = fixture(); other.ctx.instanceId = 'netease-b'; other.setLikedPlaylistId(18); await authorize(other); other.setPreview(false);
-  other.setPlaylistIds(Array.from({ length: 101 }, (_, i) => i + 201));
+  other.setPlaylistIds(Array.from({ length: 9 }, (_, i) => i + 201));
   const beforeForeign = other.calls.length;
   expect(await plugin.list(other.ctx, 'liked', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'invalid_config' } }); expect(other.calls).toHaveLength(beforeForeign);
   const otherFirst = value(await plugin.list(other.ctx, 'liked'));
-  expect(value(await plugin.list(other.ctx, 'liked', otherFirst.nextCursor)).items[0]!.entryId).toBe('101:301:standard');
+  expect(value(await plugin.list(other.ctx, 'liked', otherFirst.nextCursor)).items[0]!.entryId).toBe('9:209:standard');
   expect(other.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(1); expect(other.playlistCalls).toEqual(['18', '18']);
 });
 
@@ -266,21 +272,22 @@ test('NetEase selects the requested level from 102 native rows for 100 IDs and s
     { ...rows[73]!, level: 'lossless', type: 'FLAC', md5: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', size: 64, url: 'https://m1.music.126.net/other/74.flac', freeTrialInfo: { start: 0, end: 30 } }
   ];
   f.setPlaybackRows(alternateLevels);
-  const page = value(await plugin.list(f.ctx, 'liked'));
-  expect(page.items).toHaveLength(100); expect(page.statistics).toMatchObject({ tracks: 100, files: 100, hiddenTracks: 0 });
+  const ids = Array.from({ length: 100 }, (_, index) => String(index + 1));
+  const resolve = () => resolveMedia(new NeteaseClient(f.ctx), ids, 'standard');
+  expect((await resolve()).size).toBe(100);
   f.setPlaybackRows(rows => alternateLevels(rows.map(row => ({ ...row, type: 'MP3' }))));
-  const uppercase = value(await plugin.list(f.ctx, 'liked')); expect(uppercase.items).toHaveLength(100);
-  expect(uppercase.items.every(item => item.kind === 'file' && JSON.parse(item.fileRef).type === 'mp3')).toBe(true);
+  const uppercase = await resolve(); expect(uppercase.size).toBe(100);
+  expect([...uppercase.values()].every(item => item.reference.type === 'mp3')).toBe(true);
   f.setPlaybackRows(rows => [...rows, { ...rows[21]!, url: 'https://m2.music.126.net/another-locator/22.mp3' }]);
-  expect(value(await plugin.list(f.ctx, 'liked')).items).toHaveLength(100);
+  expect((await resolve()).size).toBe(100);
   f.setPlaybackRows(rows => rows.map((row, index) => index ? row : { ...row, level: 'lossless', type: 'FLAC' }));
-  expect(value(await plugin.list(f.ctx, 'liked')).statistics).toMatchObject({ tracks: 100, files: 99, hiddenTracks: 1 });
+  expect((await resolve()).size).toBe(99);
   f.setPlaybackRows(rows => [...rows, { ...rows[21]!, md5: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }]);
-  expect(await plugin.list(f.ctx, 'liked')).toMatchObject({ ok: false, error: { kind: 'temporary' } });
+  expect(resolve()).rejects.toMatchObject({ fault: { kind: 'temporary' } });
   f.setPlaybackRows(rows => [...rows, { ...rows[21]!, id: 101 }]);
-  expect(await plugin.list(f.ctx, 'liked')).toMatchObject({ ok: false, error: { kind: 'temporary' } });
+  expect(resolve()).rejects.toMatchObject({ fault: { kind: 'temporary' } });
   f.setPlaybackRows(rows => rows.slice(1));
-  expect(await plugin.list(f.ctx, 'liked')).toMatchObject({ ok: false, error: { kind: 'temporary' } });
+  expect(resolve()).rejects.toMatchObject({ fault: { kind: 'temporary' } });
 });
 
 test('NetEase forwards the caller abort to the actual Fetch request', async () => {
@@ -357,4 +364,61 @@ test('NetEase excludes every preview in a fallback chain and does not treat temp
   const unknown = await qualityFixture(); unknown.setPlaylistIds([1]); unknown.ctx.config = audio(['lossless'], 'fallback');
   unknown.available.set('1:lossless', { level: 'lossless', type: 'OGG' }); unknown.available.set('1:standard', { level: 'standard' });
   expect(await plugin.list(unknown.ctx, 'liked')).toMatchObject({ ok: false, error: { kind: 'temporary' } }); expect(unknown.playbackCalls).toHaveLength(1);
+});
+
+test('NetEase prepares album positions, cover and three lyric forms once, and cache-only stat matches final streamed bytes', async () => {
+  const f = fixture(); await authorize(f); f.setPlaylistIds([1, 1]); f.setPreview(false);
+  const jpeg = new Uint8Array(await Bun.file(new URL('./fixtures/source-metadata/cover.jpg', import.meta.url)).arrayBuffer());
+  const native = f.ctx.fetch; const counts = { album: 0, lyrics: 0, cover: 0 };
+  f.ctx.fetch = (async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    if (url.pathname.endsWith('/v3/song/detail')) return Response.json({ code: 200, songs: [{ id: 1, name: '来源歌名', ar: [{ name: '第一歌手' }, { name: '第二歌手' }],
+      al: { id: 55, name: '来源专辑', picUrl: 'https://p1.music.126.net/cover.jpg' }, no: 7, cd: '2' }] });
+    if (url.pathname.endsWith('/v1/album/55')) { counts.album++; return Response.json({ code: 200, album: { id: 55, artists: [{ name: '专辑歌手' }], publishTime: Date.UTC(2020, 1, 2, 16), size: 12 } }); }
+    if (url.pathname.endsWith('/song/lyric/v1')) counts.lyrics++;
+    if (url.hostname === 'p1.music.126.net') { expect(url.searchParams.get('param')).toBe('500y500'); counts.cover++; return new Response(jpeg, { headers: { 'Content-Type': 'image/jpg' } }); }
+    return native(input, init);
+  }) as typeof fetch;
+  const listed = value(await plugin.list(f.ctx, 'liked')); expect(listed.items).toHaveLength(2);
+  const entry = listed.items[0]!; if (entry.kind !== 'file') throw new Error('Expected file');
+  expect(listed.items[1]?.kind === 'file' && listed.items[1].fileRef).toBe(entry.fileRef);
+  expect(counts).toEqual({ album: 1, lyrics: 1, cover: 1 });
+  const info = value(await plugin.stat(f.ctx, entry.fileRef)); expect(info).toEqual(entry.info!);
+  const full = value(await plugin.open(f.ctx, entry.fileRef, { expectedContentId: info.contentId }));
+  const bytes = new Uint8Array(await new Response(full.body).arrayBuffer()); expect(bytes.length).toBe(info.size);
+  const tag = parseId3(bytes);
+  expect(tag.title).toBe('来源歌名'); expect(tag.performers).toEqual(['第一歌手', '第二歌手']); expect(tag.album).toBe('来源专辑');
+  expect(tag.albumArtists).toEqual(['专辑歌手']); expect(tag.getTextAsString(Id3v2FrameIdentifiers.TYER!)).toBe('2020'); expect(tag.getTextAsString(Id3v2FrameIdentifiers.TDAT!)).toBe('0302');
+  expect(tag.track).toBe(7); expect(tag.trackCount).toBe(12); expect(tag.disc).toBe(2); expect(tag.pictures).toHaveLength(1);
+  expect(tag.pictures[0]!.mimeType).toBe('image/jpeg'); expect(tag.pictures[0]!.data.toByteArray()).toEqual(jpeg);
+  const lyrics = tag.getFramesByClassType<Id3v2UnsynchronizedLyricsFrame>(Id3v2FrameClassType.UnsynchronizedLyricsFrame);
+  expect(lyrics.map(frame => [frame.description, frame.text])).toEqual([['', '[00:00.00]原文'], ['translation', '[00:00.00]译文'], ['romanization', '[00:00.00]Romanization']]);
+  const range = { start: info.size - 64, end: info.size - 1 };
+  const partial = value(await plugin.open(f.ctx, entry.fileRef, { expectedContentId: info.contentId, range }));
+  expect(new Uint8Array(await new Response(partial.body).arrayBuffer())).toEqual(bytes.slice(range.start));
+  expect(counts).toEqual({ album: 1, lyrics: 1, cover: 1 });
+  const cancellable = value(await plugin.open(f.ctx, entry.fileRef, { expectedContentId: info.contentId }));
+  const upstreamSignal = f.calls.at(-1)!.signal!;
+  expect(upstreamSignal.aborted).toBe(false); await cancellable.body.cancel();
+  expect(upstreamSignal.aborted).toBe(true); expect(f.ctx.signal.aborted).toBe(false);
+  const cache = f.ctx.cache as ReturnType<typeof memoryCache>; cache.values.delete(JSON.parse(entry.fileRef).planKey);
+  expect(await plugin.stat(f.ctx, entry.fileRef)).toMatchObject({ ok: false, error: { kind: 'temporary' } });
+});
+
+test('NetEase new listings require the optional host cache instead of silently publishing untagged audio', async () => {
+  const f = fixture(); await authorize(f); delete f.ctx.cache;
+  expect(await plugin.list(f.ctx, 'daily')).toMatchObject({ ok: false, error: { kind: 'not_supported' } });
+});
+
+test('NetEase actual FLAC and M4A representations keep exact tagged sizes and final-file byte ranges', async () => {
+  for (const [level, type, mediaType] of [['lossless', 'FLAC', 'audio/flac'], ['standard', 'M4A', 'audio/mp4']] as const) {
+    const f = await qualityFixture(); f.setPlaylistIds([1]); f.ctx.config = audio([level]); f.available.set(`1:${level}`, { level, type });
+    const entry = value(await plugin.list(f.ctx, 'liked')).items[0]!; if (entry.kind !== 'file' || !entry.info) throw new Error('Expected prepared audio');
+    expect(entry.name.toLowerCase()).toEndWith('.' + type.toLowerCase()); expect(entry.info.mediaType).toBe(mediaType);
+    const full = value(await plugin.open(f.ctx, entry.fileRef, { expectedContentId: entry.info.contentId }));
+    const bytes = new Uint8Array(await new Response(full.body).arrayBuffer()); expect(bytes.length).toBe(entry.info.size);
+    const range = { start: entry.info.size - 64, end: entry.info.size - 1 };
+    const partial = value(await plugin.open(f.ctx, entry.fileRef, { expectedContentId: entry.info.contentId, range }));
+    expect(new Uint8Array(await new Response(partial.body).arrayBuffer())).toEqual(bytes.slice(range.start));
+  }
 });

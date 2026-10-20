@@ -1,5 +1,6 @@
 import type { Context, Json, Outcome, PluginFault } from '@musicfs/plugin-api';
 import type { QqRequestHandler } from './upstream';
+import { AudioTagError } from '@musicfs/audio-tags';
 import { z } from 'zod';
 import { AUTH_REFRESH_EARLY_MS, AUTH_REFRESH_RETRY_MS, createFetchTransport, createSealedSessionResolver, createSessionMusicuClient, refreshLoginCredential, recommendPlaylistsResult, QqApiError, type AuthHttpClient, type AuthSession, type MusicuDescriptor } from './generated-upstream.mjs';
 
@@ -166,7 +167,7 @@ export async function run<T>(ctx: Context, handler: QqHandler, operation: (clien
     return { ok: true, value, ...(client.changed ? { nextPrivateState: client.state as Json } : {}) };
   } catch (error) {
     if (ctx.signal.aborted) throw ctx.signal.reason;
-    return { ok: false, error: error instanceof QqFailure ? error.fault : { kind: 'temporary', message: 'QQ 请求暂时失败，请稍后重试。' },
+    return { ok: false, error: error instanceof QqFailure ? error.fault : error instanceof AudioTagError ? { kind: error.kind, message: error.message } : { kind: 'temporary', message: 'QQ 请求暂时失败，请稍后重试。' },
       ...(client?.changed ? { nextPrivateState: client.state as Json } : {}) };
   }
 }

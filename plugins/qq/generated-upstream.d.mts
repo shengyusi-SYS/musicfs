@@ -30,4 +30,4 @@ export type { AuthSession, QrLoginChannel, QrSessionRepository } from "./node_mo
 export type { MusicuDescriptor } from "./node_modules/@yakult-green-tea/qq-music-api/dist/src/protocol/musicu.js";
 export type { OperationHandler, QrRouteService } from "./node_modules/@yakult-green-tea/qq-music-api/dist/src/routes/operations/types.js";
 export type { SealedQrPayloadV1 } from "./node_modules/@yakult-green-tea/qq-music-api/dist/src/serverless/sealedQrState.js";
-export { default as axios } from "../../node_modules/.bun/axios@1.20.0+6e33be4c15dc7415/node_modules/axios/index.js";
+export { default as axios } from "../../node_modules/.bun/axios@1.20.0+302f8eed98f6f908/node_modules/axios/index.js";

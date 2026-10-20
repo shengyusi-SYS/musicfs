@@ -2,7 +2,7 @@ import { dirname, join, resolve } from 'node:path';
 import Ajv from 'ajv';
 import standalone from 'ajv/dist/standalone/index.js';
 import schema from '../plugins/netease/config.schema.json';
-import { buildPlugin } from './build-plugin';
+import { audioTagBuildOptions, audioTagLicenses, buildPlugin } from './build-plugin';
 
 /** Pin and bundle original upstream source; no generated source edits or protocol replacements. */
 export async function buildNetease() {
@@ -13,7 +13,7 @@ export async function buildNetease() {
   const metadata = await Bun.file(join(dependency, 'package.json')).json() as { version: string };
   if (metadata.version !== '4.32.0') throw new Error('Revalidate the pinned NetEase private SDK adapter before upgrading');
   const modules = { qrKey: 'login_qr_key', qrCheck: 'login_qr_check', status: 'login_status', refresh: 'login_refresh', userPlaylists: 'user_playlist',
-    playlist: 'playlist_detail', songs: 'song_detail', daily: 'recommend_songs', recommended: 'recommend_resource', playback: 'song_url_v1' };
+    playlist: 'playlist_detail', songs: 'song_detail', daily: 'recommend_songs', recommended: 'recommend_resource', playback: 'song_url_v1', lyric: 'lyric_new', album: 'album' };
   const imports = [];
   for (const [name, file] of Object.entries(modules)) {
     const path = join(dependency, 'module', file + '.js');
@@ -38,9 +38,11 @@ export async function buildNetease() {
   dependencies.push(['Zod 4.6.7', 'node_modules/zod/LICENSE'], ['Ajv 8.20.0', 'node_modules/ajv/LICENSE']);
   const licenses = [];
   for (const [name, path] of dependencies) licenses.push(`${name}\n\n${await Bun.file(path!).text()}`);
+  licenses.push(...await audioTagLicenses());
   await Bun.write(join(directory, 'THIRD_PARTY_LICENSE.txt'), licenses.join('\n\n---\n\n'));
   return buildPlugin(directory, 'dist/netease/org.musicfs.netease.zip', {
-    external: ['node:crypto', 'node:zlib'],
+    ...audioTagBuildOptions,
+    external: [...audioTagBuildOptions.external, 'node:crypto', 'node:zlib'],
     plugins: [{ name: 'netease-node-builtins', setup(builder) {
       // CJS external require is not available in a Worker ES module. A static
       // namespace bridge preserves the original upstream import unchanged.

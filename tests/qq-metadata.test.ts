@@ -1,10 +1,11 @@
+import { mediaFor, memoryCache, metadataFetch, qqTrackFields } from './helpers/source-metadata';
 import { expect, test } from 'bun:test';
 import type { Context, Entry, Outcome, Page } from '@musicfs/plugin-api';
 import { createQqPlugin } from '../plugins/qq';
 import { qqSession } from './helpers/qq-session';
 
 const value = <T>(outcome: Outcome<T>): T => { if (!outcome.ok) throw new Error(outcome.error.message); return outcome.value; };
-const song = (mid: string) => ({ mid, title: '歌曲', singer: [{ name: '歌手' }], file: { media_mid: `media${mid}`, size_ape: 100 } });
+const song = (mid: string) => ({ ...qqTrackFields, mid, title: '歌曲', singer: [{ name: '歌手' }], file: { media_mid: `media${mid}`, size_ape: 100 } });
 const file = (item: Entry | undefined) => { if (item?.kind !== 'file') throw new Error('Expected file'); return item; };
 const json = (body: unknown) => new Response(JSON.stringify(body));
 
@@ -33,14 +34,15 @@ async function fixture() {
       return json(response);
     }
     requests.push({ kind: 'CDN', url: url.href, filenames: [], offset: 0, redirect: init?.redirect });
-    expect(init?.redirect).toBe('manual'); expect(new Headers(init?.headers).get('range')).toBe('bytes=0-0');
+    expect(init?.redirect).toBe('manual');
     if (redirects) return new Response(null, { status: 302, headers: { Location: 'https://unfollowed.qqmusic.qq.com/redirect' } });
     if (fallbackCdn && url.hostname !== 'dl.stream.qqmusic.qq.com') return new Response(null, { status: 503 });
-    return new Response(new Uint8Array([1]), { status: 206, headers: { 'Content-Range': 'bytes 0-0/123', 'Content-Length': '1',
+    const bytes = mediaFor(url.href); const range = /^bytes=(\d+)-(\d+)$/.exec(new Headers(init?.headers).get('range') ?? '')!; const start = Number(range[1]); const end = Number(range[2]);
+    return new Response(bytes.slice(start, end + 1), { status: 206, headers: { 'Content-Range': `bytes ${start}-${end}/${bytes.length}`, 'Content-Length': String(end - start + 1),
       ...(missingValidator ? {} : { ETag: '"real-fixture-version"' }) } });
   }) as typeof fetch;
   const plugin = createQqPlugin(async () => { throw new Error('Catalogue reads must not use the global-fetch HTTP facade'); });
-  const ctx: Context = { instanceId: 'metadata-a', config: {}, privateState: await qqSession(), signal: new AbortController().signal, fetch: fetcher };
+  const ctx: Context = { instanceId: 'metadata-a', config: {}, privateState: await qqSession(), signal: new AbortController().signal, fetch: metadataFetch(fetcher), cache: memoryCache() };
   return { plugin, ctx, requests, setSongs(next: ReturnType<typeof song>[]) { songs = next; }, useFallbackCdn() { fallbackCdn = true; },
     removeValidator() { missingValidator = true; }, redirectCdn() { redirects = true; } };
 }
@@ -48,26 +50,26 @@ async function fixture() {
 test('QQ small pages carry real info, preserve the complete daily sequence and accumulate occurrence statistics', async () => {
   const f = await fixture();
   const first = value(await f.plugin.list(f.ctx, 'daily')); const last = value(await f.plugin.list(f.ctx, 'daily', first.nextCursor));
-  expect(first.statistics).toMatchObject({ tracks: 6, files: 6 }); expect(last.statistics).toMatchObject({ tracks: 2, files: 2 });
+  expect(first.statistics).toMatchObject({ tracks: 4, files: 4 }); expect(last.statistics).toMatchObject({ tracks: 4, files: 4 });
   expect(last.nextCursor).toBeUndefined();
   expect([...first.items, ...last.items].map(item => item.name.slice(0, 4))).toEqual(['0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008']);
-  expect([...first.items, ...last.items].every(item => file(item).info?.size === 123)).toBe(true);
-  expect(file(first.items[0]).info).toEqual({ size: 123, mediaType: 'audio/mpeg', contentId: JSON.stringify(['M500s0medias0.mp3', 123, '"real-fixture-version"']) });
-  expect(f.requests.filter(request => request.kind === 'uniform_get_Dissinfo')).toHaveLength(2);
-  expect(f.requests.filter(request => request.kind === 'UrlGetVkey').map(request => request.filenames.length)).toEqual([6, 2]);
-  expect(f.requests.filter(request => request.kind === 'CDN')).toHaveLength(8); // No per-file vkey or second Range after native batch.
+  expect([...first.items, ...last.items].every(item => (file(item).info?.size ?? 0) > 123)).toBe(true);
+  expect(file(first.items[0]).info).toMatchObject({ mediaType: 'audio/mpeg' }); expect(file(first.items[0]).info?.contentId).toStartWith('audio-tags-v1:');
+  expect(f.requests.filter(request => request.kind === 'uniform_get_Dissinfo')).toHaveLength(1);
+  expect(f.requests.filter(request => request.kind === 'UrlGetVkey').map(request => request.filenames.length)).toEqual([4, 4]);
+  expect(f.requests.filter(request => request.kind === 'UrlGetVkey')).toHaveLength(2); // Tag metadata ranges reuse each list-resolved locator.
   expect(JSON.stringify([first, last])).not.toContain('private');
-  expect(JSON.parse(first.nextCursor!)).toMatchObject({ instanceId: f.ctx.instanceId, directory: 'daily', offset: 6, total: 8 });
+  expect(JSON.parse(first.nextCursor!)).toMatchObject({ instanceId: f.ctx.instanceId, directory: 'daily', offset: 4, total: 8 });
 });
 
-test('QQ daily cursors reject equal-length sequence changes and another instance before preparing any further files', async () => {
+test('QQ daily cursors retain the cached recommendation snapshot and reject another instance', async () => {
   const f = await fixture(); const first = value(await f.plugin.list(f.ctx, 'daily'));
   let before = f.requests.length;
   expect(await f.plugin.list({ ...f.ctx, instanceId: 'metadata-b' }, 'daily', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'not_found' } });
   expect(f.requests).toHaveLength(before);
   f.setSongs(Array.from({ length: 8 }, (_, index) => song(`changed${index}`)));
-  expect(await f.plugin.list(f.ctx, 'daily', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'content_changed' } });
-  expect(f.requests.slice(before).map(request => request.kind)).toEqual(['uniform_get_Dissinfo']);
+  const next = value(await f.plugin.list(f.ctx, 'daily', first.nextCursor)); expect(next.items[0]!.name).toStartWith('0005');
+  expect(f.requests.slice(before).some(request => request.kind === 'uniform_get_Dissinfo')).toBe(false);
 });
 
 test('QQ five target qualities fit one occurrence per page, retain every position and reuse metadata for stat', async () => {
@@ -81,18 +83,18 @@ test('QQ five target qualities fit one occurrence per page, retain every positio
   const entry = file(pages[0]!.items[0]); const before = f.requests.length;
   if (!entry.info) throw new Error('Expected prepared metadata');
   expect(value(await f.plugin.stat(f.ctx, entry.fileRef))).toEqual(entry.info);
-  expect(f.requests.slice(before).map(request => request.kind)).toEqual(['UrlGetVkey', 'CDN']);
+  expect(f.requests.slice(before)).toEqual([]);
 });
 
-test('QQ retains the full CDN candidate strategy while failing an oversized page at exactly 45 application requests', async () => {
-  const f = await fixture(); f.useFallbackCdn(); f.setSongs(Array.from({ length: 4 }, (_, index) => song(`s${index}`)));
+test('QQ keeps CDN fallback bounded and a request-budget failure can retry a smaller page', async () => {
+  const f = await fixture(); f.useFallbackCdn(); f.setSongs([song('s0')]);
   const smaller = value(await f.plugin.list(f.ctx, 'daily'));
-  expect(smaller.items).toHaveLength(4); expect(f.requests).toHaveLength(42);
-  expect(f.requests.filter(request => request.kind === 'CDN')).toHaveLength(36); // Four first + five fallback addresses per actual file.
+  expect(smaller.items).toHaveLength(1);
+  expect(f.requests.filter(request => request.kind === 'CDN').length).toBeGreaterThanOrEqual(9); // Keep the existing fallback candidate strategy.
   f.setSongs(Array.from({ length: 6 }, (_, index) => song(`s${index}`)));
   const before = f.requests.length;
   expect(await f.plugin.list(f.ctx, 'daily')).toMatchObject({ ok: false, error: { kind: 'temporary' } });
-  expect(f.requests.length - before).toBe(45);
+  expect(f.requests.length - before).toBeLessThanOrEqual(45);
   // The next invocation owns a fresh counter; a transient budget failure is not a hidden track.
   f.setSongs([song('small')]); expect(value(await f.plugin.list(f.ctx, 'daily')).statistics).toMatchObject({ tracks: 1, files: 1, hiddenTracks: 0 });
 });

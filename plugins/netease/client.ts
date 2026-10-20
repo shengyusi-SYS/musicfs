@@ -1,5 +1,6 @@
 import type { Context, Json, Outcome, PluginFault } from '@musicfs/plugin-api';
 import { CookieJar, type SerializedCookieJar } from 'tough-cookie';
+import { AudioTagError } from '@musicfs/audio-tags';
 import { z } from 'zod';
 import { encrypt, endpoints, type Endpoint, type UpstreamRequest } from './generated-upstream.mjs';
 
@@ -110,7 +111,7 @@ export async function run<T>(ctx: Context, operation: (client: NeteaseClient) =>
     return { ok: true, value, ...(client.changed ? { nextPrivateState: client.state as Json } : {}) };
   } catch (error) {
     ctx.signal.throwIfAborted();
-    return { ok: false, error: error instanceof NeteaseFailure ? error.fault : { kind: 'temporary', message: '网易云请求暂时失败，请稍后重试。' },
+    return { ok: false, error: error instanceof NeteaseFailure ? error.fault : error instanceof AudioTagError ? { kind: error.kind, message: error.message } : { kind: 'temporary', message: '网易云请求暂时失败，请稍后重试。' },
       ...(client?.changed ? { nextPrivateState: client.state as Json } : {}) };
   }
 }

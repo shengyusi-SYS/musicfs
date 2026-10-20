@@ -2,7 +2,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import Ajv from 'ajv';
 import standalone from 'ajv/dist/standalone/index.js';
 import schema from '../plugins/qq/config.schema.json';
-import { buildPlugin } from './build-plugin';
+import { audioTagBuildOptions, audioTagLicenses, buildPlugin } from './build-plugin';
 
 export async function generateQqUpstream() {
   const dependency = dirname(Bun.resolveSync('@yakult-green-tea/qq-music-api/package.json', resolve('plugins/qq')));
@@ -72,10 +72,11 @@ export async function buildQq() {
   for (const [name, location] of [['@yakult-green-tea/qq-music-api 3.3.3', join(dependency, 'LICENSE')], ['Axios 1.20.0', join(axiosDirectory, 'LICENSE')], ['Zod 4.6.7', 'node_modules/zod/LICENSE'], ['Ajv 8.20.0', 'node_modules/ajv/LICENSE']]) {
     licenses.push(`${name}\n\n${await Bun.file(location!).text()}`);
   }
+  licenses.push(...await audioTagLicenses());
   await Bun.write('plugins/qq/THIRD_PARTY_LICENSE.txt', licenses.join('\n\n---\n\n'));
   await Bun.write('plugins/qq/THIRD_PARTY_ATTRIBUTION.md', await Bun.file(join(dependency, 'ATTRIBUTION.md')).text());
   // The SDK logger reads process.env. Freeze its logging settings at author build time;
   // the installed bundle has no process global or host environment dependency.
-  return buildPlugin('plugins/qq', 'dist/plugins/org.musicfs.qq.zip', { define: { 'process.env': JSON.stringify({ LOG_LEVEL: 'error' }) } });
+  return buildPlugin('plugins/qq', 'dist/plugins/org.musicfs.qq.zip', { ...audioTagBuildOptions, define: { 'process.env': JSON.stringify({ LOG_LEVEL: 'error' }) } });
 }
 if (import.meta.main) console.log(`Built QQ development plugin (${(await buildQq()).byteLength} bytes)`);

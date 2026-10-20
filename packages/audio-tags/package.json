@@ -1,0 +1,10 @@
+{
+  "name": "@musicfs/audio-tags",
+  "version": "0.1.0-dev.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "node-taglib-sharp": "6.0.3" },
+  "devDependencies": { "@musicfs/plugin-api": "workspace:*" },
+  "license": "GPL-3.0-only"
+}

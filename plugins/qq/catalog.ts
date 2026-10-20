@@ -1,7 +1,11 @@
-import type { Entry, Page, Root } from '@musicfs/plugin-api';
+import type { Entry, Json, Page, Root } from '@musicfs/plugin-api';
+import type { AudioFormat } from '@musicfs/audio-tags';
 import { z } from 'zod';
 import { fail, object, QqFailure, type QqClient } from './client';
-import { resolveVariants, trackKey } from './playback';
+import { decodeFile, resolveVariants, trackKey } from './playback';
+import { musicTags } from './metadata';
+import { tagFile } from './tagged';
+import { sourceReader } from './media';
 import { formats } from './file-info';
 import { DAILY_SONGS, MUSIC_FILE_TYPES } from './generated-upstream.mjs';
 import { audioPolicy } from './configuration';
@@ -9,7 +13,7 @@ import { readCollection, type CollectionKind } from './collections';
 import { parsePlaylistRef, playlistRef, positiveId, type PlaylistReference } from './playlist-reference';
 
 const song = z.object({ mid: z.string().regex(/^[A-Za-z0-9]+$/), title: z.string(),
-  singer: z.array(z.object({ name: z.string() })), file: z.object({ media_mid: z.string().regex(/^[A-Za-z0-9]+$/) }).passthrough() });
+  singer: z.array(z.object({ name: z.string() }).passthrough()), file: z.object({ media_mid: z.string().regex(/^[A-Za-z0-9]+$/) }).passthrough() }).passthrough();
 const pageCursor = z.object({ directory: z.string(), offset: z.number().int().nonnegative().max(100_000), total: z.number().int().nonnegative(),
   instanceId: z.string().optional(), revision: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict();
 type Cursor = z.infer<typeof pageCursor>;
@@ -99,8 +103,11 @@ export async function list(client: QqClient, directory: string, cursor?: string)
   if (directory === 'recommended') return recommendations(client, cursor);
   const playlist = directory === 'liked' || directory === 'daily' ? null : parsePlaylistRef(directory);
   const offset = position?.offset ?? 0;
-  const count = Math.max(1, Math.floor(6 / audioPolicy(client.ctx.config).qualities.length));
-  const result = directory === 'daily' ? await client.rpc(() => DAILY_SONGS) : await playlistSongs(client, playlist, offset, count);
+  const count = Math.max(1, Math.floor(4 / audioPolicy(client.ctx.config).qualities.length));
+  const previousDaily = directory === 'daily' && position?.revision ? await client.ctx.cache?.get(`daily:${position.revision}`) : undefined;
+  if (directory === 'daily' && position && previousDaily === undefined) fail('content_changed', 'QQ 每日推荐分页资料已失效，请重新刷新。');
+  const result = directory === 'daily' ? previousDaily === undefined ? await client.rpc(() => DAILY_SONGS) : { songs: previousDaily }
+    : await playlistSongs(client, playlist, offset, count);
   const parsed = z.array(song).safeParse(result.songs);
   if (!parsed.success) fail('temporary', 'QQ 歌曲资料格式暂时无法识别。');
   const received = parsed.data;
@@ -109,9 +116,11 @@ export async function list(client: QqClient, directory: string, cursor?: string)
   if (position && position.total !== total) fail('content_changed', 'QQ 集合在分页期间发生变化，请重新刷新。');
   let revision: string | undefined;
   if (directory === 'daily') {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(received.map(trackKey))));
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(received)));
     revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
     if (position && position.revision !== revision) fail('content_changed', 'QQ 每日推荐在分页期间发生变化，请重新刷新。');
+    if (!client.ctx.cache) fail('not_supported', 'QQ 补标签需要支持插件资料缓存的宿主。');
+    if (!position) await client.ctx.cache.put(`daily:${revision}`, received as Json, { expiresAt: Date.now() + 30 * 60_000 });
   }
   if (offset > total || directory !== 'daily' && (offset + received.length > total || typeof result.more !== 'boolean')) fail('temporary', 'QQ 返回了不一致的歌曲分页。');
   const songs = (directory === 'daily' ? received.slice(offset) : received).slice(0, count);
@@ -119,15 +128,23 @@ export async function list(client: QqClient, directory: string, cursor?: string)
   if (more && !songs.length) fail('temporary', 'QQ 分页提前结束，尚未取得完整集合。');
   const resolved = await resolveVariants(client, songs);
   const statistics = { tracks: songs.length, files: 0, hiddenTracks: 0, missingVersions: 0, fallbackVersions: 0, deduplicatedVersions: 0 };
-  const items: Entry[] = songs.flatMap((item, index) => {
+  const items: Entry[] = [];
+  for (let index = 0; index < songs.length; index++) {
+    const item = songs[index]!;
     const resolution = resolved.get(trackKey(item))!;
     if (!resolution.variants.length) statistics.hiddenTracks++;
     statistics.missingVersions += resolution.missingVersions; statistics.fallbackVersions += resolution.fallbackVersions;
     statistics.deduplicatedVersions += resolution.deduplicatedVersions;
     const occurrence = offset + index;
-    return resolution.variants.map(variant => ({ kind: 'file' as const, entryId: `${occurrence}:${item.mid}:${variant.quality}`,
-      name: `${String(occurrence + 1).padStart(4, '0')} - ${item.title} - ${item.singer.map(artist => artist.name).join('、')} [${formats[variant.quality].label}]${MUSIC_FILE_TYPES[variant.quality].extension}`, fileRef: variant.fileRef, info: variant.info }));
-  });
+    if (!resolution.variants.length) continue;
+    const tags = await musicTags(client, item);
+    for (const variant of resolution.variants) {
+      const prepared = await tagFile(client, decodeFile(variant.fileRef), variant.info, MUSIC_FILE_TYPES[variant.quality].extension.slice(1) as AudioFormat, tags,
+        sourceReader(client, variant.fileRef, variant.info, variant.location));
+      items.push({ kind: 'file', entryId: `${occurrence}:${item.mid}:${variant.quality}`,
+        name: `${String(occurrence + 1).padStart(4, '0')} - ${item.title} - ${item.singer.map(artist => artist.name).join('、')} [${formats[variant.quality].label}]${MUSIC_FILE_TYPES[variant.quality].extension}`, ...prepared });
+    }
+  }
   statistics.files = items.length;
   return { items, statistics,
     ...(more ? { nextCursor: JSON.stringify({ directory, instanceId: client.ctx.instanceId, offset: offset + songs.length, total, ...(revision ? { revision } : {}) }) } : {}) };

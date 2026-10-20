@@ -1,19 +1,15 @@
 import type { FileInfo, ReadRequest, ReadResult } from '@musicfs/plugin-api';
-import { z } from 'zod';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
 import { audioPolicy, lowerQualities, qualities, type Quality } from './configuration';
+import { decodeTagged, taggedOpen, taggedStat } from './tagged';
+import type { ReadRange } from '@musicfs/audio-tags';
+import { decodeFile, info, reference, type MediaReference } from './reference';
+export { decodeFile, info, type MediaReference } from './reference';
 
-const reference = z.object({ version: z.literal(1), id: z.string().regex(/^[1-9]\d*$/), level: z.enum(qualities), type: z.enum(['mp3', 'flac', 'm4a']), md5: z.string().regex(/^[a-fA-F0-9]{32}$/), size: z.number().int().positive().safe() }).strict();
-export type MediaReference = z.infer<typeof reference>;
-const mime = { mp3: 'audio/mpeg', flac: 'audio/flac', m4a: 'audio/mp4' };
 type Location = { reference: MediaReference; url: string };
-type Variant = { reference: MediaReference; targets: Quality[] };
+type Variant = { reference: MediaReference; targets: Quality[]; location: Location };
 type Resolution = { variants: Variant[]; missingVersions: number; fallbackVersions: number; deduplicatedVersions: number };
-export function decodeFile(file: string): MediaReference {
-  let value: unknown; try { value = JSON.parse(file); } catch { fail('not_found', '无效的网易云文件引用。'); }
-  const parsed = reference.safeParse(value); if (!parsed.success) fail('not_found', '无效的网易云文件引用。'); return parsed.data;
-}
 function mediaUrl(value: unknown): string {
   if (typeof value !== 'string') fail('temporary', '网易云未返回有效音频地址。');
   let url: URL; try { url = new URL(value); } catch { fail('temporary', '网易云音频地址无法识别。'); }
@@ -55,7 +51,6 @@ export async function resolveMedia(client: NeteaseClient, ids: string[], selecte
   }
   return result;
 }
-export const info = (ref: MediaReference): FileInfo => ({ contentId: JSON.stringify([ref.id, ref.level, ref.type, ref.md5.toLowerCase(), ref.size]), size: ref.size, mediaType: mime[ref.type] });
 
 /** Resolve unique songs once per requested level; catalogue occurrences stay separate. */
 export async function resolveVariants(client: NeteaseClient, input: string[]): Promise<Map<string, Resolution>> {
@@ -79,7 +74,7 @@ export async function resolveVariants(client: NeteaseClient, input: string[]): P
         if (found.reference.level !== target) resolution.fallbackVersions++;
         const previous = resolution.variants.find(variant => info(variant.reference).contentId === info(found.reference).contentId);
         if (previous) { previous.targets.push(target); resolution.deduplicatedVersions++; }
-        else resolution.variants.push({ reference: found.reference, targets: [target] });
+        else resolution.variants.push({ reference: found.reference, targets: [target], location: found });
         return false;
       });
     }
@@ -88,11 +83,11 @@ export async function resolveVariants(client: NeteaseClient, input: string[]): P
   return resolved;
 }
 
-async function request(client: NeteaseClient, ref: MediaReference, range?: { start: number; end: number }): Promise<Response> {
-  const current = (await resolveMedia(client, [ref.id], ref.level)).get(ref.id);
+async function request(client: NeteaseClient, ref: MediaReference, range?: { start: number; end: number }, location?: Location, signal = client.ctx.signal): Promise<Response> {
+  const current = location ?? (await resolveMedia(client, [ref.id], ref.level)).get(ref.id);
   if (!current) fail('unavailable', '网易云当前未提供此完整音频版本。');
   if (info(current.reference).contentId !== info(ref).contentId) fail('content_changed', '网易云音频版本已变化，请刷新目录。');
-  const response = await client.ctx.fetch(current.url, { signal: client.ctx.signal, headers: { 'Accept-Encoding': 'identity', ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}) } });
+  const response = await client.ctx.fetch(current.url, { signal: signal === client.ctx.signal ? signal : AbortSignal.any([client.ctx.signal, signal]), headers: { 'Accept-Encoding': 'identity', ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}) } });
   if (!response.body || !response.ok) { await response.body?.cancel(); fail(response.status === 416 ? 'content_changed' : 'temporary', '网易云音频读取暂未成功。'); }
   return response;
 }
@@ -103,15 +98,32 @@ function verify(response: Response, ref: MediaReference, range?: { start: number
   if (!length || !/^\d+$/.test(length) || Number(length) !== (range ? range.end - range.start + 1 : ref.size)) fail('temporary', '网易云音频响应长度不一致。');
 }
 export async function stat(client: NeteaseClient, file: string): Promise<FileInfo> {
+  const tagged = decodeTagged(file);
+  if (tagged) return taggedStat(client, tagged);
   const ref = decodeFile(file); const range = { start: 0, end: 0 }; const response = await request(client, ref, range);
   try { verify(response, ref, range); return info(ref); }
   finally { await response.body?.cancel(); }
 }
 export async function open(client: NeteaseClient, file: string, input: ReadRequest): Promise<ReadResult> {
+  const tagged = decodeTagged(file);
+  if (tagged) return taggedOpen(client, tagged, input, sourceReader(client, tagged.source));
+  return rawOpen(client, file, input);
+}
+export async function rawOpen(client: NeteaseClient, file: string, input: ReadRequest, location?: Location, signal = client.ctx.signal): Promise<ReadResult> {
   const ref = decodeFile(file);
   if (input.expectedContentId !== info(ref).contentId) fail('content_changed', '网易云文件版本已变化。');
   if (input.range && (!Number.isSafeInteger(input.range.start) || !Number.isSafeInteger(input.range.end) || input.range.start < 0 || input.range.end < input.range.start || input.range.end >= ref.size)) fail('not_supported', '无效的网易云音频范围。');
-  const response = await request(client, ref, input.range);
+  const response = await request(client, ref, input.range, location, signal);
   try { verify(response, ref, input.range); return { content: info(ref), servedRange: input.range ?? null, body: response.body! }; }
   catch (error) { await response.body?.cancel(); throw error; }
+}
+
+export function sourceReader(client: NeteaseClient, ref: MediaReference, location?: Location): ReadRange {
+  let located: Promise<Location | undefined> | undefined = location ? Promise.resolve(location) : undefined;
+  return async (range, signal) => {
+    signal.throwIfAborted();
+    const current = await (located ??= resolveMedia(client, [ref.id], ref.level).then(values => values.get(ref.id)));
+    if (!current) fail('unavailable', '网易云当前未提供此完整音频版本。');
+    return rawOpen(client, JSON.stringify(ref), { expectedContentId: info(ref).contentId, range }, current, signal);
+  };
 }
