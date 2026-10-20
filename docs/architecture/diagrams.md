@@ -82,8 +82,13 @@ flowchart LR
   Click[点击发行程序] --> Identity[验证已有后台身份]
   Identity -->|存在| Browser[open 打开共用页面]
   Identity -->|不存在| Spawn[分离后台，持有 proper-lockfile]
-  Spawn --> Local[私有凭据 / SQLite / 本机 HTTP]
+  Spawn --> Settings[读取桌面网络设置]
+  Settings --> Local[私有凭据 / SQLite / HTTP 监听]
   Local --> Browser
+  Browser --> Network[保存本机或局域网 / 端口]
+  Network --> NextStart[正常退出后下次启动生效]
+  NextStart --> Settings
+  Local --> LAN[启用时提供局域网 DAV 地址]
   Browser --> Mounts[挂载管理 API]
   Mounts --> RC[随包 rclone 私有 RC]
   RC --> LocalDAV[本机 DAV]
@@ -185,6 +190,11 @@ sequenceDiagram
     S->>P: 尝试清理当前挑战
     Note over S,D: 旧轮询结果不能覆盖取消；清理失败不撤销取消
     S-->>W: cancelled
+  else 退出已保存授权
+    W->>S: DELETE 实例 session
+    S->>D: 原子保留配置、清空私有状态与认证、增加代际
+    Note over S,D: 旧认证/刷新不能写回；布局保留
+    S-->>W: 204，后续按现有流程重新授权
   end
 ```
 

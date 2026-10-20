@@ -3,6 +3,7 @@ import type { Status, SourceInstance, PluginInstallation, PluginInspection, Sour
 import type { PluginChange } from '../contracts/plugin-changes';
 import type { MountInput, MountView } from '../contracts/mounts';
 import type { RefreshScope, RefreshView } from '../contracts/refreshes';
+import type { DesktopNetworkSettings, DesktopNetworkView } from '../contracts/desktop';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -53,6 +54,8 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     mount: (input: MountInput) => request<MountView>('/mounts', json('POST', input)),
     unmount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     quitDesktop: () => request<{ stopping: true }>('/desktop/quit', { method: 'POST' }),
+    desktopNetwork: (signal: AbortSignal) => request<DesktopNetworkView>('/desktop/network', { signal }),
+    saveDesktopNetwork: (settings: DesktopNetworkSettings) => request<DesktopNetworkView>('/desktop/network', json('PUT', settings)),
     configuration: (id: string, signal: AbortSignal) => request<SourceConfiguration>(`/plugins/${encodeURIComponent(id)}/configuration`, { signal }),
     createInstance: (pluginId: string, name: string, config: Json) => request<Result<SourceInstance>>('/instances', json('POST', { pluginId, name, config })),
     configure: (id: string, config: Json) => request<Result<Json>>(`/instances/${encodeURIComponent(id)}/config`, json('PUT', { config })),

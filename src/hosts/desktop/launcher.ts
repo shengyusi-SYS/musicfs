@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { createDesktopService } from './service';
 import { createMountManager } from './mounts';
 import { writePrivateJson } from './rclone-control';
+import { desktopNetworkSchema, desktopNetworkView, readDesktopNetworkSettings } from './network';
 
 const credentialsSchema = z.object({ instanceId: z.uuid(), adminToken: z.string().min(32), username: z.literal('musicfs'), password: z.string().min(32) }).strict();
 const runtimeSchema = z.object({ pid: z.number().int().positive(), origin: z.string(), instanceId: z.uuid() }).strict();
@@ -116,14 +117,15 @@ export async function startDesktopBackground(input: { directory?: string; resour
     }
     const resources = resolve(input.resourcesDirectory);
     if (!await Bun.file(join(resources, 'web', 'index.html')).exists()) throw new Error('发行包缺少共用管理页面，请重新解压完整发行包。');
-    let preferredPort = 0;
+    const network = await readDesktopNetworkSettings(directory);
+    let preferredPort = network.port;
     try {
       const previous = runtimeSchema.parse(JSON.parse(await readFile(runtimePath, 'utf8')));
       const address = new URL(previous.origin);
       if (previous.instanceId === credentials.instanceId && address.protocol === 'http:' && address.hostname === '127.0.0.1'
         && address.pathname === '/' && !address.search && !address.hash && !address.username && !address.password) {
         const port = Number(address.port || 80);
-        if (Number.isInteger(port) && port > 0 && port <= 65535) preferredPort = port;
+        if (!preferredPort && Number.isInteger(port) && port > 0 && port <= 65535) preferredPort = port;
       }
     } catch { /* Missing or invalid crash metadata cannot choose a listening endpoint. */ }
     let origin = '';
@@ -134,6 +136,14 @@ export async function startDesktopBackground(input: { directory?: string; resour
     const app = new Hono();
     app.use('/__musicfs/*', bearerAuth({ token: credentials.adminToken }));
     app.get('/__musicfs/identity', c => c.json({ pid: process.pid, origin, instanceId: credentials.instanceId }));
+    app.use('/api/desktop/network', bearerAuth({ token: credentials.adminToken }));
+    app.get('/api/desktop/network', async c => c.json(desktopNetworkView(await readDesktopNetworkSettings(directory), network, server!.port!)));
+    app.put('/api/desktop/network', async c => {
+      const parsed = desktopNetworkSchema.safeParse(await c.req.json().catch(() => null));
+      if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: '请选择本机或局域网访问，端口须为 0—65535 的整数。' }, 422);
+      await writePrivateJson(join(directory, 'network.json'), parsed.data);
+      return c.json(desktopNetworkView(parsed.data, network, server!.port!));
+    });
     app.post('/api/desktop/quit', bearerAuth({ token: credentials.adminToken }), async c => {
       try { await mounts.close(); }
       catch { return c.json({ error: 'mount_busy', message: '挂载未能正常卸载，后台仍在运行。请关闭占用程序后重试。' }, 409); }
@@ -141,12 +151,15 @@ export async function startDesktopBackground(input: { directory?: string; resour
       return c.json({ stopping: true }, 202);
     });
     app.route('/', service.app);
-    try { server = Bun.serve({ hostname: '127.0.0.1', port: preferredPort, fetch: app.fetch, idleTimeout: 0 }); }
+    const hostname = network.access === 'lan' ? '0.0.0.0' : '127.0.0.1';
+    try { server = Bun.serve({ hostname, port: preferredPort, fetch: app.fetch, idleTimeout: 0 }); }
     catch (error) {
       if (!preferredPort || !(error instanceof Error && 'code' in error && error.code === 'EADDRINUSE')) throw error;
-      server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: app.fetch, idleTimeout: 0 });
+      server = Bun.serve({ hostname, port: 0, fetch: app.fetch, idleTimeout: 0 });
     }
-    origin = server.url.origin;
+    // Launcher identity and local mounts always use a concrete loopback address,
+    // including when the same listener also accepts LAN clients.
+    origin = `http://127.0.0.1:${server.port}`;
     await writePrivateJson(runtimePath, { pid: process.pid, origin, instanceId: credentials.instanceId });
     async function close() {
       if (closing) return closing;
