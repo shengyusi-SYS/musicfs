@@ -15,7 +15,9 @@ export function memoryCache() {
   const values = new Map<string, { value: Json; expiresAt?: number }>();
   const cache: NonNullable<Context['cache']> = {
     async get(key) { const saved = values.get(key); return saved && (saved.expiresAt === undefined || saved.expiresAt > Date.now()) ? structuredClone(saved.value) : undefined; },
+    async getMany(keys) { return Promise.all(keys.map(key => cache.get(key))); },
     async put(key, value, options) { values.set(key, { value: structuredClone(value), ...(options?.expiresAt === undefined ? {} : { expiresAt: options.expiresAt }) }); },
+    async putMany(items) { for (const item of items) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt }); },
   };
   return { ...cache, values };
 }

@@ -1,7 +1,7 @@
 import { ByteVector, Id3v1Tag, Id3v2Tag, ApeTag, FlacBlock, FlacBlockType, XiphComment, XiphPicture } from 'node-taglib-sharp';
 import { AudioTagError, type PrepareOptions, type TaggedPlan, type TagSegment } from './types';
 import { ascii, inline, segmentSize, source } from './bytes';
-import { readBytes } from './read';
+import { readBytes, bufferedRanges } from './read';
 import { applyId3, applyTags } from './tags';
 import { prepareM4a } from './m4a';
 
@@ -111,7 +111,7 @@ export async function prepare(options: PrepareOptions): Promise<TaggedPlan> {
   options.signal.throwIfAborted();
   const encoders = { mp3, flac, ape, m4a: prepareM4a };
   if (!encoders[options.format]) throw new AudioTagError('not_supported', 'Audio tag generation is not supported for this format.');
-  const generated = await encoders[options.format](options);
+  const generated = await encoders[options.format]({ ...options, readRange: bufferedRanges(options) });
   const segments: TagSegment[] = [];
   for (const segment of generated) {
     const previous = segments.at(-1);

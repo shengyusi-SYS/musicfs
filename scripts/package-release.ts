@@ -66,7 +66,7 @@ async function pluginManifest(path: string): Promise<{ id: string; version: stri
 }
 
 /** Prepared release roots only; streams files directly to the archive and retains their Unix modes. */
-async function archive(directory: string, stem: string, staging: string): Promise<ReleaseFile> {
+export async function archive(directory: string, stem: string, staging: string): Promise<ReleaseFile> {
   const file = `${stem}.zip`; const destination = join(staging, file);
   const output = createWriteStream(destination, { flags: 'wx' });
   const writer = new ZipWriter(Writable.toWeb(output), { useWebWorkers: false, bufferedWrite: false, level: 6 });
@@ -89,7 +89,7 @@ async function archive(directory: string, stem: string, staging: string): Promis
   return describe(destination, file);
 }
 
-async function copyProjectSource(directory: string, identity: ReleaseIdentity): Promise<void> {
+export async function copyProjectSource(directory: string, identity: ReleaseIdentity): Promise<void> {
   const directories = ['src', 'packages', 'plugins', 'scripts', 'tests', 'docs', 'outputs', 'worker-template', 'third-party'];
   const rootFiles = ['package.json', 'bun.lock', 'bunfig.toml', 'tsconfig*.json', 'vite.config.*',
     '.dependency-cruiser.cjs', '.gitignore', '.gitattributes', 'README*', 'LICENSE*'];

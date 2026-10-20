@@ -10,8 +10,9 @@ import refreshSchema from './migrations/0005.sql' with { type: 'text' };
 import pluginChangesSchema from './migrations/0006.sql' with { type: 'text' };
 import renewalsSchema from './migrations/0007.sql' with { type: 'text' };
 import pluginCacheSchema from './migrations/0008.sql' with { type: 'text' };
+import pluginCacheIndexes from './migrations/0009.sql' with { type: 'text' };
 import type { PluginCacheStore } from '../../core/sources/cache';
-import { cachedPluginDataStatement, cachePluginDataPlan } from './plugin-cache-sql';
+import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDataPlan, cachePluginDataManyPlan } from './plugin-cache-sql';
 import type { RenewalStore } from '../../core/sources/renewal';
 import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
@@ -35,8 +36,8 @@ export function openSqlite(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = db.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version;
-  if (version === undefined || version < 0 || version > 8) { db.close(); throw new Error('Unsupported MusicFS database version'); }
-  if (version < 8) db.transaction(() => {
+  if (version === undefined || version < 0 || version > 9) { db.close(); throw new Error('Unsupported MusicFS database version'); }
+  if (version < 9) db.transaction(() => {
     if (version === 0) db.exec(initialSchema);
     if (version < 2) db.exec(librarySchema);
     if (version < 3) db.exec(authenticationSchema);
@@ -44,7 +45,8 @@ export function openSqlite(path: string) {
     if (version < 5) db.exec(refreshSchema);
     if (version < 6) db.exec(pluginChangesSchema);
     if (version < 7) db.exec(renewalsSchema);
-    db.exec(pluginCacheSchema); db.exec('PRAGMA user_version = 8');
+    if (version < 8) db.exec(pluginCacheSchema);
+    db.exec(pluginCacheIndexes); db.exec('PRAGMA user_version = 9');
   })();
 
   const installation = (id: string): Installation | undefined => {
@@ -110,8 +112,14 @@ export function openSqlite(path: string) {
     },
     deleteInstance: id => { db.query('DELETE FROM instances WHERE id = ?').run(id); },
     cachedPluginData(source, key, now) { return execute<{ document: string }>(cachedPluginDataStatement(source, key, now))[0]?.document; },
-    cachePluginData(source, key, document, expiresAt, now) {
-      return batch(cachePluginDataPlan(source, key, document, expiresAt, now)).at(-1)!.length === 1;
+    cachedPluginDataMany(source, keys, now) { return execute<{ key: string; document: string }>(cachedPluginDataManyStatement(source, keys, now)); },
+    cachePluginData(source, key, document, expiresAt, now, cleanup = true) {
+      const plan = cachePluginDataPlan(source, key, document, expiresAt, now);
+      return batch(cleanup ? plan : plan.slice(1)).at(-1)!.length === 1;
+    },
+    cachePluginDataMany(source, items, now, cleanup = true) {
+      const plan = cachePluginDataManyPlan(source, items, now);
+      return batch(cleanup ? plan : plan.slice(1)).at(-1)!.length === items.length;
     },
     claimRenewal(expected, token, now, until) {
       return renewalClaimFromRow(batch<RenewalClaimRow>(claimRenewalPlan(expected, token, now, until)).at(-1)?.[0]);
@@ -172,7 +180,7 @@ export function openSqlite(path: string) {
       return db.query<{ instant: number | null }, [number, number, number, number]>(`SELECT MIN(instant) AS instant FROM (
         SELECT CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END AS instant FROM plugin_changes
           WHERE operation_id IN (${readyChangesSQL})
-        UNION ALL SELECT CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END FROM library_refresh_jobs
+        UNION ALL SELECT MAX(CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END, COALESCE(json_extract(document, '$.retryAt'), 0)) FROM library_refresh_jobs
           WHERE operation_id IN (${readyRefreshesSQL}))`).get(Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1)?.instant ?? null;
     },
     close: () => db.close()

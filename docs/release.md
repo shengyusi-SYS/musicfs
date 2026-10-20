@@ -1,8 +1,18 @@
 # MusicFS 当前交付物
 
+## dev.4 刷新性能更新
+
+2026-10-21，应用`0.1.0-dev.4`、API`0.1.7`、schema9；网易云`alpha.10`，QQ`alpha.12`（共用音频准备窗口更新）。本轮单独提供[Windows x64更新包](../dist/releases/musicfs-0.1.0-dev.4-windows-x64.zip)、[对应源码](../dist/releases/musicfs-0.1.0-dev.4-source.zip)与[校验和](../dist/releases/musicfs-0.1.0-dev.4-checksums.txt)；下方dev.3整套归档及其统一清单保持原样，没有重打其他目标或部署云端。
+
+先正常退出旧后台，再解压完整新目录启动；沿用原用户数据，schema8自动升级为9。随后在插件页安装包内`plugins/org.musicfs.netease.zip`（alpha.10），保留原实例与授权。只更新插件而保持旧核心仍有兼容回退，但批量缓存和新进度需要新版核心。插件代码修订会使该实例旧缓存失效，升级后的第一次准备可能仍是冷扫描，后续才直接复用。
+
+完整离线4,000首扫描在缓存有效时为40页、3次基础调用，基本资料与播放信息到期时为83次；只增删少量歌曲复用旧歌准备结果。文件修改时间不再跟随目录刷新时间。本地实际workerd/D1热24首为一页、24条SQL。封面、歌词、实际音频及Range保留，源码与[性能说明](architecture/refresh-performance.md)同步。本包在WSL交叉构建，没有调用Windows宿主、追加真实平台压力测试，或把dev.3的原生挂载验收改记为dev.4通过。
+
+## dev.3 完整发行记录
+
 应用`0.1.0-dev.3`、插件API`0.1.6`、数据库schema8。2026-10-21按用户要求打包最新实现，包含可选音乐资料补全、挂载项管理、WinFsp安装引导、本机HTTPS及Windows原生映射文件上限设置与恢复。下面列出产物、使用入口及未验证范围；既有记录保留各自版本边界，本次仅补现有Windows虚拟机的必要验收，不追加音乐平台请求。
 
-## 本次发行范围
+## dev.3 发行范围
 
 共用核心、管理页面、四个桌面目标、Worker、三个来源插件、独立作者工具包与对应项目源码统一交付。已有证据包括Linux/WSL实际运行与FUSE挂载、真实付费Worker生命周期和升级、双示例有限内容/音质、代表客户端，以及本地/云端四次真实退出重登。完整记录见[验收台账](verification.md)。
 
@@ -15,7 +25,7 @@
 
 上述项目记录为本次跳过或未确认，不记作实测通过。项目自有代码的GPL-3.0-only正文、同版本项目源码及已有第三方材料随包交付；本次收口不构成对全部第三方资料完整性的确认。
 
-## 选择发行包
+## dev.3 整套发行包
 
 本仓库生成的文件位于`dist/releases/`。完整源码/页面/插件身份与摘要以[release-manifest.json](../dist/releases/release-manifest.json)为准，校验文件为[SHA256SUMS](../dist/releases/SHA256SUMS)。
 
@@ -39,7 +49,7 @@ Linux发行程序在此前版本已有WSL解压运行、FUSE本地/远程挂载�
 
 Worker首次部署按包内`WORKER.md`或[部署说明](worker.md#首次部署)操作。已有部署升级核心/WebUI时，使用同版本源码中的组装工具保留实际云端插件和配置；不要直接上传新包初始注册表。插件自身的安装和更新从WebUI完成。
 
-## 本轮包含的变化
+## dev.3 包含的变化
 
 - API 0.1.6 提供可选插件JSON缓存，SQLite/D1新增schema8缓存表。
 - QQ、网易云示例可补全音乐资料、封面和歌词；MP3/FLAC/APE/M4A按标签和原音频区段读取，保持音频编码。格式和真实样本边界见[实现记录](verification/metadata-implementation.md)。

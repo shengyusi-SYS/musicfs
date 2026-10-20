@@ -27,15 +27,23 @@ const activeStep = (step: AuthStep | null): step is Extract<AuthStep, { kind: 'w
 const stampOf = ({ id, pluginId, epoch, pluginRevision, pluginGeneration }: SourceStamp): SourceStamp => ({ id, pluginId, epoch, pluginRevision, pluginGeneration });
 const publicAuthentication = ({ operationId, step, error }: Authentication): Authentication => ({ operationId, step, ...(error ? { error } : {}) });
 
-export function createSources(store: InstanceStore & RenewalStore & Partial<PluginCacheStore>, registry: PluginRegistry, request: typeof fetch = fetch, now: () => number = Date.now) {
+export function createSources(store: InstanceStore & RenewalStore & Partial<PluginCacheStore>, registry: PluginRegistry, request: typeof fetch = fetch, now: () => number = Date.now,
+  limits: { requests?: number; cacheQueries?: number } = {}) {
   const stale = () => new SourceError('stale_call', 'The source changed while this operation was running');
   const invalidAction = () => new SourceError('invalid_auth_action', 'Authentication operation or challenge is no longer current');
   // Native Worker fetch requires its global receiver even when a plugin invokes ctx.fetch().
   const pluginFetch = request.bind(globalThis);
   const cacheStore = typeof store.cachedPluginData === 'function' && typeof store.cachePluginData === 'function' ? store as PluginCacheStore : undefined;
-  const context = (snapshot: InstanceSnapshot, signal: AbortSignal): Context => ({ instanceId: snapshot.id, config: snapshot.config,
-    privateState: snapshot.privateState, signal, fetch: pluginFetch,
-    ...(cacheStore ? { cache: pluginCache(cacheStore, snapshot, signal, now) } : {}) });
+  const context = (snapshot: InstanceSnapshot, signal: AbortSignal): Context => {
+    let requests = limits.requests ?? Infinity; let cacheQueries = limits.cacheQueries ?? Infinity;
+    const spend = (amount: number) => { cacheQueries -= amount; };
+    const bounded = limits.requests !== undefined || limits.cacheQueries !== undefined;
+    const countedFetch = ((input: RequestInfo | URL, init?: RequestInit) => { requests--; return pluginFetch(input, init); }) as typeof fetch;
+    return { instanceId: snapshot.id, config: snapshot.config, privateState: snapshot.privateState, signal,
+      fetch: bounded ? countedFetch : pluginFetch,
+      ...(bounded ? { workBudget: { get remaining() { return Math.min(requests, cacheQueries); } } } : {}),
+      ...(cacheStore ? { cache: pluginCache(cacheStore, snapshot, signal, now, spend) } : {}) };
+  };
   async function capture(id: string) {
     const snapshot = await store.capture(id);
     if (!snapshot) throw new SourceError('missing_instance', 'Source instance is missing or its plugin is not active');

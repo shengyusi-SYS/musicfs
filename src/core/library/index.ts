@@ -95,7 +95,7 @@ type Resolved = { target: Target; name: string; path: string; modifiedAt: string
 type MetadataGroup = { stamp: SourceStamp; entries: [ViewEntry, Resolved][] };
 
 export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore,
-  budgets: { pages: number; entries: number; directories?: number } = { pages: 1000, entries: 100_000 },
+  budgets: { pages: number; entries: number; directories?: number } = { pages: 10_000, entries: 100_000 },
   options: { execution?: 'inline' | 'deferred' } = {}) {
   const refreshes = createRefreshes(sources, store, budgets);
   async function drain(initial: RefreshView, signal: AbortSignal): Promise<RefreshView> {
@@ -105,6 +105,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
         signal.throwIfAborted();
         const previous = JSON.stringify(progress.current);
         progress = await refreshes.step(progress.operationId, signal);
+        if (progress.retryAt && Date.parse(progress.retryAt) > Date.now()) throw new PendingRefreshError(progress.operationId);
         if (progress.status === 'running' && JSON.stringify(progress.current) === previous) {
           await new Promise(resolve => setTimeout(resolve, 20));
         }
@@ -178,7 +179,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     if (!await sources.current(target.stamp)) throw new LibraryError('stale_call', 'Source changed');
     const value = await snapshot(target.stamp, { kind: 'directory', ref: target.ref }, signal);
     if (value.kind !== 'directory') throw new LibraryError('invalid_source', 'Invalid directory snapshot');
-    return value.items.map(entry => ({ id: entry.entryId, name: entry.name, modifiedAt: value.completedAt,
+    return value.items.map(entry => ({ id: entry.entryId, name: entry.name, modifiedAt: entry.kind === 'file' ? entry.info?.modifiedAt ?? value.completedAt : value.completedAt,
       target: entry.kind === 'directory' ? { kind: 'directory', stamp: target.stamp, ref: entry.directoryRef }
         : { kind: 'file', stamp: target.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }) } }));
   }
@@ -218,7 +219,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     const { target, ...base } = resolved;
     if (target.kind !== 'file') return { ...base, kind: 'directory', etag: await digest([base.path, target]) };
     if (!content) throw new LibraryError('invalid_source', 'Source returned no file metadata');
-    return { ...base, kind: 'file', etag: await digest([target.stamp.id, target.ref, content.contentId, content.size, content.mediaType]),
+    return { ...base, modifiedAt: content.modifiedAt ?? base.modifiedAt, kind: 'file', etag: await digest([target.stamp.id, target.ref, content.contentId, content.size, content.mediaType]),
       handle: { stamp: target.stamp, fileRef: target.ref, content } };
   }
   const metadataError = (error: unknown) => error instanceof Error ? error : new Error('File metadata is unavailable');

@@ -7,7 +7,7 @@ import type { RefreshStore } from '../../core/library/refresh-types';
 import type { PluginChangeStore } from '../../application/change-plugin';
 import type { RenewalStore } from '../../core/sources/renewal';
 import type { PluginCacheStore } from '../../core/sources/cache';
-import { cachedPluginDataStatement, cachePluginDataPlan } from './plugin-cache-sql';
+import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDataPlan, cachePluginDataManyPlan } from './plugin-cache-sql';
 import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import { changeFromRow, changeLeaseFromRow, changeInputFromRow, changeRecordSQL, nextChangeInstanceSQL, readyChangesSQL,
   createChangeStatement, claimChangeStatement, releaseChangeStatement, commitChangePlan, type ChangeRow, type ChangeInputRow } from './plugin-change-sql';
@@ -98,9 +98,18 @@ export function createD1Store(db: D1Database) {
     async cachedPluginData(source, key, now) {
       return (await prepare(cachedPluginDataStatement(source, key, now)).first<{ document: string }>())?.document;
     },
-    async cachePluginData(source, key, document, expiresAt, now) {
-      const result = await db.batch<{ written: number }>(cachePluginDataPlan(source, key, document, expiresAt, now).map(prepare));
+    async cachedPluginDataMany(source, keys, now) {
+      return (await prepare(cachedPluginDataManyStatement(source, keys, now)).all<{ key: string; document: string }>()).results;
+    },
+    async cachePluginData(source, key, document, expiresAt, now, cleanup = true) {
+      const plan = cachePluginDataPlan(source, key, document, expiresAt, now);
+      const result = await db.batch<{ written: number }>((cleanup ? plan : plan.slice(1)).map(prepare));
       return result.at(-1)!.results.length === 1;
+    },
+    async cachePluginDataMany(source, items, now, cleanup = true) {
+      const plan = cachePluginDataManyPlan(source, items, now);
+      const result = await db.batch<{ written: number }>((cleanup ? plan : plan.slice(1)).map(prepare));
+      return result.at(-1)!.results.length === items.length;
     },
     async claimRenewal(expected, token, now, until) {
       const results = await db.batch<RenewalClaimRow>(claimRenewalPlan(expected, token, now, until).map(prepare));

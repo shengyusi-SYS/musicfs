@@ -10,6 +10,8 @@ const sameStamp = (a: SourceStamp, b: SourceStamp) => a.id === b.id && a.epoch =
   && a.pluginRevision === b.pluginRevision && a.pluginGeneration === b.pluginGeneration;
 const task = (key: SnapshotKey): RefreshTask => ({ key, attemptId: crypto.randomUUID(), pages: 0, entries: 0, children: [] });
 const counters = z.record(z.string().min(1).max(64), z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER));
+const workProgress = z.object({ completed: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  total: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), unit: z.string().min(1).max(32) });
 const staleFailure = (): RefreshFailure => ({ code: 'stale_call', message: '来源或刷新操作已发生变化，本次结果没有发布。' });
 const failureOf = (error: unknown): RefreshFailure => error instanceof LibraryError
   ? { code: error.code, message: error.message, ...(error.sourceFault ? { sourceFault: error.sourceFault } : {}) }
@@ -20,9 +22,10 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
   const timestamp = () => new Date(now()).toISOString();
   const project = (record: RefreshRecord): RefreshView => ({ operationId: record.operationId, instanceId: record.stamp.id,
     scope: record.scope, status: record.status, current: record.task ? { kind: record.task.key.kind, directoryRef: record.task.key.ref,
-      pages: record.task.pages, entries: record.task.entries, statistics: record.task.statistics ?? null } : null,
+      pages: record.task.pages, entries: record.task.entries, statistics: record.task.statistics ?? null,
+      ...(record.task.progress ? { progress: record.task.progress } : {}) } : null,
     refreshedDirectories: record.refreshedDirectories, failures: record.failures, ...(record.error ? { error: record.error } : {}),
-    createdAt: record.createdAt, updatedAt: record.updatedAt });
+    createdAt: record.createdAt, updatedAt: record.updatedAt, ...(record.retryAt === undefined ? {} : { retryAt: new Date(record.retryAt).toISOString() }) });
   async function view(record: RefreshRecord): Promise<RefreshView> {
     return project(active(record.status) && !await sources.current(record.stamp)
       ? { ...record, status: 'superseded', error: staleFailure() } : record);
@@ -31,10 +34,13 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     const key: SnapshotKey = scope.kind === 'instance' || scope.directoryRef === undefined ? { kind: 'roots', ref: '' }
       : { kind: 'directory', ref: scope.directoryRef };
     const date = timestamp();
+    const previous = await store.currentRefresh(stamp.id);
+    const cooling = previous && sameStamp(previous.stamp, stamp) && (previous.retryAt ?? 0) > now() ? previous : undefined;
     return view(await store.createRefresh({ operationId: crypto.randomUUID(), stamp, scope, status: 'queued', revision: 1,
       leaseToken: null, leaseUntil: null, task: task(key), pending: [], seen: [],
       known: scope.kind === 'instance' ? await store.knownDirectoryRefs(stamp.id) : [], refreshedDirectories: 0, failures: [],
-      createdAt: date, updatedAt: date }, replace));
+      createdAt: date, updatedAt: date, ...(cooling ? { retryAt: cooling.retryAt!, rateLimitRetries: cooling.rateLimitRetries ?? 0,
+        ...(cooling.error ? { error: cooling.error } : {}) } : {}) }, replace));
   }
   function appendUnique(target: string[], values: string[], seen: string[]) {
     const included = new Set([...seen, ...target]);
@@ -53,6 +59,15 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     if (previous.pages >= budgets.pages) throw new LibraryError('invalid_source', 'Source pagination budget exceeded');
     if (!page || !Array.isArray(page.items)) throw new LibraryError('invalid_source', 'Source returned an invalid page');
     const next = structuredClone(record); const current = next.task!;
+    delete next.retryAt; delete next.rateLimitRetries; delete next.error;
+    if (page.progress !== undefined) {
+      const parsed = workProgress.safeParse(page.progress);
+      if (!parsed.success || parsed.data.completed > parsed.data.total || current.progress &&
+        (current.progress.total !== parsed.data.total || current.progress.unit !== parsed.data.unit || current.progress.completed > parsed.data.completed)) {
+        throw new LibraryError('invalid_source', 'Source returned inconsistent work progress');
+      }
+      current.progress = parsed.data;
+    }
     const counterKeys = JSON.stringify(Object.keys(page.statistics ?? {}).sort());
     if (current.counterKeys !== undefined && current.counterKeys !== counterKeys) throw new LibraryError('invalid_source', 'Source page counters changed during pagination');
     current.counterKeys = counterKeys;
@@ -110,6 +125,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     if (!active(stored.status) || !await sources.current(stored.stamp)) return view(stored);
     signal.throwIfAborted();
     const instant = now();
+    if (stored.retryAt !== undefined && stored.retryAt > instant) return view(stored);
     const claimed = await store.claimRefresh(operationId, crypto.randomUUID(), instant, instant + 120_000);
     if (!claimed) return view(await store.refreshRecord(operationId) ?? { ...stored, status: 'superseded', error: staleFailure() });
     try {
@@ -134,9 +150,20 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
         throw signal.reason;
       }
       const next = structuredClone(claimed);
+      delete next.retryAt;
+      const sourceFault = failureOf(error).sourceFault;
       if (!await sources.current(claimed.stamp) || error instanceof SourceError && ['stale_call', 'missing_instance'].includes(error.code)
         || error instanceof LibraryError && error.code === 'stale_call') {
         next.status = 'superseded'; next.error = staleFailure();
+      } else if (sourceFault?.kind === 'rate_limited' && (claimed.rateLimitRetries ?? 0) < 5) {
+        const suggested = sourceFault.retryAfterSeconds;
+        const seconds = suggested !== undefined && Number.isFinite(suggested) && suggested >= 0 ? suggested : Math.min(300, 30 * 2 ** (claimed.rateLimitRetries ?? 0));
+        next.status = 'running'; next.retryAt = now() + Math.max(1, seconds) * 1000;
+        next.rateLimitRetries = (claimed.rateLimitRetries ?? 0) + 1; next.error = failureOf(error);
+        const saved = checkpoint(claimed, next);
+        return await store.commitRefresh(claimed, saved) === 'stale' ? superseded(claimed) : project(saved);
+      } else if (sourceFault?.kind === 'rate_limited') {
+        next.status = 'failed'; next.error = failureOf(error);
       } else if (claimed.scope.kind === 'instance' && claimed.task?.key.kind === 'directory') {
         next.failures.push({ directoryRef: claimed.task.key.ref, error: failureOf(error) });
         advance(next);

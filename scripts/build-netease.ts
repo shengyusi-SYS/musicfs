@@ -35,6 +35,12 @@ export async function buildNetease() {
     const info = await Bun.file(join(root, 'package.json')).json() as { version: string };
     dependencies.push([`${name} ${info.version}`, join(root, 'LICENSE')]); lookup = root;
   }
+  lookup = resolve(directory);
+  for (const name of ['p-limit', 'yocto-queue']) {
+    const root = dirname(Bun.resolveSync(name, lookup));
+    const info = await Bun.file(join(root, 'package.json')).json() as { version: string };
+    dependencies.push([`${name} ${info.version}`, join(root, 'license')]); lookup = root;
+  }
   dependencies.push(['Zod 4.6.7', 'node_modules/zod/LICENSE'], ['Ajv 8.20.0', 'node_modules/ajv/LICENSE']);
   const licenses = [];
   for (const [name, path] of dependencies) licenses.push(`${name}\n\n${await Bun.file(path!).text()}`);

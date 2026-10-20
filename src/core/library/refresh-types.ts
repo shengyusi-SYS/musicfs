@@ -1,4 +1,4 @@
-import type { Entry, Root } from '@musicfs/plugin-api';
+import type { Entry, Root, WorkProgress } from '@musicfs/plugin-api';
 import type { SourceStamp } from '../sources';
 import type { InstanceRefresh, Snapshot, SnapshotKey } from './types';
 
@@ -7,13 +7,15 @@ export type RefreshFailure = InstanceRefresh['failures'][number]['error'];
 export type RefreshStatus = 'queued' | 'running' | 'completed' | 'failed' | 'superseded' | 'cancelled';
 export type RefreshView = {
   operationId: string; instanceId: string; scope: RefreshScope; status: RefreshStatus;
-  current: null | { kind: 'roots' | 'directory'; directoryRef: string; pages: number; entries: number; statistics: Record<string, number> | null };
+  current: null | { kind: 'roots' | 'directory'; directoryRef: string; pages: number; entries: number; statistics: Record<string, number> | null; progress?: WorkProgress };
   refreshedDirectories: number; failures: InstanceRefresh['failures']; error?: RefreshFailure;
   createdAt: string; updatedAt: string;
+  retryAt?: string;
 };
 export type RefreshTask = {
   key: SnapshotKey; attemptId: string; cursor?: string; pages: number; entries: number;
   counterKeys?: string; statistics?: Record<string, number>; children: string[];
+  progress?: WorkProgress;
 };
 /** Private checkpoint: source state and credentials never enter this record. */
 export type RefreshRecord = {
@@ -22,6 +24,7 @@ export type RefreshRecord = {
   task: RefreshTask | null; pending: string[]; seen: string[]; known: string[];
   refreshedDirectories: number; failures: InstanceRefresh['failures']; error?: RefreshFailure;
   createdAt: string; updatedAt: string;
+  retryAt?: number; rateLimitRetries?: number;
 };
 export type SnapshotHeader = Pick<Snapshot, 'stamp' | 'id' | 'kind' | 'completedAt' | 'statistics'>;
 export type RefreshPage = { items: (Root | Entry)[]; nextCursor?: string; publish?: SnapshotHeader };

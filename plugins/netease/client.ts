@@ -10,6 +10,12 @@ export type NeteaseState = z.infer<typeof saved>;
 export const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export class NeteaseFailure extends Error { constructor(readonly fault: PluginFault) { super(fault.message); } }
 export function fail(kind: PluginFault['kind'], message: string): never { throw new NeteaseFailure({ kind, message }); }
+export function rateLimited(response?: Response): never {
+  const header = response?.headers.get('retry-after');
+  const seconds = header ? /^\d+(?:\.\d+)?$/.test(header) ? Number(header) : (Date.parse(header) - Date.now()) / 1000 : NaN;
+  throw new NeteaseFailure({ kind: 'rate_limited', message: '网易云请求过于频繁，稍后将继续准备。',
+    ...(Number.isFinite(seconds) && seconds >= 0 ? { retryAfterSeconds: Math.ceil(seconds) } : {}) });
+}
 const site = 'https://music.163.com';
 const api = 'https://interface.music.163.com';
 const ua = 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/3.0.18.203152';
@@ -73,13 +79,14 @@ export class NeteaseClient {
       catch { await response.body?.cancel(); fail('temporary', '网易云返回了无法保存的 Cookie。'); }
     }
     if (received.length) this.update({ ...this.state, cookies: JSON.stringify(this.jar.serializeSync()) });
-    if (response.status === 429) { await response.body?.cancel(); throw new NeteaseFailure({ kind: 'rate_limited', message: '网易云请求过于频繁，请稍后重试。' }); }
+    if (response.status === 429) { await response.body?.cancel(); rateLimited(response); }
     if (!response.ok) { await response.body?.cancel(); fail('temporary', `网易云请求暂未成功（HTTP ${response.status}）。`); }
     let value: unknown;
     try { value = await response.json(); }
     catch { fail('temporary', '网易云返回了无法识别的内容。'); }
     this.ctx.signal.throwIfAborted();
     if (value === null || typeof value !== 'object' || Array.isArray(value)) fail('temporary', '网易云返回了无法识别的数据。');
+    if (object(value).code === 429) rateLimited(response);
     return { status: response.status, body: object(value), cookie: received };
   };
   async call(endpoint: Endpoint, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
@@ -87,7 +94,7 @@ export class NeteaseClient {
     this.ctx.signal.throwIfAborted();
     const code = response.body.code;
     if (code === 301 || code === 302) return this.loseSession();
-    if (code === 429) fail('rate_limited', '网易云请求过于频繁，请稍后重试。');
+    if (code === 429) rateLimited();
     if (code !== undefined && code !== 200 && code !== 800 && code !== 801 && code !== 802 && code !== 803) fail(code === 404 ? 'not_found' : 'temporary', '网易云暂时无法返回此项内容。');
     return response.body;
   }

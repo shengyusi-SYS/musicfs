@@ -1,17 +1,17 @@
 import type { Entry, Json, Page, Root } from '@musicfs/plugin-api';
-import type { AudioFormat } from '@musicfs/audio-tags';
+import pLimit from 'p-limit';
 import { z } from 'zod';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
-import { info, sourceReader, resolveVariants } from './media';
+import { info, sourceReader, resolveVariants, type Resolution } from './media';
 import { audioPolicy, labels } from './configuration';
-import { musicTags } from './metadata';
-import { tagFile } from './tagged';
+import { songKey, prepareSongFile, type PreparedFile } from './tagged';
+import { compactSong, playlistScan, scanSongs, scanVersions, verifyScan } from './scan';
 
 const rootsList = [ ['liked', '喜欢的歌曲'], ['daily', '每日推荐歌曲'], ['created', '自建歌单'], ['favorites', '收藏歌单'], ['recommended', '每日推荐歌单'] ] as const;
 const playlistRef = z.object({ kind: z.literal('playlist'), id: z.string().regex(/^[1-9]\d*$/) }).strict();
 const cursorSchema = z.object({ directory: z.string(), offset: z.number().int().nonnegative().safe(), revision: z.string().optional(),
-  likedPlaylistId: z.string().regex(/^[1-9]\d*$/).optional(), instanceId: z.string().min(1).optional() }).strict()
+  scanId: z.string().optional(), likedPlaylistId: z.string().regex(/^[1-9]\d*$/).optional(), instanceId: z.string().min(1).optional() }).strict()
   .refine(value => (value.likedPlaylistId === undefined) === (value.instanceId === undefined));
 const emptyStatistics = () => ({ tracks: 0, files: 0, hiddenTracks: 0, missingVersions: 0, fallbackVersions: 0, deduplicatedVersions: 0 });
 function id(value: unknown): string {
@@ -42,31 +42,80 @@ export async function roots(client: NeteaseClient, value?: string): Promise<Page
   await client.profile();
   return { items: rootsList.map(([sourceId, name]) => ({ sourceId, name, directoryRef: sourceId })) };
 }
-async function songPage(client: NeteaseClient, tracks: unknown[], offset: number): Promise<Page<Entry>> {
-  const songs = tracks.map(item => object(item)); const ids = songs.map(song => id(song.id));
-  if (!ids.length) return { items: [], statistics: emptyStatistics() };
-  const versions = await resolveVariants(client, ids); const statistics = emptyStatistics(); statistics.tracks = tracks.length;
-  const items: Entry[] = [];
-  for (let index = 0; index < songs.length; index++) {
-    const song = songs[index]!; const songId = ids[index]!; const resolution = versions.get(songId)!;
-    statistics.missingVersions += resolution.missingVersions; statistics.fallbackVersions += resolution.fallbackVersions; statistics.deduplicatedVersions += resolution.deduplicatedVersions;
-    if (!resolution.variants.length) { statistics.hiddenTracks++; continue; }
-    const artists = song.ar ?? song.artists;
-    if (!Array.isArray(artists)) fail('temporary', '网易云未返回完整歌曲名称信息。');
-    const artist = artists.map(item => label(object(item).name)).join('、');
-    const position = offset + index + 1;
-    const tags = await musicTags(client, song);
-    for (const variant of resolution.variants) {
-      const media = variant.reference;
-      const sourceInfo = info(media);
-      const prepared = await tagFile(client, media, sourceInfo, media.type as AudioFormat, tags,
-        sourceReader(client, media, variant.location));
-      items.push({ kind: 'file', entryId: `${position}:${songId}:${media.level}`, name: `${String(position).padStart(4, '0')}. ${label(song.name)} - ${artist} [${labels[media.level]}].${media.type}`, ...prepared });
+export type PreparationPolicy = { warmFiles: number; concurrency: number; coldFiles?: number; milliseconds?: number };
+const preparation: PreparationPolicy = { warmFiles: 100, concurrency: 2, coldFiles: 32, milliseconds: 2000 };
+async function songPage(client: NeteaseClient, tracks: unknown[], offset: number, policy: PreparationPolicy,
+  versions?: Map<string, Resolution>): Promise<{ page: Page<Entry>; consumed: number }> {
+  const started = performance.now();
+  const songs = tracks.map(item => compactSong(item) ?? object(item)); const ids = songs.map(song => id(song.id));
+  const statistics = emptyStatistics();
+  if (!ids.length) return { page: { items: [], statistics }, consumed: 0 };
+  const resolved = versions ?? await resolveVariants(client, ids);
+  const candidates = await Promise.all(songs.map(async (song, index) => {
+    const resolution = resolved.get(ids[index]!)!;
+    const files = await Promise.all(resolution.variants.map(async variant => ({ variant,
+      key: await songKey(variant.reference, info(variant.reference), song) })));
+    return { song, songId: ids[index]!, position: offset + index + 1, resolution, files };
+  }));
+  const keys = candidates.flatMap(item => item.files.map(file => file.key));
+  const saved = client.ctx.cache!.getMany ? await client.ctx.cache!.getMany(keys) : await Promise.all(keys.map(key => client.ctx.cache!.get(key)));
+  const ready = new Map(keys.map((key, index) => [key, saved[index] as unknown as PreparedFile | undefined]));
+  const items: Entry[] = []; let consumed = 0; let cold = 0; let failure: unknown;
+  let largestCost = 0;
+  const limit = pLimit(policy.concurrency);
+  const prepared = new Map<string, Promise<PreparedFile>>();
+  // Process only a bounded chunk at a time; never queue a whole account.
+  for (let start = 0; start < candidates.length;) {
+    const remaining = client.ctx.workBudget?.remaining ?? Infinity;
+    const nextCold = candidates[start]!.files.some(file => !ready.has(file.key) || !ready.get(file.key));
+    if (consumed && nextCold && remaining < (largestCost ? largestCost + 2 : 24)) break;
+    const width = client.ctx.workBudget ? 1 : policy.concurrency;
+    const before = remaining;
+    const chunk = candidates.slice(start, start + width);
+    const work = chunk.map(item => limit(async () => {
+      if (failure) throw failure;
+      client.ctx.signal.throwIfAborted();
+      try {
+        const files = [];
+        for (const candidate of item.files) {
+          const media = candidate.variant.reference;
+          let file = ready.get(candidate.key);
+          if (!file) {
+            let pending = prepared.get(candidate.key);
+            if (!pending) {
+              pending = prepareSongFile(client, candidate.key, media, info(media), item.song,
+                sourceReader(client, media, candidate.variant.location));
+              prepared.set(candidate.key, pending); cold++;
+            }
+            file = await pending;
+          }
+          const artists = item.song.ar ?? item.song.artists;
+          if (!Array.isArray(artists)) fail('temporary', '网易云未返回完整歌曲名称信息。');
+          const artist = artists.map(value => label(object(value).name)).join('、');
+          files.push({ kind: 'file' as const, entryId: `${item.position}:${item.songId}:${media.level}`,
+            name: `${String(item.position).padStart(4, '0')}. ${label(item.song.name)} - ${artist} [${labels[media.level]}].${media.type}`, ...file });
+        }
+        return files;
+      } catch (error) { failure ??= error; throw error; }
+    }));
+    const outcome = await Promise.allSettled(work);
+    if (failure) throw failure;
+    largestCost = Math.max(largestCost, before === Infinity ? 0 : before - (client.ctx.workBudget?.remaining ?? before));
+    for (let i = 0; i < chunk.length; i++) {
+      const result = outcome[i]!; if (result.status === 'rejected') throw result.reason;
+      const item = chunk[i]!; items.push(...result.value); consumed++; statistics.tracks++;
+      statistics.missingVersions += item.resolution.missingVersions; statistics.fallbackVersions += item.resolution.fallbackVersions;
+      statistics.deduplicatedVersions += item.resolution.deduplicatedVersions;
+      if (!item.files.length) statistics.hiddenTracks++;
     }
+    start += chunk.length;
+    if (cold >= (policy.coldFiles ?? 32) || cold > 0 && performance.now() - started >= (policy.milliseconds ?? 2000)) break;
   }
-  statistics.files = items.length; return { items, statistics };
+  statistics.files = items.length;
+  return { page: { items, statistics }, consumed };
 }
-export async function list(client: NeteaseClient, directory: string, value?: string): Promise<Page<Entry>> {
+export async function list(client: NeteaseClient, directory: string, value?: string, requestedPolicy: PreparationPolicy = preparation): Promise<Page<Entry>> {
+  const policy = client.ctx.cache?.getMany ? requestedPolicy : { warmFiles: 8, concurrency: 1, coldFiles: 8, milliseconds: 2000 };
   client.requireSession(); const page = cursor(directory, value);
   if (page.likedPlaylistId && (directory !== 'liked' || page.instanceId !== client.ctx.instanceId)) fail('invalid_config', '网易云喜欢目录游标不属于当前实例。');
   if (directory === 'created' || directory === 'favorites') {
@@ -95,9 +144,10 @@ export async function list(client: NeteaseClient, directory: string, value?: str
       await client.ctx.cache.put(`daily:${revision}`, tracks as Json, { expiresAt: Date.now() + 30 * 60_000 });
     }
     if (!Array.isArray(tracks)) fail('content_changed', '网易云每日推荐分页资料已失效，请重新刷新。');
-    const count = Math.max(1, Math.floor(8 / audioPolicy(client.ctx.config).qualities.length));
-    const content = await songPage(client, tracks.slice(page.offset, page.offset + count), page.offset);
-    return { ...content, ...(page.offset + count < tracks.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + count, revision }) } : {}) };
+    const count = Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length));
+    const content = await songPage(client, tracks.slice(page.offset, page.offset + count), page.offset, policy);
+    return { ...content.page, progress: { completed: page.offset + content.consumed, total: tracks.length, unit: '曲目' },
+      ...(page.offset + content.consumed < tracks.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + content.consumed, revision }) } : {}) };
   }
   let playlistId: string;
   if (directory === 'liked') {
@@ -119,19 +169,13 @@ export async function list(client: NeteaseClient, directory: string, value?: str
     let raw: unknown; try { raw = JSON.parse(directory); } catch { fail('not_found', '网易云目录不存在。'); }
     const parsed = playlistRef.safeParse(raw); if (!parsed.success) fail('not_found', '网易云目录不存在。'); playlistId = parsed.data.id;
   }
-  const result = object((await client.call(endpoints.playlist, { id: playlistId })).playlist);
-  if (!Array.isArray(result.trackIds) || !Number.isSafeInteger(result.trackCount) || result.trackCount !== result.trackIds.length) fail('temporary', '网易云歌单曲目列表未完整返回。');
-  const ids = result.trackIds.map(item => id(object(item).id));
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(ids)));
-  const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-  if (page.revision && page.revision !== revision) fail('content_changed', '网易云歌单在分页期间已变化，请重新刷新。');
-  const selected = ids.slice(page.offset, page.offset + Math.max(1, Math.floor(8 / audioPolicy(client.ctx.config).qualities.length)));
-  if (!selected.length) return { items: [], statistics: emptyStatistics() };
-  const details = await client.call(endpoints.songs, { ids: [...new Set(selected)].join(',') });
-  if (!Array.isArray(details.songs)) fail('temporary', '网易云未返回完整歌曲详情。');
-  const byId = new Map(details.songs.map(song => [id(object(song).id), song]));
-  const ordered = selected.map(songId => { const item = byId.get(songId); if (!item) fail('temporary', '网易云歌曲详情分页不完整。'); return item; });
-  const content = await songPage(client, ordered, page.offset);
-  return { ...content, ...(page.offset + selected.length < ids.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + selected.length, revision,
+  const scan = await playlistScan(client, playlistId, page.scanId, page.revision);
+  const batch = await scanSongs(client, scan, page.offset);
+  const versions = await scanVersions(client, scan, batch.start, batch.songs.map(song => id(song.id)));
+  const count = Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length));
+  const content = await songPage(client, batch.songs.slice(page.offset - batch.start, page.offset - batch.start + count), page.offset, policy, versions);
+  const next = page.offset + content.consumed;
+  if (next >= scan.ids.length) await verifyScan(client, scan);
+  return { ...content.page, progress: { completed: next, total: scan.ids.length, unit: '曲目' }, ...(next < scan.ids.length ? { nextCursor: JSON.stringify({ directory, offset: next, revision: scan.revision, scanId: scan.id,
     ...(directory === 'liked' ? { likedPlaylistId: playlistId, instanceId: client.ctx.instanceId } : {}) }) } : {}) };
 }

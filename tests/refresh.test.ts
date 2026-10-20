@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import type { Entry, Outcome, Page, SourcePlugin } from '@musicfs/plugin-api';
 import { createLibrary, PendingRefreshError } from '../src/core/library';
 import { libraryFixture } from './helpers/library-fixture';
+import { createRefreshes } from '../src/core/library/refresh';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const close of cleanups.splice(0)) close(); });
@@ -33,6 +34,54 @@ async function pending(work: Promise<unknown>): Promise<PendingRefreshError> {
   }
   throw new Error('A cold deferred directory must return a pending operation');
 }
+
+test('rate limits persist a cooldown and resume the same directory cursor without repeating accepted pages', async () => {
+  const f = await setup(); let now = 1000; let calls = 0;
+  f.source.list = async (_ctx, _ref, cursor) => {
+    calls++;
+    if (!cursor) return { ok: true, value: { items: [entry('first')], nextCursor: 'second', progress: { completed: 1, total: 2, unit: 'items' } } };
+    if (calls === 2) return { ok: false, error: { kind: 'rate_limited', message: 'Wait', retryAfterSeconds: 7 } };
+    expect(cursor).toBe('second');
+    return { ok: true, value: { items: [entry('last')], progress: { completed: 2, total: 2, unit: 'items' } } };
+  };
+  const rebuild = () => createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => now);
+  const refresh = rebuild(); const job = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
+  expect(await refresh.step(job.operationId, signal())).toMatchObject({ status: 'running', current: { pages: 1, progress: { completed: 1, total: 2 } } });
+  const waiting = await refresh.step(job.operationId, signal());
+  expect(waiting).toMatchObject({ status: 'running', retryAt: new Date(8000).toISOString(), current: { pages: 1, entries: 1 } });
+  expect(await f.store.readyRefreshes(now, 1)).toEqual([]);
+  expect(f.store.nextBackgroundWorkAt()).toBe(8000);
+  expect(await f.store.claimRefresh(job.operationId, 'early', now, now + 100)).toBeNull();
+  expect(await rebuild().step(job.operationId, signal())).toEqual(waiting); expect(calls).toBe(2);
+  now = 8000;
+  const finished = await rebuild().step(job.operationId, signal());
+  expect(finished).toMatchObject({ status: 'completed', current: { pages: 2, progress: { completed: 2, total: 2 } } });
+  expect(finished.retryAt).toBeUndefined(); expect(finished.error).toBeUndefined(); expect(calls).toBe(3);
+  expect(f.store.snapshot(f.id, key)?.value?.items.map(item => 'entryId' in item ? item.entryId : '')).toEqual(['first', 'last']);
+});
+
+test('restarting or cancelling a refresh does not bypass a known source cooldown', async () => {
+  let calls = 0;
+  const f = await setup(plugin({ list: async () => { calls++; return { ok: false, error: { kind: 'rate_limited', message: 'Wait', retryAfterSeconds: 9 } }; } }));
+  const refresh = createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => 1000);
+  const first = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
+  const waiting = await refresh.step(first.operationId, signal()); await refresh.cancel(first.operationId);
+  const next = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
+  expect(next.retryAt).toBe(waiting.retryAt); expect(next.operationId).not.toBe(first.operationId);
+  expect((await refresh.step(next.operationId, signal())).status).toBe('queued'); expect(calls).toBe(1);
+});
+
+test('exhausting rate-limit retries stops the instance instead of requesting another directory', async () => {
+  let now = 1000; const visited: string[] = [];
+  const f = await setup(plugin({
+    roots: async () => ({ ok: true, value: { items: ['a', 'b'].map(ref => ({ sourceId: ref, name: ref, directoryRef: ref })) } }),
+    list: async (_ctx, ref) => { visited.push(ref); return { ok: false, error: { kind: 'rate_limited', message: 'Wait', retryAfterSeconds: 1 } }; }
+  }));
+  const refresh = createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => now);
+  let job = await refresh.start(f.id, { kind: 'instance' }); job = await refresh.step(job.operationId, signal());
+  for (let i = 0; i < 6; i++) { job = await refresh.step(job.operationId, signal()); now += 1000; }
+  expect(job.status).toBe('failed'); expect(visited).toEqual(Array(6).fill('a'));
+});
 
 test('42 pages resume across Library controllers, publish once, and preserve ordered entries and additive statistics', async () => {
   const fixture = await setup();

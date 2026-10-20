@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Space, Typography } from 'antd';
+import { Alert, Button, Progress, Space, Typography } from 'antd';
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RefreshScope, RefreshView } from '../../contracts/refreshes';
 import { ApiError, type Api } from '../api';
@@ -71,9 +71,10 @@ export function usePersistentRefresh(api: Api, input: {
   const running = active(view);
   useEffect(() => {
     if (!operationId || !running || step.isPending || stepping || step.error || operation.error || cancel.isPending) return;
-    const timer = setTimeout(() => step.mutate(operationId), pacing.current.operationId === operationId ? pacing.current.delay : 150);
+    const retryDelay = view?.retryAt ? Math.max(0, Date.parse(view.retryAt) - Date.now()) : 0;
+    const timer = setTimeout(() => step.mutate(operationId), Math.max(retryDelay, pacing.current.operationId === operationId ? pacing.current.delay : 150));
     return () => clearTimeout(timer);
-  }, [operationId, running, step.isPending, step.error, operation.error, stepping, cancel.isPending, view?.updatedAt]);
+  }, [operationId, running, step.isPending, step.error, operation.error, stepping, cancel.isPending, view?.updatedAt, view?.retryAt]);
   useEffect(() => {
     if (!view) return;
     if (active(view)) { watched.current.add(view.operationId); return; }
@@ -113,7 +114,9 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
 }) {
   const value = operation.view;
   const needsAuth = value?.error?.sourceFault?.kind === 'needs_auth' || value?.failures.some(item => item.error.sourceFault?.kind === 'needs_auth');
-  const title = !value ? '正在读取刷新状态' : value.status === 'queued' ? '目录已加入准备队列'
+  const waiting = operation.active && value?.retryAt && Date.parse(value.retryAt) > Date.now();
+  const progress = value?.current?.progress;
+  const title = !value ? '正在读取刷新状态' : waiting ? '来源要求等待，稍后自动继续' : value.status === 'queued' ? '目录已加入准备队列'
     : value.status === 'running' ? '正在准备目录' : value.status === 'completed' ? (value.failures.length ? '刷新完成，部分目录保留上次内容' : '目录刷新完成')
       : value.status === 'cancelled' ? '刷新已取消' : value.status === 'superseded' ? '刷新已被较新的操作替代' : '刷新失败，已保留上次成功内容';
   return <>
@@ -124,6 +127,10 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
         <div>{value.status === 'completed' && value.scope.kind === 'directory' && value.scope.directoryRef === undefined
           ? '内容入口已更新' : <>已完成 {value.refreshedDirectories} 个目录</>}</div>
         {value.current && value.status !== 'completed' && <div>当前{value.current.kind === 'roots' ? '内容入口' : '目录'}已读取 {value.current.pages} 页，暂存 {value.current.entries} 条目</div>}
+        {progress && <div>已处理 {progress.completed.toLocaleString()} / {progress.total.toLocaleString()} {progress.unit}
+          <Progress size="small" percent={progress.total ? Math.floor(progress.completed / progress.total * 100) : 100} status={waiting ? 'normal' : operation.active ? 'active' : 'normal'} />
+        </div>}
+        {waiting && <div>预计 {new Date(value.retryAt!).toLocaleTimeString()} 继续，可关闭页面。</div>}
         {value.current?.statistics && value.status !== 'completed' && <Space wrap>{Object.entries(labels ?? {}).flatMap(([key, label]) => {
           const count = value.current?.statistics?.[key]; return count === undefined ? [] : [<Typography.Text key={key}>临时{label}：{count}</Typography.Text>];
         })}</Space>}

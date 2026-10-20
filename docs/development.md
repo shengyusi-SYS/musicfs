@@ -22,6 +22,7 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun run probe:worker:qq` | 实际 QQ 打包模块在本地 workerd/D1、无 Node 兼容开关；状态隔离、受控SDK续期/双控制器合并/密文跨运行时恢复及正式管理路由完成认证；可显式选择真实开发会话 |
 | `bun run build:netease` | 固定 4.32.0 必要 SDK 模块、原样加密及 Ajv standalone，输出 dist/netease/org.musicfs.netease.zip |
 | `bun run probe:worker:netease` | 实际网易云 ESM 在 Bun/workerd 请求真实二维码；可显式选取已授权实例验证 D1 会话恢复和每日目录；需要网络 |
+| `bun scripts/probe-netease-refresh-offline.ts` | 实际网易云打包SDK与正式Worker service，在本地workerd/D1使用受控响应检查冷热刷新、每步SQL及共享封面；不访问真实平台 |
 | `bun run build:worker` | 组装正式 Worker core/薄入口/独立 registry、WebUI、模板及迁移；可附已有插件 ZIP 路径 |
 | `bun run probe:worker:service` | 实际正式入口在本地 workerd 的页面/API/DAV、D1重启、未配置发布凭据及坏插件启动拒绝 |
 | `bun scripts/probe-worker-refresh.ts` | 正式 Worker service 的 42 页独立 HTTP 推进、D1重启续接、每步查询数量及4,158文件allprop无逐项来源读取；使用本地来源样本，不证明云端免费 CPU |

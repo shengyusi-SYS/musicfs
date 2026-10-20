@@ -4,7 +4,8 @@ export type JsonObject = { [key: string]: Json };
 export type HostKind = 'desktop' | 'worker';
 export type ByteRange = { start: number; end: number };
 /** statistics are additive, nonnegative integer counters for this page, never running totals. */
-export type Page<T> = { items: T[]; nextCursor?: string; statistics?: Record<string, number> };
+export type WorkProgress = { completed: number; total: number; unit: string };
+export type Page<T> = { items: T[]; nextCursor?: string; statistics?: Record<string, number>; progress?: WorkProgress };
 export type FieldError = { path: string; message: string };
 
 export interface PluginManifest {
@@ -41,13 +42,19 @@ export interface Context {
   fetch: typeof fetch;
   /** Optional host storage for small, serializable plugin data, isolated to this source revision. */
   cache?: PluginCache;
+  /** Optional host work allowance for this invocation; plugins may checkpoint before starting more work. */
+  workBudget?: { readonly remaining: number };
 }
 
 export interface PluginCache {
   /** undefined means missing or expired; a cached null is a valid value. */
   get(key: string): Promise<Json | undefined>;
+  /** Optional batched lookup, aligned with input keys; missing/expired values remain undefined. */
+  getMany?(keys: string[]): Promise<(Json | undefined)[]>;
   /** Omit expiresAt for immutable data needed by published file references. Times are Unix milliseconds. */
   put(key: string, value: Json, options?: { expiresAt?: number }): Promise<void>;
+  /** Optional atomic batch with the same expiry and source-revision rules as put. */
+  putMany?(items: { key: string; value: Json; expiresAt?: number }[]): Promise<void>;
 }
 
 export interface Configuration {
@@ -61,7 +68,9 @@ export type Entry =
       /** Complete metadata for these exact bytes, never a size hint or a temporary locator. */
       info?: FileInfo };
 export type Root = { sourceId: string; name: string; directoryRef: string };
-export type FileInfo = { contentId: string; size: number; mediaType: string };
+export type FileInfo = { contentId: string; size: number; mediaType: string;
+  /** Optional ISO timestamp for this byte representation, independent of directory refresh time. */
+  modifiedAt?: string };
 export type ReadRequest = { expectedContentId: string; range?: ByteRange };
 export type ReadResult = {
   content: FileInfo;

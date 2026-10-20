@@ -47,14 +47,15 @@ for (const adapter of ['SQLite', 'D1'] as const) {
   test(`${adapter}: plugin data persists across reopen and separates instances, expiry and cached null`, async () => {
     const f = await setup(adapter); let a = await f.cache();
     const plan = { source: 'same-audio', segments: [{ bytes: 'small-cover-and-tags' }] };
-    await a.put('plan:immutable', plan);
-    await a.put('lyrics:track', null, { expiresAt: 2000 });
+    await a.putMany!([{ key: 'plan:immutable', value: plan }, { key: 'lyrics:track', value: null, expiresAt: 2000 }]);
     expect(await a.get('lyrics:track')).toBeNull();
+    expect(await a.getMany!(['plan:immutable', 'missing', 'lyrics:track', 'plan:immutable'])).toEqual([plan, undefined, null, plan]);
     expect(await (await f.cache('b')).get('plan:immutable')).toBeUndefined();
     await f.reopen(); a = await f.cache();
     expect(await a.get('plan:immutable')).toEqual(plan);
     f.time(2000);
     expect(await a.get('lyrics:track')).toBeUndefined();
+    expect(await a.getMany!(['lyrics:track', 'plan:immutable'])).toEqual([undefined, plan]);
     expect(await a.get('plan:immutable')).toEqual(plan);
     await a.put('lyrics:track', { original: '[00:00.00]new lyrics' }, { expiresAt: 3000 });
     expect(await a.get('lyrics:track')).toEqual({ original: '[00:00.00]new lyrics' });
@@ -69,6 +70,7 @@ for (const adapter of ['SQLite', 'D1'] as const) {
     expect(await replacement.get('plan')).toBeUndefined();
     await replacement.put('plan', { marker: 'new-account' });
     await expect(old.put('plan', { marker: 'late-old-account' })).rejects.toMatchObject({ code: 'stale_call' });
+    await expect(old.putMany!([{ key: 'plan', value: 'late' }, { key: 'other', value: 'late' }])).rejects.toMatchObject({ code: 'stale_call' });
     expect(await old.get('plan')).toBeUndefined();
     expect(await replacement.get('plan')).toEqual({ marker: 'new-account' });
     await f.store.activate({ ...manifest, version: '1.0.1' }, 'revision-two', 1);

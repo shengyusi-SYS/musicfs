@@ -1,0 +1,108 @@
+import type { Json } from '@musicfs/plugin-api';
+import { endpoints } from './generated-upstream.mjs';
+import { fail, object, type NeteaseClient } from './client';
+import { resolveVariants, resolutionKey, type Resolution } from './media';
+
+export const batchSize = 100;
+const lifetime = 24 * 60 * 60_000;
+export type SongScan = { id: string; playlistId: string; ids: string[]; revision: string };
+export const hash = async (value: unknown) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',
+  new TextEncoder().encode(JSON.stringify(value)))), byte => byte.toString(16).padStart(2, '0')).join('');
+export function trackId(value: unknown): string {
+  if (typeof value === 'number' && !Number.isSafeInteger(value)) fail('temporary', '网易云返回了无法精确识别的内容编号。');
+  const result = String(value ?? ''); if (!/^[1-9]\d*$/.test(result)) fail('temporary', '网易云返回了无效内容编号。'); return result;
+}
+const pick = (value: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter(key => value[key] !== undefined).map(key => [key, value[key]]));
+export function compactSong(input: unknown): Record<string, unknown> | undefined {
+  const song = object(input); const artists = song.ar ?? song.artists;
+  if (typeof song.name !== 'string' || !song.name || !Array.isArray(artists) || !artists.every(item => typeof object(item).name === 'string' && object(item).name)) return;
+  return { ...pick(song, ['id', 'name', 'no', 'cd', 'publishTime']), ar: artists.map(item => pick(object(item), ['name'])),
+    al: pick(object(song.al ?? song.album), ['id', 'name', 'picUrl', 'artists', 'artist', 'publishTime', 'size']) };
+}
+async function membership(client: NeteaseClient, playlistId: string) {
+  const result = object((await client.call(endpoints.playlist, { id: playlistId })).playlist);
+  if (!Array.isArray(result.trackIds) || !Number.isSafeInteger(result.trackCount) || result.trackCount !== result.trackIds.length) fail('temporary', '网易云歌单曲目列表未完整返回。');
+  const ids = result.trackIds.map(item => trackId(object(item).id));
+  return { ids, revision: await hash(ids), tracks: Array.isArray(result.tracks) ? result.tracks : [] };
+}
+export async function playlistScan(client: NeteaseClient, playlistId: string, scanId?: string, revision?: string): Promise<SongScan> {
+  const cache = client.ctx.cache;
+  if (!cache) fail('not_supported', '网易云补标签需要支持插件资料缓存的宿主。');
+  if (scanId) {
+    const saved = await cache.get(`scan:${scanId}`) as unknown as SongScan | undefined;
+    if (!saved || saved.playlistId !== playlistId || saved.revision !== revision) fail('content_changed', '网易云本次歌单准备资料已失效，请重新刷新。');
+    return saved;
+  }
+  const result = await membership(client, playlistId);
+  if (revision && revision !== result.revision) fail('content_changed', '网易云歌单在分页期间已变化，请重新刷新。');
+  const scan = { id: crypto.randomUUID(), playlistId, ids: result.ids, revision: result.revision };
+  // Keep the ordered IDs separate from bounded song-detail blocks.
+  const seeds = new Map(result.tracks.flatMap(item => { const song = compactSong(item); return song ? [[trackId(song.id), song] as const] : []; }));
+  const blocks: { key: string; value: Json; expiresAt: number }[] = [];
+  for (let start = 0; start < scan.ids.length; start += batchSize) {
+    const songs = [...new Set(scan.ids.slice(start, start + batchSize))].flatMap(id => seeds.has(id) ? [seeds.get(id)!] : []);
+    if (songs.length) blocks.push({ key: `scan:${scan.id}:songs:${start}`, value: songs as Json, expiresAt: Date.now() + lifetime });
+  }
+  blocks.push({ key: `scan:${scan.id}`, value: scan as unknown as Json, expiresAt: Date.now() + lifetime });
+  if (cache.putMany) await cache.putMany(blocks);
+  else for (const item of blocks) await cache.put(item.key, item.value, { expiresAt: item.expiresAt });
+  return scan;
+}
+export async function verifyScan(client: NeteaseClient, scan: SongScan) {
+  if ((await membership(client, scan.playlistId)).revision !== scan.revision) fail('content_changed', '网易云歌单在准备期间已变化，请重新刷新。');
+}
+export async function scanSongs(client: NeteaseClient, scan: SongScan, offset: number) {
+  const start = Math.floor(offset / batchSize) * batchSize; const ids = scan.ids.slice(start, start + batchSize);
+  const key = `scan:${scan.id}:songs:${start}`;
+  const cached = await client.ctx.cache!.get(key);
+  const seeds = Array.isArray(cached) ? cached : object(cached).songs;
+  const byId = new Map((Array.isArray(seeds) ? seeds : []).map(item => { const song = object(item); return [trackId(song.id), song]; }));
+  if (object(cached).complete === true) return { start, songs: ids.map(id => byId.get(id)!) };
+  // Membership is always fresh. Stable song facts can be shared across scans and playlists.
+  const fresh = new Map(byId);
+  const absent = [...new Set(ids)].filter(id => !byId.has(id));
+  const cache = client.ctx.cache!;
+  if (cache.getMany && absent.length) {
+    const saved = await cache.getMany(absent.map(id => `song:${id}`));
+    saved.forEach((song, index) => { if (song) byId.set(absent[index]!, object(song)); });
+  }
+  const missing = [...new Set(ids)].filter(id => !byId.has(id));
+  if (missing.length) {
+    const details = await client.call(endpoints.songs, { ids: missing.join(',') });
+    if (!Array.isArray(details.songs)) fail('temporary', '网易云未返回完整歌曲详情。');
+    for (const item of details.songs) { const song = compactSong(item); if (song) { byId.set(trackId(song.id), song); fresh.set(trackId(song.id), song); } }
+    for (const id of ids) if (!byId.has(id)) fail('temporary', '网易云歌曲详情分页不完整。');
+  }
+  const expiresAt = Date.now() + lifetime;
+  const writes = [{ key, value: { complete: true, songs: [...new Set(ids)].map(id => byId.get(id)!) } as Json, expiresAt },
+    ...(cache.getMany ? [...fresh].map(([id, song]) => ({ key: `song:${id}`, value: song as Json, expiresAt })) : [])];
+  if (cache.putMany) await cache.putMany(writes);
+  else for (const item of writes) await cache.put(item.key, item.value, { expiresAt });
+  return { start, songs: ids.map(id => byId.get(id)!) };
+}
+export async function scanVersions(client: NeteaseClient, scan: SongScan, start: number, ids: string[]) {
+  if (!ids.length) return new Map<string, Resolution>();
+  const key = `scan:${scan.id}:versions:${start}`;
+  const saved = await client.ctx.cache!.get(key);
+  if (Array.isArray(saved)) return new Map(saved as unknown as [string, Resolution][]);
+  const cache = client.ctx.cache!; const unique = [...new Set(ids)];
+  type Cached = { value: Resolution; expiresAt: number };
+  const reused = cache.getMany ? await cache.getMany(unique.map(id => resolutionKey(client, id))) : [];
+  const versions = new Map<string, Resolution>(); const expiries: number[] = [];
+  reused.forEach((item, index) => { if (item) { const record = item as unknown as Cached; versions.set(unique[index]!, record.value); expiries.push(record.expiresAt); } });
+  const missing = unique.filter(id => !versions.has(id));
+  const writes: { key: string; value: Json; expiresAt: number }[] = [];
+  if (missing.length) for (const [id, value] of await resolveVariants(client, missing)) {
+    versions.set(id, value);
+    // A missing target is rechecked sooner; successful locators never outlive native expiry.
+    const expiresAt = Math.min(Date.now() + (value.missingVersions ? 30_000 : 5 * 60_000),
+      ...value.variants.map(variant => variant.location.expiresAt ?? 0));
+    expiries.push(expiresAt);
+    if (cache.getMany && expiresAt > Date.now()) writes.push({ key: resolutionKey(client, id), value: { value, expiresAt } as unknown as Json, expiresAt });
+  }
+  const expiry = Math.min(...expiries);
+  if (expiry > Date.now()) writes.push({ key, value: [...versions] as unknown as Json, expiresAt: expiry });
+  if (cache.putMany && writes.length) await cache.putMany(writes);
+  else for (const item of writes) await cache.put(item.key, item.value, { expiresAt: item.expiresAt });
+  return versions;
+}

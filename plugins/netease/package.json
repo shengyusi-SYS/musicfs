@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@musicfs/audio-tags": "workspace:*",
     "NeteaseCloudMusicApi": "4.32.0",
+    "p-limit": "7.3.3",
     "tough-cookie": "6.0.2",
-    "zod": "4.6.7",
-    "@musicfs/audio-tags": "workspace:*"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@musicfs/plugin-api": "workspace:*",

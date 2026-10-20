@@ -1,5 +1,24 @@
 import type { ByteRange, FileInfo, ReadResult } from '@musicfs/plugin-api';
-import { AudioTagError, type PrepareOptions } from './types';
+import { AudioTagError, type PrepareOptions, type ReadRange } from './types';
+
+/** Preparation-local header/tail windows. Open streams keep their original exact reader. */
+export function bufferedRanges(options: PrepareOptions): ReadRange {
+  const windows: { start: number; end: number; bytes: Uint8Array }[] = [];
+  return async (range, signal) => {
+    signal.throwIfAborted();
+    let window = windows.find(value => value.start <= range.start && value.end >= range.end);
+    if (!window) {
+      // MP4 boxes declare exact boundaries; never prefetch through an mdat payload.
+      const start = options.format === 'm4a' ? range.start : Math.floor(range.start / 4096) * 4096;
+      const end = options.format === 'm4a' ? range.end : Math.min(options.sourceInfo.size - 1, Math.max(range.end, start + 4095));
+      window = { start, end, bytes: await readBytes(options, start, end) };
+      if (window.bytes.length <= 65_536) { windows.push(window); if (windows.length > 2) windows.shift(); }
+    }
+    signal.throwIfAborted();
+    return { content: options.sourceInfo, servedRange: range,
+      body: new Response(new Uint8Array(window.bytes.subarray(range.start - window.start, range.end - window.start + 1))).body! };
+  };
+}
 
 export async function verifyRead(result: ReadResult, expected: FileInfo, range: ByteRange): Promise<void> {
   if (result.content.contentId !== expected.contentId || result.content.size !== expected.size

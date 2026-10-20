@@ -14,7 +14,7 @@
 | [插件结构升级](verification/p2-plugin-migration.md) | API0.1.4、整体候选激活、正式桌面重启与Worker新调用接棒 | 真实Cloudflare传播/配额或示例会话续期 |
 | [来源会话生命周期](verification/p2-session-lifecycle.md) | API0.1.5、实例按需续期、SQLite/D1协调、QQ SDK轮换/认证取消与网易云失效判断 | 真实自然到期/完整重登或云端已验 |
 | [大目录读取与CPU定位](verification/p2-read-cpu.md) | 正式workerd采样入口、XML/命名/SQL重复工作减法及限定结果 | 真实免费计划CPU、峰值内存或云端已验 |
-| [大目录刷新性能评估](architecture/refresh-performance.md) | 桌面网易云约4,000首单音质的请求放大、离线计数、缓存/批量/SDK适配与限流方案 | 已完成优化、实际账号耗时或平台限流已证实 |
+| [大目录刷新性能实现](architecture/refresh-performance.md) | 网易云4,000首完整离线计数、共用自适应批量、冷热缓存、共享封面和持久限流；本地workerd/D1预算 | 实际账号耗时、免费云端CPU或平台限流已证实 |
 | [开发与验证入口](development.md) | 工程命令、实现入口和探针运行方法 | 完整用户版应用 |
 | [使用说明](user-guide.md)与[插件作者指南](plugin-authoring.md) | 随包启动、来源/客户端及独立作者包的操作步骤 | 全部系统、真实云端与完整许可已验 |
 | [统一发行与作者验收](verification/p4-release-artifacts.md) | 版本化归档/校验和、GPL声明/项目源码包、仓库外Linux重建及作者接入 | 其他系统原生运行或正式发布已完成 |

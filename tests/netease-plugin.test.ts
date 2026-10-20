@@ -55,7 +55,7 @@ function fixture() {
       const parameters = new URLSearchParams(await req.text()); const decrypted = encrypt.eapiReqDecrypt(parameters.get('params')!);
       const ids = JSON.parse(String(decrypted!.data.ids)) as number[];
       const selected = String(decrypted!.data.level); playbackCalls.push({ ids, level: selected });
-      return json({ code: 200, data: playbackRows((missingPlayback ? [] : ids).map(id => ({ id, url: `https://m1.music.126.net/temporary-${calls.length}/${id}.mp3`, level: 'standard', type: 'mp3', size: bytes.length,
+      return json({ code: 200, data: playbackRows((missingPlayback ? [] : ids).map(id => ({ id, url: `https://m1.music.126.net/temporary-${calls.length}/${id}.mp3`, expi: 1200, level: 'standard', type: 'mp3', size: bytes.length,
         md5: brokenVersion ? 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' : '00000000000000000000000000000000', freeTrialInfo: preview && id === 2 ? { start: 0, end: 30 } : null })), selected) });
     }
     if (path === '/api/v3/discovery/recommend/songs') return json({ code: 200, data: { dailySongs: [{ id: 1, name: '完整音频', ar: [{ name: '歌手' }] }] } });
@@ -230,23 +230,24 @@ test('NetEase legacy references retain raw stat and ranges while tagged entries 
 
 test('NetEase liked pages locate once per instance while retaining order, repeated positions, old cursors and sequence checks', async () => {
   const f = fixture(); await authorize(f); f.setPreview(false); f.setPlaylistIds([...Array.from({ length: 8 }, (_, i) => i + 1), 1]);
+  delete f.ctx.cache!.getMany; // Older hosts use the small compatibility checkpoint policy.
   const initialCalls = f.calls.length;
   const first = value(await plugin.list(f.ctx, 'liked')); expect(first.items).toHaveLength(8); expect(first.nextCursor).toBeDefined();
   expect(f.calls.length - initialCalls).toBeGreaterThan(4); const beforeSecond = f.calls.length;
   const last = value(await plugin.list(f.ctx, 'liked', first.nextCursor)); expect(last.items).toHaveLength(1); expect(last.items[0]!.entryId).toBe('9:1:standard'); expect(last.nextCursor).toBeUndefined();
-  expect(f.calls.length - beforeSecond).toBe(3);
+  expect(f.calls.length - beforeSecond).toBe(1);
   expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(1); expect(f.playlistCalls).toEqual(['8', '8']);
   expect((first.statistics?.tracks ?? 0) + (last.statistics?.tracks ?? 0)).toBe(9);
 
-  const legacy = JSON.parse(first.nextCursor!) as Record<string, unknown>; delete legacy.likedPlaylistId; delete legacy.instanceId;
+  const legacy = JSON.parse(first.nextCursor!) as Record<string, unknown>; delete legacy.likedPlaylistId; delete legacy.instanceId; delete legacy.scanId;
   const beforeLegacy = f.calls.length;
   expect(value(await plugin.list(f.ctx, 'liked', JSON.stringify(legacy))).items[0]!.entryId).toBe('9:1:standard');
-  expect(f.calls.length - beforeLegacy).toBe(4); expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(2);
+  expect(f.calls.length - beforeLegacy).toBe(5); expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(2);
   f.setPlaylistIds(Array.from({ length: 9 }, (_, i) => 9 - i));
   expect(await plugin.list(f.ctx, 'liked', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'content_changed' } });
   expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(2);
 
-  const other = fixture(); other.ctx.instanceId = 'netease-b'; other.setLikedPlaylistId(18); await authorize(other); other.setPreview(false);
+  const other = fixture(); delete other.ctx.cache!.getMany; other.ctx.instanceId = 'netease-b'; other.setLikedPlaylistId(18); await authorize(other); other.setPreview(false);
   other.setPlaylistIds(Array.from({ length: 9 }, (_, i) => i + 201));
   const beforeForeign = other.calls.length;
   expect(await plugin.list(other.ctx, 'liked', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'invalid_config' } }); expect(other.calls).toHaveLength(beforeForeign);
@@ -408,6 +409,30 @@ test('NetEase prepares album positions, cover and three lyric forms once, and ca
 test('NetEase new listings require the optional host cache instead of silently publishing untagged audio', async () => {
   const f = fixture(); await authorize(f); delete f.ctx.cache;
   expect(await plugin.list(f.ctx, 'daily')).toMatchObject({ ok: false, error: { kind: 'not_supported' } });
+});
+
+test('NetEase stable auxiliary metadata lasts one week while missing lyrics are retried after one day', async () => {
+  for (const missing of [false, true]) {
+    const f = fixture(); await authorize(f); const request = f.ctx.fetch;
+    if (missing) f.ctx.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (new URL(String(input)).pathname.endsWith('/song/lyric/v1')) return Response.json({ code: 200 });
+      return request(input, init);
+    }, { preconnect: fetch.preconnect });
+    const before = Date.now(); value(await plugin.list(f.ctx, 'daily'));
+    const cached = (f.ctx.cache as ReturnType<typeof memoryCache>).values.get('lyrics:1')!;
+    const remaining = cached.expiresAt! - before;
+    expect(remaining).toBeGreaterThanOrEqual((missing ? 1 : 7) * 24 * 60 * 60_000);
+    expect(remaining).toBeLessThan((missing ? 1 : 7) * 24 * 60 * 60_000 + 2000);
+  }
+});
+
+test('NetEase preserves Retry-After for HTTP and business rate limits without invalidating the session', async () => {
+  for (const status of [200, 429]) {
+    const f = fixture(); await authorize(f);
+    f.ctx.fetch = Object.assign(async () => Response.json({ code: 429 }, { status, headers: { 'retry-after': '9' } }), { preconnect: fetch.preconnect });
+    expect(await plugin.list(f.ctx, 'created')).toMatchObject({ ok: false, error: { kind: 'rate_limited', retryAfterSeconds: 9 } });
+    expect(JSON.stringify(f.ctx.privateState)).toContain('private-session');
+  }
 });
 
 test('NetEase actual FLAC and M4A representations keep exact tagged sizes and final-file byte ranges', async () => {

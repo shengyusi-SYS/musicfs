@@ -21,7 +21,7 @@ const stampValues = (stamp: SourceStamp): SqlValue[] => [stamp.id, stamp.pluginI
 export const refreshRecordSQL = 'SELECT document FROM library_refresh_jobs WHERE operation_id = ?';
 export const currentRefreshSQL = 'SELECT document FROM library_refresh_jobs WHERE instance_id = ? ORDER BY rowid DESC LIMIT 1';
 export const readyRefreshesSQL = `SELECT operation_id FROM library_refresh_jobs r WHERE ${active} AND ${current}
-  AND (lease_token IS NULL OR lease_until <= ?) ORDER BY rowid LIMIT ?`;
+  AND MAX(CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END, COALESCE(json_extract(document, '$.retryAt'), 0)) <= ? ORDER BY rowid LIMIT ?`;
 // The reader uses only the first header. Avoid repeating it for every entry in a D1 result.
 export const snapshotEntriesSQL = `SELECT CASE WHEN e.ordinal = 0 OR e.ordinal IS NULL THEN s.document END AS document,
   s.error, s.published_attempt_id, e.document AS entry
@@ -111,7 +111,8 @@ export function claimRefreshStatement(operationId: string, token: string, now: n
     lease_token = ?, lease_until = ?, mutation_token = NULL,
     document = json_set(document, '$.status', 'running', '$.revision', revision + 1,
       '$.leaseToken', ?, '$.leaseUntil', ?, '$.updatedAt', ?)
-    WHERE operation_id = ? AND ${active} AND ${current} AND (lease_token IS NULL OR lease_until <= ?)
+    WHERE operation_id = ? AND ${active} AND ${current}
+      AND MAX(CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END, COALESCE(json_extract(document, '$.retryAt'), 0)) <= ?
     RETURNING document`, token, until, token, until, new Date(now).toISOString(), operationId, now);
 }
 

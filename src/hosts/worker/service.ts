@@ -24,7 +24,9 @@ export function createWorkerService(input: {
 }) {
   const store = createD1Store(input.db);
   const registry = createWorkerRegistry(store, input.registrations);
-  const sources = createSources(store, registry);
+  // A shared adaptive plugin algorithm can spend more items on cache hits.
+  // Reserve room for source checks and the atomic refresh checkpoint under Free's 50-query ceiling.
+  const sources = createSources(store, registry, fetch, Date.now, { cacheQueries: 32, requests: 50 });
   const library = createLibrary(sources, store, undefined, { execution: 'deferred' });
   const app = new Hono();
   app.use('*', async (c, next) => {

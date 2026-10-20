@@ -96,6 +96,25 @@ test('prepared and live metadata use the same validator despite object property 
   expect(described.etag).toBe((await library.files.stat(entry, signal())).etag);
 });
 
+test('unchanged file modification time survives refresh for listings and DAV metadata', async () => {
+  let size = 8; let modifiedAt = '2026-10-20T10:00:00.000Z';
+  const info = () => ({ contentId: `bytes-${size}`, size, mediaType: 'audio/wav', modifiedAt });
+  const { library, id } = await setup(plugin({ list: async () => ({ ok: true, value: { items: [
+    { kind: 'file', entryId: 'one', name: '音频.wav', fileRef: 'audio', info: info() }
+  ] } }), stat: async () => ({ ok: true, value: info() }) }));
+  const [before] = await library.files.list('/实例 & #/来源', signal());
+  const etag = (await library.files.stat(before!, signal())).etag;
+  await library.refresh(id, 'root', signal());
+  const [after] = await library.files.list('/实例 & #/来源', signal());
+  expect(after!.modifiedAt).toBe(modifiedAt);
+  expect((await library.files.statMany([after!], signal())).get(after!)).toMatchObject({ modifiedAt, etag });
+  expect(await library.files.stat(filePath, signal())).toMatchObject({ modifiedAt, etag });
+  size = 9; modifiedAt = '2026-10-21T10:00:00.000Z';
+  await library.refresh(id, 'root', signal());
+  expect(await library.files.stat(filePath, signal())).toMatchObject({ modifiedAt });
+  expect((await library.files.stat(filePath, signal())).etag).not.toBe(etag);
+});
+
 test('batch source checks also cover changes while another source is still being described', async () => {
   let changeFirst = async () => {};
   const source = plugin({ list: async ctx => ({ ok: true, value: { items: [{ kind: 'file', entryId: 'one', name: '音频.wav', fileRef: 'audio',
