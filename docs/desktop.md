@@ -18,11 +18,13 @@ Windows 挂载前会检测 WinFsp 的实际运行组件。缺失时页面提供�
 
 ## 本机 HTTPS 与资源管理器原生映射
 
-“服务连接 → 本机 HTTPS WebDAV”提供可选的回环 HTTPS 入口。点击启用后生成此数据目录专用的自签名证书，再在 Windows 信任证书，复制显示的 HTTPS 地址和相同读取凭据到资源管理器。地址只供这台运行后台的电脑使用；它不覆盖局域网地址或云端证书。证书和端口会保留，重启恢复入口；停用会断开此 HTTPS 入口，证书材料保留以便再启用。
+“服务连接 → 本机 HTTPS WebDAV”提供可选的回环 HTTPS 入口。点击启用后生成此数据目录专用的自签名证书，再点击“完成 Windows 连接设置”：一次标准系统权限确认，将此证书加入系统信任并启动现有 WebClient 服务，不改变服务启动类型。已就绪的设置直接复用。复制显示的 HTTPS 地址和相同读取凭据到资源管理器。地址只供这台运行后台的电脑使用；它不覆盖局域网地址或云端证书。证书和端口会保留，重启恢复入口；停用会断开此 HTTPS 入口，证书材料保留以便再启用。
 
 此入口使用 Bun 原生 TLS，复用同一 DAV 处理链路，不额外运行反向代理。管理页面、启动器身份和 App 管理的 rclone 挂载继续使用既有回环连接。Windows 默认 WebClient 只在 HTTPS 上使用 Basic 认证，故仅生成证书还不够，必须让 Windows 信任；不通过放宽全局 `BasicAuthLevel` 来解决。原生客户端仍受 Windows 自身限制，例如默认 50,000,000 字节的文件传输上限；需要完整音乐文件挂载时优先使用下方 App 管理的挂载。[Microsoft WebDAV 说明](https://learn.microsoft.com/en-us/iis/publish/using-webdav/using-the-webdav-redirector)
 
 具体模块关系见[桌面挂载架构](architecture/desktop-mounts.md)，实际 Windows 结果见[限定验收记录](verification/p2-windows-mount.md)。
+
+## 挂载位置与系统依赖
 
 挂载发生在运行 MusicFS 后台的电脑。用 Windows 浏览器打开 WSL 后台，挂载仍在 WSL；需要 Windows 盘符时，应运行 Windows 发行程序。资源管理器的“映射网络驱动器”则是独立的 Windows WebDAV 客户端，使用它能访问的 DAV 地址和读取凭据，不会调用此页面的 rclone 挂载。
 

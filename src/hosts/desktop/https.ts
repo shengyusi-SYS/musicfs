@@ -13,7 +13,7 @@ export class DesktopHttpsError extends Error {
 }
 
 const stateSchema = z.object({ enabled: z.boolean(), port: z.number().int().min(0).max(65535) });
-const trustSchema = z.object({ currentUser: z.boolean(), localMachine: z.boolean() });
+const windowsSchema = z.object({ trusted: z.boolean(), webClient: z.enum(['running', 'stopped', 'missing']) });
 const psLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const encoded = (script: string) => Buffer.from(script, 'utf16le').toString('base64');
 const hashScript = `function Get-Sha256($certificate) {
@@ -51,6 +51,7 @@ export async function createDesktopHttps(options: {
   let server: ReturnType<typeof Bun.serve> | undefined;
   let certificate: X509Certificate | undefined;
   let error: string | null = null;
+  let windowsError: string | null = null;
   let pending = Promise.resolve();
   const serialize = <T>(action: () => Promise<T>): Promise<T> => {
     const result = pending.then(action); pending = result.then(() => {}, () => {}); return result;
@@ -98,26 +99,30 @@ export async function createDesktopHttps(options: {
     state.port = server.port!;
   }
   async function inspect(): Promise<DesktopHttpsView> {
-    let trust = { currentUser: false, localMachine: false };
-    if (platform === 'win32' && certificate) {
+    let trusted = false;
+    let webClient: DesktopHttpsView['webClient'] = null;
+    if (platform === 'win32') {
       try {
-        trust = trustSchema.parse(JSON.parse(await powershell(`${preamble}\n${hashScript}
-$expected = ${psLiteral(certificate.fingerprint256.replaceAll(':', ''))}
-function Test-Root($location) {
-  $store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', $location)
+        const windows = windowsSchema.parse(JSON.parse(await powershell(`${preamble}\n${hashScript}
+$expected = ${psLiteral(certificate?.fingerprint256.replaceAll(':', '') ?? '')}
+function Test-Root {
+  $store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', 'LocalMachine')
   try {
     $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
     foreach ($candidate in $store.Certificates) { if ((Get-Sha256 $candidate) -eq $expected) { return $true } }
     return $false
   } finally { $store.Close() }
 }
-@{ currentUser = (Test-Root 'CurrentUser'); localMachine = (Test-Root 'LocalMachine') } | ConvertTo-Json -Compress
+$service = Get-Service -Name WebClient -ErrorAction SilentlyContinue
+$serviceState = if ($null -eq $service) { 'missing' } elseif ($service.Status -eq 'Running') { 'running' } else { 'stopped' }
+@{ trusted = (Test-Root); webClient = $serviceState } | ConvertTo-Json -Compress
 `)));
-      } catch { error = '无法读取 Windows 证书信任状态，请检查 Windows PowerShell 后重新检测。'; }
+        trusted = windows.trusted; webClient = windows.webClient; windowsError = null;
+      } catch { windowsError = '无法读取 Windows 连接设置，请检查 Windows PowerShell 后重新检测。'; }
     }
     return { platform, enabled: state.enabled, davUrl: server ? `https://127.0.0.1:${state.port}/dav/` : null,
       certificate: certificate ? { fingerprintSha256: certificate.fingerprint256, expiresAt: new Date(certificate.validTo).toISOString() } : null,
-      trust, error };
+      trusted, webClient, error: error ?? windowsError };
   }
   try {
     await readCertificate();
@@ -132,29 +137,33 @@ function Test-Root($location) {
         return inspect();
       } catch { throw new DesktopHttpsError('https_failed', '无法启用本机 HTTPS，请检查本机端口与数据目录后重试。'); }
     }),
-    trust: (scope = 'current-user') => serialize(async () => {
+    trust: () => serialize(async () => {
       if (platform !== 'win32') throw new DesktopHttpsError('unsupported_platform', '自动信任证书仅用于 Windows。');
-      if (!certificate) throw new DesktopHttpsError('trust_failed', '请先启用本机 HTTPS，再信任本 App 的证书。');
-      const location = scope === 'local-machine' ? 'LocalMachine' : 'CurrentUser';
+      if (!state.enabled || !server || !certificate) throw new DesktopHttpsError('trust_failed', '请先启用本机 HTTPS，再完成 Windows 连接设置。');
+      const current = await inspect();
+      if (current.webClient === null) throw new DesktopHttpsError('trust_failed', '无法检测 Windows WebClient，请重新检测后再完成连接设置。');
+      if (current.webClient === 'missing') throw new DesktopHttpsError('trust_failed', '此 Windows 未提供 WebClient 服务，无法使用原生 WebDAV 映射；可使用 App 的本机挂载。');
+      if (current.trusted && current.webClient === 'running') return current;
       const installation = `${preamble}\n${hashScript}
 $certificate = New-Object Security.Cryptography.X509Certificates.X509Certificate2(${psLiteral(certificatePath)})
 if ((Get-Sha256 $certificate) -ne ${psLiteral(certificate.fingerprint256.replaceAll(':', ''))}) { throw 'Certificate changed' }
-$store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', '${location}')
+$store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', 'LocalMachine')
 try { $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite); $store.Add($certificate) }
 finally { $store.Close(); $certificate.Dispose() }
+$service = Get-Service -Name WebClient -ErrorAction SilentlyContinue
+if ($null -eq $service) { throw 'WebClient service is not installed' }
+if ($service.Status -ne 'Running') { Start-Service -Name WebClient }
 `;
       try {
-        if (scope === 'local-machine') {
-          await powershell(`${preamble}
+        await powershell(`${preamble}
 $child = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe') -Verb RunAs -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', '${encoded(installation)}') -Wait -PassThru
 if ($child.ExitCode -ne 0) { throw 'Certificate installation failed' }
 `);
-        } else await powershell(installation);
         error = null;
         const view = await inspect();
-        if (!(scope === 'local-machine' ? view.trust.localMachine : view.trust.currentUser)) throw new Error('Certificate trust was not installed');
+        if (!view.trusted || view.webClient !== 'running') throw new Error('Windows connection setup was not completed');
         return view;
-      } catch { throw new DesktopHttpsError('trust_failed', '证书信任未完成；请确认 Windows 提示后重试。'); }
+      } catch { throw new DesktopHttpsError('trust_failed', 'Windows 连接设置未完成；请确认系统权限提示后重试。'); }
     }),
     disable: () => serialize(async () => {
       if (server) { await server.stop(true); server = undefined; }

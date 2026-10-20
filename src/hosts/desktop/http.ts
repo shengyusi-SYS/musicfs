@@ -37,12 +37,7 @@ export function createDesktopHttp(input: {
   app.post('/api/desktop/mount-prerequisites/install', async c => c.json(await input.prerequisites.installWinFsp()));
   app.get('/api/desktop/https', async c => c.json(await input.https.inspect()));
   app.post('/api/desktop/https/enable', async c => c.json(await input.https.enable()));
-  app.post('/api/desktop/https/trust', async c => {
-    const body: unknown = await c.req.json().catch(() => ({}));
-    const scope = body && typeof body === 'object' && 'scope' in body ? body.scope : 'current-user';
-    if (scope !== 'current-user' && scope !== 'local-machine') return c.json({ error: 'invalid_input', message: '请选择当前用户或系统证书信任。' }, 422);
-    return c.json(await input.https.trust(scope));
-  });
+  app.post('/api/desktop/https/trust', async c => c.json(await input.https.trust()));
   app.delete('/api/desktop/https', async c => c.json(await input.https.disable()));
   app.post('/api/desktop/quit', async c => {
     try { await input.mounts.close(); }

@@ -40,7 +40,8 @@ test('local HTTPS exposes only DAV, verifies the leaf certificate, and reopens t
     });
   } };
   const first = await createDesktopHttps(options); cleanup.push(() => first.close());
-  expect(await first.inspect()).toMatchObject({ enabled: false, davUrl: null, certificate: null });
+  expect(await first.inspect()).toMatchObject({ enabled: false, davUrl: null, certificate: null,
+    ...(process.platform === 'win32' ? {} : { trusted: false, webClient: null }) });
   const enabled = await first.enable();
   const ca = await readFile(join(directory, 'localhost-cert.pem'), 'utf8');
   const certificate = new X509Certificate(ca);
