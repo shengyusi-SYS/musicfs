@@ -103,6 +103,8 @@ bun scripts/probe-player.ts --url-file /tmp/selected-audio-url.txt --output /tmp
 
 默认执行已安装的`mpv`，可用`MUSICFS_MPV`显式指定受信任二进制；脚本不下载或安装播放器。直接DAV需要将读取Basic认证头放在`MUSICFS_PLAYER_AUTHORIZATION`环境变量中，OpenList已签名代理URL通常不需要该头。`MUSICFS_PLAYER_AUDIO_OUTPUT`可选明确音频输出（本次为`pulse`）；凭据和URL不打印、不写入仓库。
 
+成功报告记录加载到播放、各次定位恢复的实际耗时；命令超时包含命令/属性名和私有日志位置。等待超时仍按未通过处理，先定位失败再决定下一次验证，不通过反复延长等待取得通过结论。
+
 脚本通过Unix IPC控制真实播放器，在实际输出设备上静音播放，检查解码、时间前进与五次双向seek后的恢复；拒绝仅null输出。它适用于Linux/macOS的验证宿主，不是产品播放器或Windows验收程序。默认不运行于`bun run check`，也不自动下载整个媒体或重复DAV字节矩阵。失败日志留在脚本报出的临时目录，成功清理。实际版本/结果见[客户端记录](verification/p2-clients.md)。
 
 ## 实现入口
