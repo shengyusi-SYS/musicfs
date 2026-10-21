@@ -357,6 +357,22 @@ flowchart TD
 
 ## 领域关系
 
+Worker的复用边界与桌面保持同一领域算法：
+
+```mermaid
+flowchart LR
+  Binding[D1 binding] --> Runtime[无请求上下文的 runtime]
+  Runtime --> Core[sources / library]
+  Core --> Views[有界已发布目录索引]
+  Request[每次 HTTP] --> Service[本次 Hono 与宿主接线]
+  Service --> Runtime
+  Request --> Context[本次凭据 / assets / waitUntil / signal]
+  Context --> Service
+  Views --> Header[D1 header 核对发布身份]
+```
+
+runtime不保存音频Response、stream或HTTP执行上下文。Worker isolate消失只损失暖索引；持久检查点与发布快照仍从D1恢复。短暂失败与限流都沿现有任务retryAt续接，重试本身不形成另一套队列。
+
 插件、安装修订与实例分别存在；一个实际音频可对应多个目录出现位置。目录布局引用内容源，不接管来源内部对象或平台歌单。
 
 ```mermaid

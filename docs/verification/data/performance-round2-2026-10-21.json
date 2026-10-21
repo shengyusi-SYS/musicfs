@@ -1,0 +1,131 @@
+{
+  "date": "2026-10-21",
+  "scope": "WSL offline fixtures and local workerd/D1 only; no music platform traffic or Cloudflare deployment",
+  "directory": {
+    "files": 4000,
+    "five_independent_HEAD_before": {
+      "snapshots": 10,
+      "rows": 20005
+    },
+    "five_independent_HEAD_after": {
+      "snapshots": 2,
+      "rows": 4001
+    },
+    "subsequent_GET_and_Range_snapshot_rows": 0,
+    "worker_factory": "actual local workerd/D1, independent HTTP, request credentials/assets/waitUntil, isolate restart and overlapping cold requests; 47 assertions",
+    "limits": "not real Free Worker CPU evidence; LRU uses estimated size, not hard heap cap"
+  },
+  "equivalent_configuration": {
+    "local_workerd_writes": {
+      "equivalent": 0,
+      "changed": 1
+    },
+    "state_authentication_tests": 41
+  },
+  "temporary_retry": {
+    "delays_ms": [
+      2000,
+      8000
+    ],
+    "maximum_retries_same_page": 2,
+    "validation": "injected clock, later-page and cross-controller continuation, rate limit independence, exhaustion, instance advance, cancel"
+  },
+  "qq_read": {
+    "four_candidate_CDNs_play_and_two_seeks": {
+      "before_external_calls": 18,
+      "after_external_calls": 10
+    },
+    "single_CDN_play_and_two_seeks": {
+      "before_external_calls": 9,
+      "after_external_calls": 7
+    },
+    "extra_cost": "one small cache read per open, write on initial/expired selection; every open still obtains fresh vkey; no signed URL persisted"
+  },
+  "qq_refresh": {
+    "before": {
+      "cold": {
+        "pages": 5,
+        "calls": {
+          "playlist": 5,
+          "playback": 5,
+          "probe": 20,
+          "album": 1,
+          "lyrics": 20,
+          "cover": 1,
+          "range": 40
+        },
+        "reads": {
+          "song": 20,
+          "album": 20,
+          "lyrics": 20,
+          "cover": 20,
+          "tag-input": 20
+        },
+        "planBytes": 0
+      },
+      "warm": {
+        "pages": 5,
+        "calls": {
+          "playlist": 5,
+          "playback": 5,
+          "probe": 20
+        },
+        "reads": {
+          "song": 20,
+          "album": 20,
+          "lyrics": 20,
+          "cover": 20,
+          "tag-input": 20,
+          "tag-plan": 20
+        },
+        "planBytes": 921450
+      }
+    },
+    "after": {
+      "scope": "offline fake QqClient transport, 20 complete single-quality MP3s, shared 32KiB picture; no platform HTTP",
+      "cold": {
+        "pages": 5,
+        "calls": {
+          "playlist": 5,
+          "playback": 10,
+          "probe": 20,
+          "album": 1,
+          "lyrics": 20,
+          "cover": 1,
+          "range": 40
+        },
+        "reads": {
+          "getMany": 10,
+          "metadata": 30,
+          "tag-input": 20
+        },
+        "planBytes": 0,
+        "maxPluginQueries": 23,
+        "maxSourceRequests": 21
+      },
+      "warm": {
+        "pages": 1,
+        "calls": {
+          "playlist": 1,
+          "playback": 6,
+          "probe": 20
+        },
+        "reads": {
+          "getMany": 6
+        },
+        "planBytes": 0,
+        "maxPluginQueries": 6,
+        "maxSourceRequests": 27
+      }
+    },
+    "limits": "transport/cache model, not all real D1 SQL or Free CPU; cold external calls increase by 5 for first-block cost measurement"
+  },
+  "tests": [
+    "tests/library-views.test.ts",
+    "tests/worker-runtime.test.ts",
+    "tests/source-state.test.ts",
+    "tests/refresh.test.ts",
+    "tests/qq-read-performance.test.ts",
+    "tests/qq-refresh-performance.test.ts"
+  ]
+}
