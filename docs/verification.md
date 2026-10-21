@@ -4,7 +4,7 @@
 
 ## 当前事实
 
-当前桌面更新为 dev.15 的挂载名称与重命名，核心桌面体验沿用已验收的 dev.14。API0.1.9、音乐库 schema10 和平台插件版本不变；Worker认证迁移仍为0011。新名称与启动路径见[本轮核对](verification/mount-names.md)，Windows托盘、自启注册命令、自动挂载和登录见[dev.14实机证据](verification/desktop-access.md)。macOS原生产物与免费CPU仍未验，产物身份统一见[发行页](release.md)。
+当前桌面更新为 dev.15 的挂载名称与重命名，正式 Windows 包的默认卷标、中文自定义与管理页重命名已通过现有 VM 必要验收，见[名称与启动核对](verification/mount-names.md)。核心桌面体验沿用已验收的 dev.14，Windows托盘、自启注册命令、自动挂载和登录见[dev.14实机证据](verification/desktop-access.md)。API0.1.9、音乐库 schema10 和平台插件版本不变；Worker认证迁移仍为0011。macOS原生产物与免费CPU仍未验，产物身份统一见[发行页](release.md)。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
