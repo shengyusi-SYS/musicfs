@@ -8,7 +8,7 @@
 
 最终Windows包已在现有VM通过直接DAV重复范围、整个App正常重启后的缓存复用、清理后重新取源及App本机挂载绕过共享落盘；正常退出。未测真实整库或新增平台请求，Worker未重建或部署。
 
-产物：[Windows x64](../dist/releases/0.1.0-dev.11/musicfs-0.1.0-dev.11-windows-x64.zip)、[对应源码](../dist/releases/0.1.0-dev.11/musicfs-0.1.0-dev.11-source.zip)、[版本清单](../dist/releases/0.1.0-dev.11/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.11/SHA256SUMS)。构建输入为干净提交`bd80956`；正常退出旧后台、解压完整新版并重新挂载即可，原数据/授权/插件保留。本轮接入不新增第三方依赖，也未替换为自制分块框架。
+产物：[Windows x64](../dist/releases/0.1.0-dev.11/musicfs-0.1.0-dev.11-windows-x64.zip)、[对应源码](../dist/releases/0.1.0-dev.11/musicfs-0.1.0-dev.11-source.zip)、[版本清单](../dist/releases/0.1.0-dev.11/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.11/SHA256SUMS)。构建输入为干净提交`103d7e8`；正常退出旧后台、解压完整新版并重新挂载即可，原数据/授权/插件保留。本轮接入不新增第三方依赖，也未替换为自制分块框架。
 
 ## dev.10 缓存管理与播放范围调整
 

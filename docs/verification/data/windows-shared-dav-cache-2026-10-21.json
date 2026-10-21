@@ -3,7 +3,7 @@
   "scope": "Final dev.11 Windows App + managed shared rclone VFS + offline fixture plugin; no music platform",
   "stage": "complete",
   "version": "0.1.0-dev.11",
-  "executableSha256": "b19fa905effb0f8dd2a2de1d674f820cb5ea9bee05906e7657395507c5118360",
+  "executableSha256": "8ea8a87408b94ec0926a3d25711fda5ec86fd0d5e78e64621fbf0538e48948a2",
   "firstState": {
     "dav": [
       {
@@ -30,24 +30,6 @@
     "source": [
       {
         "range": {
-          "start": 0,
-          "end": 4095
-        },
-        "phase": "preparation",
-        "sentBytes": 4096,
-        "consumedBytes": 4096
-      },
-      {
-        "range": {
-          "start": 4800512,
-          "end": 4802393
-        },
-        "phase": "preparation",
-        "sentBytes": 1882,
-        "consumedBytes": 1882
-      },
-      {
-        "range": {
           "start": 44,
           "end": 2097151
         },
@@ -61,8 +43,8 @@
           "end": 4802393
         },
         "phase": "read",
-        "sentBytes": 2705242,
-        "consumedBytes": 1100624
+        "sentBytes": 2555904,
+        "consumedBytes": 802816
       },
       {
         "range": {
@@ -74,7 +56,7 @@
         "consumedBytes": 128
       }
     ],
-    "preparations": 1,
+    "preparations": 0,
     "sourceSize": 4802394,
     "finalSize": 5850970,
     "libraryPath": "实例 & #/Music",
@@ -96,7 +78,7 @@
     "directory": "\\\\?\\<user-profile>\\AppData\\Local\\Temp\\musicfs-shared-cache-20261021\\data\\mounts\\cache\\vfs\\musicfs_shared_reads",
     "bytesUsed": 0,
     "files": 1,
-    "sampledAt": "2026-10-21T15:36:32.255Z",
+    "sampledAt": "2026-10-21T15:45:08.900Z",
     "message": null
   },
   "repeatState": {
@@ -175,7 +157,7 @@
     "directory": "<user-profile>\\AppData\\Local\\Temp\\musicfs-shared-cache-20261021\\data\\mounts\\cache\\vfs\\musicfs_shared_reads",
     "bytesUsed": null,
     "files": null,
-    "sampledAt": "2026-10-21T15:36:35.799Z",
+    "sampledAt": "2026-10-21T15:45:13.059Z",
     "message": null
   },
   "normalQuit": true
