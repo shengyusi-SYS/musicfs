@@ -1,0 +1,25 @@
+{
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.test.ts",
+    "**/test-*.ts",
+    "**/test-fixtures.ts"
+  ],
+  "id": "file-read-protocol",
+  "include": [
+    "../../../packages/audio-tags/**",
+    "../../../packages/plugin-api/src/**",
+    "../../../src/core/library/file-info.ts",
+    "../../../src/core/library/published-views.ts",
+    "../../../src/core/library/types.ts",
+    "../../../src/core/library/index.ts",
+    "../../../src/hosts/desktop/read-cache.ts",
+    "../../../docs/architecture/audio-tags.md",
+    "../../../docs/architecture/shared-read-cache.md",
+    "../../../docs/architecture/plugin-interface.md",
+    "../../../docs/clients.md",
+    "../../../docs/engineering-lessons.md"
+  ],
+  "responsibility": "文件访问、协议与音频表示领域的独立评估。"
+}

@@ -1,0 +1,22 @@
+{
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.test.ts"
+  ],
+  "id": "user-journeys-ux",
+  "include": [
+    "../../src/contracts/**",
+    "../../src/transport/http/**",
+    "../../docs/user-guide.md",
+    "../../docs/desktop.md",
+    "../../docs/clients.md",
+    "../../docs/plugin-authoring.md",
+    "../../docs/architecture/web-ui.md",
+    "../../docs/architecture/cache-policy.md",
+    "../../docs/architecture/shared-read-cache.md",
+    "../../docs/engineering-lessons.md",
+    "../../outputs/musicfs-implementation-plan.md"
+  ],
+  "responsibility": "产品使用旅程与管理界面领域的独立评估。"
+}
