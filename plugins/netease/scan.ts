@@ -3,7 +3,7 @@ import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
 import { resolveVariants, resolutionKey, type Resolution } from './media';
 
-export const batchSize = 100;
+export const batchSize = 200;
 const lifetime = 24 * 60 * 60_000;
 export type SongScan = { id: string; playlistId: string; ids: string[]; revision: string };
 export const hash = async (value: unknown) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',

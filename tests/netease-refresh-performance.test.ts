@@ -49,7 +49,7 @@ function fixture(count: number, seed = 0) {
     rename(value: string) { title = value; }, reorder() { playlist.reverse(); }, setPlaylist(value: number[]) { playlist = value; }, changeMedia() { representation = 'changed'; } };
 }
 
-test('large NetEase scans reuse one membership and 100-track native batches across cold checkpoints', async () => {
+test('large NetEase scans reuse one membership and 200-track native batches across cold checkpoints', async () => {
   const f = fixture(4000, 10); f.client.ctx.fileInfo = 'required';
   const seedBatches: string[][] = []; const putMany = f.cache.putMany!;
   f.cache.putMany = async items => {
@@ -69,20 +69,27 @@ test('large NetEase scans reuse one membership and 100-track native batches acro
   expect(first.nextCursor).toBeDefined(); expect(second.nextCursor).not.toBe(first.nextCursor);
 });
 
-test('warm desktop refresh reuses prepared bytes in one larger page and notices membership and title changes', async () => {
-  const f = fixture(24, 24); f.client.ctx.fileInfo = 'required'; let cursor: string | undefined;
+test('warm desktop refresh keeps 100-file pages within 200-track batches and notices membership and title changes', async () => {
+  const f = fixture(240, 240); f.client.ctx.fileInfo = 'required'; let cursor: string | undefined;
   const original: string[] = [];
   do { const page = await list(f.client, 'liked', cursor); original.push(...page.items.map(item => JSON.stringify(item))); cursor = page.nextCursor; } while (cursor);
   f.reset();
   // The desktop policy only enlarges already prepared work; cold preparation remains bounded.
   const warm = await list(f.client, 'liked', undefined, { warmFiles: 100, concurrency: 2 });
-  expect(warm.items.map(item => JSON.stringify(item))).toEqual(original); expect(warm.nextCursor).toBeUndefined();
+  const second = await list(f.client, 'liked', warm.nextCursor, { warmFiles: 100, concurrency: 2 });
+  const last = await list(f.client, 'liked', second.nextCursor, { warmFiles: 100, concurrency: 2 });
+  expect([warm.items.length, second.items.length, last.items.length]).toEqual([100, 100, 40]);
+  expect([warm, second, last].flatMap(page => page.items.map(item => JSON.stringify(item)))).toEqual(original);
+  expect(last.nextCursor).toBeUndefined();
   expect(f.calls).toEqual({ user: 1, playlist: 2 });
   f.reset(); f.rename('Updated');
   const changed = await list(f.client, 'liked', undefined, { warmFiles: 100, concurrency: 2, coldFiles: 8 }); expect(changed.items[0]?.name).toContain('Updated');
   expect(f.calls.lyrics ?? 0).toBe(0); expect(f.calls.range).toBeGreaterThan(0);
   f.reorder();
-  await expect(list(f.client, 'liked', changed.nextCursor)).rejects.toMatchObject({ fault: { kind: 'content_changed' } });
+  await expect((async () => {
+    let next = changed.nextCursor;
+    do { next = (await list(f.client, 'liked', next)).nextCursor; } while (next);
+  })()).rejects.toMatchObject({ fault: { kind: 'content_changed' } });
 });
 
 test('4000-track lazy scans preserve membership and order without preparing audio or auxiliary metadata', async () => {
@@ -99,12 +106,12 @@ test('4000-track lazy scans preserve membership and order without preparing audi
   const started = performance.now(); const cold = await scan(); const coldCalls = { ...f.calls };
   const coldMs = performance.now() - started; f.reset();
   const warmStart = performance.now(); const warm = await scan(); const warmMs = performance.now() - warmStart;
-  expect(warm.pages).toBe(40); expect(warm.entries).toEqual(cold.entries); expect(warm.entries).toHaveLength(4000);
+  expect(warm.pages).toBe(20); expect(warm.entries).toEqual(cold.entries); expect(warm.entries).toHaveLength(4000);
   expect(f.calls).toEqual({ user: 1, playlist: 2 });
-  expect(coldCalls.playlist).toBe(2); expect(coldCalls.details).toBe(40); expect(coldCalls.playback).toBe(40);
+  expect(coldCalls.playlist).toBe(2); expect(coldCalls.details).toBe(20); expect(coldCalls.playback).toBe(20);
   const warmCalls = { ...f.calls };
-  expect(cold.pages).toBe(40);
-  expect(coldCalls).toEqual({ user: 1, playlist: 2, details: 40, playback: 40 });
+  expect(cold.pages).toBe(20);
+  expect(coldCalls).toEqual({ user: 1, playlist: 2, details: 20, playback: 20 });
   expect(cold.files.every(item => item.kind === 'file' && item.info === undefined && item.deferredInfo === true)).toBe(true);
   const expiry = [...f.cache.values].filter(([key]) => key.startsWith('song:') || key.startsWith('versions:')).map(([key, item]) => [key, item.expiresAt]);
   f.reset(); f.setPlaylist([4001, ...Array.from({ length: 4000 }, (_, i) => i + 1)]);
@@ -126,11 +133,11 @@ test('4000-track lazy scans preserve membership and order without preparing audi
   f.reset();
   for (const [key, value] of f.cache.values) if (key.startsWith('versions:')) value.expiresAt = 0;
   await scan(); const expiredVersions = { ...f.calls };
-  expect(expiredVersions).toEqual({ user: 1, playlist: 2, playback: 40 });
+  expect(expiredVersions).toEqual({ user: 1, playlist: 2, playback: 20 });
   f.reset();
   for (const [key, value] of f.cache.values) if (key.startsWith('song:') || key.startsWith('versions:')) value.expiresAt = 0;
   await scan(); const expiredBasics = { ...f.calls };
-  expect(expiredBasics).toEqual({ user: 1, playlist: 2, details: 40, playback: 40 });
+  expect(expiredBasics).toEqual({ user: 1, playlist: 2, details: 20, playback: 20 });
   const report = { scope: 'offline controlled transport, 4000 single-quality MP3 catalogue entries; no album, lyric, cover or audio reads; no platform HTTP',
     cold: { pages: cold.pages, calls: coldCalls, localHarnessMs: Math.round(coldMs) },
     warm: { pages: warm.pages, calls: warmCalls, localHarnessMs: Math.round(warmMs) },
@@ -139,26 +146,33 @@ test('4000-track lazy scans preserve membership and order without preparing audi
   if (process.env.MUSICFS_REFRESH_RESULT) await Bun.write(process.env.MUSICFS_REFRESH_RESULT, JSON.stringify(report, null, 2) + '\n');
 }, 20_000);
 
-test('lazy pages keep 100 source tracks when multiple qualities produce more than 100 files', async () => {
-  const f = fixture(200, 0);
+test('lazy pages keep 200 source tracks when multiple qualities produce more than 200 files', async () => {
+  const f = fixture(400, 0);
   f.client.ctx.config = { audio: { mode: 'multiple', qualities: ['lossless', 'standard'], missingQuality: 'hide' } };
   const first = await list(f.client, 'liked');
-  expect(first.statistics).toMatchObject({ tracks: 100, files: 200, hiddenTracks: 0 });
-  expect(first.progress).toEqual({ completed: 100, total: 200, unit: '曲目' });
+  expect(first.statistics).toMatchObject({ tracks: 200, files: 400, hiddenTracks: 0 });
+  expect(first.progress).toEqual({ completed: 200, total: 400, unit: '曲目' });
   expect(first.nextCursor).toBeDefined();
   expect(f.calls).toEqual({ user: 1, playlist: 1, details: 1, playback: 2 });
   expect(first.items.every(item => item.kind === 'file' && item.deferredInfo === true)).toBe(true);
+  const second = await list(f.client, 'liked', first.nextCursor);
+  expect(second.statistics).toMatchObject({ tracks: 200, files: 400, hiddenTracks: 0 });
+  expect(second.progress).toEqual({ completed: 400, total: 400, unit: '曲目' });
+  expect(second.nextCursor).toBeUndefined();
+  expect(first.items.at(-1)?.entryId).toBe('200:200:standard');
+  expect(second.items[0]?.entryId).toBe('201:201:lossless');
+  expect(f.calls).toEqual({ user: 1, playlist: 2, details: 2, playback: 4 });
 });
 
 test('one lazy stat prepares only its persistent song descriptor and GET serves its exact tagged bytes', async () => {
   const f = fixture(4000, 10);
   const page = await list(f.client, 'liked'); const entry = page.items[0]!;
   if (entry.kind !== 'file') throw new Error('Expected a file');
-  expect(page.items).toHaveLength(100); expect(entry.info).toBeUndefined(); expect(entry.deferredInfo).toBe(true);
+  expect(page.items).toHaveLength(200); expect(entry.info).toBeUndefined(); expect(entry.deferredInfo).toBe(true);
   expect(f.calls).toEqual({ user: 1, playlist: 1, details: 1, playback: 1 });
   const ref = JSON.parse(entry.fileRef);
   expect(ref.version).toBe(3); expect(ref.descriptorKey).toStartWith('tag-seed:');
-  expect([...f.cache.values.keys()].filter(key => key.startsWith('tag-seed:'))).toHaveLength(100);
+  expect([...f.cache.values.keys()].filter(key => key.startsWith('tag-seed:'))).toHaveLength(200);
   expect(JSON.stringify(ref)).not.toContain('Song'); expect(JSON.stringify(ref)).not.toContain('cover');
   expect(f.cache.values.get(ref.descriptorKey)?.expiresAt).toBeUndefined();
   for (const key of f.cache.values.keys()) if (key.startsWith('scan:') || key.startsWith('song:')) f.cache.values.delete(key);

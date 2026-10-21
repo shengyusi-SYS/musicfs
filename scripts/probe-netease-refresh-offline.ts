@@ -12,14 +12,16 @@ import { parseBuffer } from 'music-metadata';
 import type { Entry } from '@musicfs/plugin-api';
 import type { ContentSources, ViewEntry } from '../src/contracts/management';
 
+const tracks = Number(process.argv[2] ?? 24);
+assert(process.argv.length <= 3 && [24, 200].includes(tracks), 'Usage: bun run scripts/probe-netease-refresh-offline.ts [24|200]');
 await buildNetease();
 const root = await mkdtemp(join(tmpdir(), 'musicfs-netease-refresh-'));
 const source = new Uint8Array(await Bun.file('tests/fixtures/source-metadata/source.mp3').arrayBuffer());
 const picture = new Uint8Array(32_768); picture.set(cover);
-const ids = Array.from({ length: 24 }, (_, i) => i + 1);
+const ids = Array.from({ length: tracks }, (_, i) => i + 1);
 const song = (id: number) => ({ id, name: `Song ${id}`, ar: [{ name: 'Artist' }], al: { id: 1, name: 'Album', picUrl: 'https://p1.music.126.net/cover.png' }, no: id, cd: '1' });
 const richSong = (id: number) => ({ id, name: `Song ${id}`, artists: [{ name: 'Artist' }],
-  album: { id: 1, name: 'Album', picUrl: 'https://p1.music.126.net/cover.png', artists: [{ name: 'Artist' }], publishTime: 1577836800000, size: 24 }, no: id, disc: '1' });
+  album: { id: 1, name: 'Album', picUrl: 'https://p1.music.126.net/cover.png', artists: [{ name: 'Artist' }], publishTime: 1577836800000, size: ids.length }, no: id, disc: '1' });
 let requests = 0;
 const calls: Record<string, number> = {};
 await Bun.write(join(root, 'netease.mjs'), Bun.file('dist/netease/org.musicfs.netease/index.mjs'));
@@ -57,7 +59,7 @@ const mf = new Miniflare({ modulesRoot: root, modules: [{ type: 'ESModule', path
       const selected = JSON.parse(String(data.ids)) as number[];
       return Response.json({ code: 200, data: selected.map(id => ({ id, level: data.level, type: 'mp3', url: `https://m1.music.126.net/${id}.mp3`, expi: 1200, md5: id.toString(16).padStart(32, '0'), size: source.length })) });
     }
-    if (path.startsWith('/api/v1/album/')) return Response.json({ code: 200, album: { artist: { name: 'Artist' }, publishTime: 1577836800000, size: 24 } });
+    if (path.startsWith('/api/v1/album/')) return Response.json({ code: 200, album: { artist: { name: 'Artist' }, publishTime: 1577836800000, size: ids.length } });
     if (path === '/api/song/lyric/v1') return Response.json({ code: 200, lrc: { lyric: '[00:00.00]Lyrics' } });
     throw new Error(`Unhandled offline request: ${path}`);
   }, log: new Log(LogLevel.ERROR) });
@@ -83,13 +85,16 @@ try {
     milliseconds: Math.round((performance.now() - before.started) * 10) / 10,
     calls: Object.fromEntries(Object.entries(calls).flatMap(([path, count]) => count === (before.calls[path] ?? 0) ? [] : [[path, count - (before.calls[path] ?? 0)]])) });
   const finish = async (initial: RefreshView) => {
-    let job = initial; const queries: number[] = []; const before = mark();
+    let job = initial; const queries: number[] = []; const stepMilliseconds: number[] = []; const before = mark();
     while (job.status === 'queued' || job.status === 'running') {
+      const stepStarted = performance.now();
       const step = await invoke<RefreshView>(`/api/refreshes/${job.operationId}/step`, {}); job = step.value; queries.push(step.queries);
+      stepMilliseconds.push(Math.round((performance.now() - stepStarted) * 10) / 10);
       assert(step.queries <= 50, `Free D1 query ceiling exceeded: ${step.queries}`); assert(queries.length < 100);
     }
     assert.equal(job.status, 'completed', JSON.stringify(job.error));
-    return { job, metrics: { pages: job.current?.pages, queries, maxQueries: Math.max(...queries), ...cost(before) } };
+    return { job, metrics: { pages: job.current?.pages, queries, maxQueries: Math.max(...queries),
+      stepMilliseconds: { min: Math.min(...stepMilliseconds), max: Math.max(...stepMilliseconds) }, ...cost(before) } };
   };
   const run = async (body: { directoryRef?: string } = { directoryRef: 'liked' }) => {
     const start = await invoke<RefreshView>(`${base}/refresh`, body); const completed = await finish(start.value);
@@ -156,7 +161,7 @@ try {
   const rows = await db.prepare("SELECT cache_key AS key, length(document) AS bytes FROM source_plugin_cache WHERE cache_key LIKE 'tag-plan:%' OR cache_key LIKE 'tag-bytes:%'").all<{ key: string; bytes: number }>();
   const storage = { planBytes: rows.results.filter(row => row.key.startsWith('tag-plan:')).reduce((n, row) => n + row.bytes, 0),
     sharedArtworkCount: rows.results.filter(row => row.key.startsWith('tag-bytes:')).length };
-  assert.equal(storage.sharedArtworkCount, 1); assert(storage.planBytes < 24 * 8192);
+  assert.equal(storage.sharedArtworkCount, 1); assert(storage.planBytes < ids.length * 8192);
   const file = warmFiles[0]!; assert(file.info);
   const preparedHead = await dav(first.path, { method: 'HEAD' });
   assert.equal(preparedHead.status, 200); assert.equal(preparedHead.headers.get('ETag'), firstFile.etag);
@@ -174,6 +179,7 @@ try {
     sqlAccounting: 'Application D1 statements per request; probe inspection queries excluded', tracks: ids.length,
     catalogue, firstFile, filePreparation, warm, setup: { roots: rootsSetup.metrics, listingQueries: listing.queries }, storage,
     sharedPlanRead: { bytes: bytes.length, metadata: true, tailRange: true }, calls };
-  const output = '.musicfs/refresh-evaluation/worker-deferred.json'; await Bun.write(output, JSON.stringify(report, null, 2) + '\n');
+  const output = `.musicfs/refresh-evaluation/worker-deferred${tracks === 24 ? '' : '-200'}.json`;
+  await Bun.write(output, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report));
 } finally { await mf.dispose(); await rm(root, { recursive: true, force: true }); }
