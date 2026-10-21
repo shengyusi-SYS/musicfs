@@ -133,8 +133,10 @@ export function commitRefreshPlan(expected: RefreshRecord, next: RefreshRecord, 
     conditionValues.push(expected.stamp.id, task?.key.kind ?? '', task?.key.ref ?? '', task?.attemptId ?? '');
   }
   const stale = conditions.join(' OR ');
-  const duplicate = page ? `EXISTS (SELECT 1 FROM json_each(?) p JOIN library_snapshot_entries e
-    ON e.attempt_id = ? AND e.identity = json_extract(p.value, ?))
+  // Keep the bounded incoming page outside the identity lookup. A normal join
+  // lets SQLite scan every accumulated entry against json_each on every page.
+  const duplicate = page ? `EXISTS (SELECT 1 FROM json_each(?) p WHERE EXISTS (
+    SELECT 1 FROM library_snapshot_entries e WHERE e.attempt_id = ? AND e.identity = json_extract(p.value, ?)))
     OR EXISTS (SELECT 1 FROM json_each(?) p GROUP BY json_extract(p.value, ?) HAVING count(*) > 1)` : '0';
   const duplicateValues: SqlValue[] = page ? [items, task?.attemptId ?? '', identity, items, identity] : [];
   const cyclic = page?.nextCursor !== undefined ? 'EXISTS (SELECT 1 FROM library_refresh_cursors WHERE attempt_id = ? AND cursor = ?)' : '0';

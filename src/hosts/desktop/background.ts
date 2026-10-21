@@ -1,3 +1,5 @@
+import { setImmediate as yieldToIo } from 'node:timers/promises';
+
 /** One desktop process may drain persisted work after the management page closes. */
 export function createDesktopRunner(step: (signal: AbortSignal) => Promise<boolean>, nextAt: () => number | null) {
   const controller = new AbortController();
@@ -11,7 +13,11 @@ export function createDesktopRunner(step: (signal: AbortSignal) => Promise<boole
     running = (async () => {
       do {
         requested = false;
-        while (!controller.signal.aborted && await step(controller.signal)) { /* One durable step at a time. */ }
+        while (!controller.signal.aborted && await step(controller.signal)) {
+          // Hot SQLite/cache steps can otherwise drain entirely as microtasks,
+          // delaying playback, management requests and cancellation until the end.
+          await yieldToIo(undefined, { signal: controller.signal });
+        }
       } while (requested && !controller.signal.aborted);
       const instant = nextAt();
       if (!controller.signal.aborted && instant !== null) {

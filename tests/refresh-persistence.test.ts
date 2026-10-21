@@ -12,7 +12,7 @@ import type { LibraryStore, Snapshot, SnapshotKey } from '../src/core/library/ty
 import type { RefreshRecord, RefreshStore, SnapshotHeader } from '../src/core/library/refresh-types';
 import { createD1Store } from '../src/infrastructure/persistence/d1';
 import { openSqlite } from '../src/infrastructure/persistence/sqlite';
-import { snapshotEntriesSQL, type SnapshotEntryRow } from '../src/infrastructure/persistence/refresh-sql';
+import { commitRefreshPlan, snapshotEntriesSQL, type SnapshotEntryRow, type SqlStatement } from '../src/infrastructure/persistence/refresh-sql';
 
 type Store = InstallationStore & InstanceStore & LibraryStore & RefreshStore;
 const cleanup: (() => Promise<void>)[] = [];
@@ -36,10 +36,16 @@ const header = (current: RefreshRecord, id: string): SnapshotHeader => ({ stamp:
 async function setup(adapter: 'SQLite' | 'D1') {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-refresh-')); let store: Store;
   let reopen: () => void;
+  let queryPlan: ((query: SqlStatement) => { detail: string }[]) | undefined;
   let rows: <T>(sql: string, ...values: (string | number | null)[]) => Promise<T[]>;
   if (adapter === 'SQLite') {
     const path = join(directory, 'state.sqlite'); let current = openSqlite(path); store = current;
     const inspect = new Database(path);
+    queryPlan = query => {
+      const reader = new Database(path, { readonly: true });
+      try { return reader.query<{ detail: string }, (string | number | null)[]>('EXPLAIN QUERY PLAN ' + query.sql).all(...query.values); }
+      finally { reader.close(); }
+    };
     reopen = () => { current.close(); current = openSqlite(path); store = current; };
     rows = async <T>(sql: string, ...values: (string | number | null)[]) => inspect.query<T, (string | number | null)[]>(sql).all(...values);
     cleanup.push(async () => { current.close(); inspect.close(); await rm(directory, { recursive: true, force: true }); });
@@ -59,7 +65,7 @@ async function setup(adapter: 'SQLite' | 'D1') {
   const captured = (await store.capture('instance'))!;
   const stamp: SourceStamp = { id: captured.id, pluginId: captured.pluginId, epoch: captured.epoch,
     pluginRevision: captured.pluginRevision, pluginGeneration: captured.pluginGeneration };
-  return { get store() { return store; }, stamp, reopen, rows };
+  return { get store() { return store; }, stamp, reopen, rows, queryPlan };
 }
 
 for (const adapter of ['SQLite', 'D1'] as const) {
@@ -108,7 +114,14 @@ for (const adapter of ['SQLite', 'D1'] as const) {
     expect(await fixture.store.currentRefresh(stamp.id)).toEqual(checkpoint);
     const second = (await fixture.store.claimRefresh('paged', 'second', now + 1, now + 101))!;
     const completed = next(second, { status: 'completed', task: null, refreshedDirectories: 1 });
+    if (fixture.queryPlan) for (const query of commitRefreshPlan(second, completed, { items: [file('last')], publish: header(second, 'new') }).slice(0, 2)) {
+      const plan = fixture.queryPlan(query);
+      const identityLookups = plan.filter(item => /SEARCH e\b/.test(item.detail));
+      expect(identityLookups).toHaveLength(1);
+      expect(identityLookups[0]!.detail).toContain('(attempt_id=? AND identity=?)');
+    }
     expect(await fixture.store.commitRefresh(second, completed, { items: [items[0]!], publish: header(second, 'new') })).toBe('duplicate_entry');
+    expect(await fixture.store.commitRefresh(second, completed, { items: [file('same-page'), file('same-page')], publish: header(second, 'new') })).toBe('duplicate_entry');
     expect(await fixture.store.commitRefresh(second, completed, { items: [file('last')], nextCursor: 'second' })).toBe('cyclic_cursor');
     expect(await fixture.store.refreshRecord('paged')).toEqual(second);
     expect((await rows<{ count: number }>('SELECT count(*) AS count FROM library_snapshot_entries'))[0]!.count).toBe(120);
