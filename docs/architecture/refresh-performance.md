@@ -63,7 +63,7 @@ WebDAV 整层 allprop 往往同时要求每个文件的准确大小。随包 rcl
 
 SDK `/api/batch` 以路径为键包装业务调用，不能把同一路径的多首歌词当成已证实的真批量。每首歌词目前仍有独立成本，HTTP 打包不等于平台只做一次工作；不尝试无证据的路径变体或增加并发探测阈值。
 
-200首富详情/版本的两次真实请求分别约322/421ms，返回全部200个ID；compact缓存块约72/57KiB，低于1MiB单值合同，SQL仍用json_each固定绑定参数。离线4,000首已验证20页、43次基础调用；同一4,159首可推算45次，耗时未重新验证。实际200首本地workerd清单一页26SQL、冷文件准备最多38SQL/步，准确属性与Range通过。[批次证据](../verification/data/netease-sdk-batch-200-2026-10-21.json)、[200首Worker证据](../verification/data/deferred-catalogue-worker-200-2026-10-21.json)。不继续放大到SDK v3注释的1000上限：实际使用的是另一富详情端点，更大响应/处理粒度尚无与本次收益相称的必要性证据。
+200首富详情/版本的两次真实请求分别约322/421ms，返回全部200个ID；compact缓存块约72/57KiB，低于1MiB单值合同，SQL仍用json_each固定绑定参数。离线4,000首已验证20页、43次基础调用；同一4,159首可推算45次，耗时未重新验证。实际200首本地workerd清单一页26SQL、冷文件准备最多38SQL/步，准确属性与Range通过。[批次证据](../verification/data/netease-sdk-batch-200-2026-10-21.json)、[200首Worker证据](../verification/data/deferred-catalogue-worker-200-2026-10-21.json)。随后用户追问容量，一次500首富详情请求虽HTTP200却仅返回201首，已立即停止，未继续版本查询；200保留为已验证默认，不能把SDK另一v3路径的1000注释套用到这里，也不能凭该样本断言精确上限。[500首核对](../verification/data/netease-sdk-batch-500-2026-10-21.json)
 
 ## 缓存、粒度与免费基准
 

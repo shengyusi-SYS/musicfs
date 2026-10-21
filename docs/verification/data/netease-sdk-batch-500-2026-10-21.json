@@ -1,0 +1,46 @@
+{
+  "observedAt": "2026-10-21T02:36:31.600Z",
+  "sdk": "NeteaseCloudMusicApi 4.32.0",
+  "batchSize": 500,
+  "scope": "Two authorized metadata requests at most; existing WSL SQLite authorization and scan IDs read only; no audio, lyrics, cover, full refresh or deployment; no original instance writes.",
+  "policy": {
+    "quality": "standard",
+    "mode": "single",
+    "missingQuality": "hide",
+    "fallback": false
+  },
+  "cacheContract": {
+    "perValueMaxBytes": 1048576,
+    "maxItems": null,
+    "sqlBatchUsesJsonEach": true
+  },
+  "requests": [
+    {
+      "kind": "rich-details",
+      "httpMethod": "POST",
+      "transportMs": 301.47,
+      "httpStatus": 200,
+      "decodedBodyBytes": 566235,
+      "contentLengthHeader": null,
+      "contentEncoding": "br",
+      "retryAfterPresent": false,
+      "businessCode": 200,
+      "responseItems": 201,
+      "uniqueReturnedIds": 201,
+      "requestedIdsPresent": 201,
+      "unrequestedIds": 0,
+      "completeIdSet": false,
+      "productionCallMs": 310.32
+    }
+  ],
+  "input": {
+    "uniqueSongCount": 500,
+    "existingScanCache": true,
+    "originalDatabaseReadonly": true
+  },
+  "result": "incomplete-stop",
+  "stoppedAt": "rich-details",
+  "failureKind": "incomplete-response",
+  "originalStateWritten": false,
+  "interpretation": "HTTP and business responses succeeded, but only 201 of the 500 requested song IDs were present. The probe stopped before playback and made one upstream request total. This does not establish an exact maximum of 200 or 201."
+}
