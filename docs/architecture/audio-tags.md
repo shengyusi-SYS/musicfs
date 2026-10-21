@@ -53,6 +53,19 @@ API0.1.6的可选`Context.cache`已在SQLite/D1上实现，JSON `get/put`支持`
 
 资料描述键不包含SDK内部的详情完整性标记；相同歌曲资料来自每日推荐或歌单时，不因请求记账字段不同生成两份表示。
 
+```mermaid
+flowchart LR
+  Facts[实际媒体与音乐资料键] --> Ready{已准备ready有效}
+  Ready -->|是| Reuse[复用已固定表示]
+  Ready -->|否| Reservation{未准备代次索引有效}
+  Reservation -->|是| Same[复用原代次与mtime]
+  Reservation -->|否| New[保存新代次与资料期限]
+  Same --> Describe[直接公布准确文件属性]
+  New --> Describe
+  Describe --> Read[首次GET才准备该曲]
+  Read --> Freeze[原子固定计划 保存ready 使代次索引到期]
+```
+
 ### 单文件资料调度
 
 示例 alpha.16 在已有两个并发名额内重叠歌词和封面读取，专辑/歌曲补充资料仍先确认，不猜测依赖。网易云用于单文件按需准备；QQ仅在准备块只有一首且策略允许两个名额时启用。多首批量不叠加内层并发，有 `workBudget` 的宿主继续串行；不更改公开插件合同或新建全局请求队列。
