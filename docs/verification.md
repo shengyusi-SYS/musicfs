@@ -4,7 +4,7 @@
 
 ## 当前事实
 
-当前交付为 dev.14：桌面常驻、启动与自动挂载、账号密码及手机访问；Windows/Linux、离线 Worker、源码与作者包集中交付。API0.1.9、音乐库 schema10 和平台插件版本不变，Worker 新增认证迁移0011。证据来自隔离本地服务、workerd、浏览器及明确目标的构建；Windows 已补齐托盘、自启注册命令、自动挂载和登录的必要实机证据；macOS 原生产物与免费 CPU 仍未验。产物身份统一见[发行页](release.md)。
+当前桌面更新为 dev.15 的挂载名称与重命名，核心桌面体验沿用已验收的 dev.14。API0.1.9、音乐库 schema10 和平台插件版本不变；Worker认证迁移仍为0011。新名称与启动路径见[本轮核对](verification/mount-names.md)，Windows托盘、自启注册命令、自动挂载和登录见[dev.14实机证据](verification/desktop-access.md)。macOS原生产物与免费CPU仍未验，产物身份统一见[发行页](release.md)。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|

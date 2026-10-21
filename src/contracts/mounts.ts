@@ -1,5 +1,6 @@
 /** Browser-visible desktop mounting contract. Credentials only occur in input. */
 export type MountInput = {
+  /** Display name and native volume label; defaults to MusicFS. */
   name?: string;
   mountPoint: string;
   /** Restore this saved mount when the desktop starts; defaults to true. */
@@ -47,6 +48,7 @@ export interface MountManager {
   remount(id: string): Promise<MountView>;
   unmount(id: string): Promise<MountView>;
   remove(id: string): Promise<void>;
+  rename(id: string, name: string): Promise<MountView>;
   configureAutoMount(id: string, enabled: boolean): Promise<MountView>;
   configureCache(id: string, settings: MountCacheSettings): Promise<MountView>;
   cacheStatus(id: string): Promise<MountCacheStatus>;

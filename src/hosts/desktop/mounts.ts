@@ -13,8 +13,9 @@ const sourceSchema = z.discriminatedUnion('kind', [
 const directoryCacheSeconds = z.number().int().min(0).max(2_147_483_647);
 const fileCacheMaxMiB = z.number().int().min(0).max(1_048_576);
 const fileCacheMaxAgeHours = z.number().int().min(0).max(2_147_483);
+const mountName = z.string().trim().min(1).max(120);
 const cacheSchema = z.object({ directoryCacheSeconds, fileCacheMaxMiB: fileCacheMaxMiB.optional(), fileCacheMaxAgeHours: fileCacheMaxAgeHours.optional() }).strict();
-const inputSchema = z.object({ name: z.string().trim().min(1).max(120).optional(), mountPoint: z.string().min(1).max(4096),
+const inputSchema = z.object({ name: mountName.optional(), mountPoint: z.string().min(1).max(4096),
   autoMount: z.boolean().default(true),
   directoryCacheSeconds: directoryCacheSeconds.default(300), fileCacheMaxMiB: fileCacheMaxMiB.default(8192),
   fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(168), source: sourceSchema }).strict();
@@ -34,6 +35,12 @@ const nativeStatsSchema = z.object({
 type RecordEntry = { input: MountInput; view: MountView; mayBeMounted: boolean };
 type MountPoint = { MountPoint: string; Fs: string };
 type Connection = { url: string; username: string; password: string };
+
+// rclone 1.75.2 clips Windows volume labels at 32 bytes. Keep a complete UTF-8 prefix.
+function windowsVolumeName(name: string): string {
+  let bytes = 0;
+  return [...name].filter(character => (bytes += Buffer.byteLength(character, 'utf8')) <= 32).join('');
+}
 
 /** Desktop-only ownership of mount definitions, credentials and the private rclone process. */
 export async function createMountManager(options: {
@@ -181,7 +188,7 @@ export async function createMountManager(options: {
 
   async function start(record: RecordEntry, input: MountInput) {
     record.input = input; record.view.state = 'starting'; delete record.view.error;
-    record.view.name = input.name ?? record.view.name;
+    record.view.name = input.name ?? 'MusicFS';
     record.view.autoMount = input.autoMount ?? true;
     record.view.directoryCacheSeconds = input.directoryCacheSeconds ?? 300;
     record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? 8192;
@@ -207,7 +214,7 @@ export async function createMountManager(options: {
         // initial range downloads audio even for tiny reads. Scope the buffer to this VFS
         // (including a reused RC process); grow chunks normally during sequential playback.
         _config: { BufferSize: 128 * 1024 },
-        mountOpt: { AllowOther: false, AllowNonEmpty: false }, vfsOpt: { ReadOnly: true, CacheMode: record.view.fileCacheMaxMiB === 0 ? 'off' : 'full',
+        mountOpt: { AllowOther: false, AllowNonEmpty: false, VolumeName: platform === 'win32' ? windowsVolumeName(record.view.name) : record.view.name }, vfsOpt: { ReadOnly: true, CacheMode: record.view.fileCacheMaxMiB === 0 ? 'off' : 'full',
           CacheMaxSize: record.view.fileCacheMaxMiB * 1024 * 1024,
           CacheMaxAge: record.view.fileCacheMaxAgeHours === 0 ? 'off' : `${record.view.fileCacheMaxAgeHours}h`, ReadAhead: 0,
           // Persist downloaded-range metadata on close, before an immediate normal remount.
@@ -257,7 +264,7 @@ export async function createMountManager(options: {
       }
       if (previous?.mayBeMounted) throw new MountError('mount_busy', '此路径仍有待处理的挂载，请先卸载，再重新挂载。');
       const record: RecordEntry = previous ?? {
-        input, mayBeMounted: false, view: { id: crypto.randomUUID(), name: input.name ?? (input.source.kind === 'local' ? '本地 MusicFS' : new URL(input.source.url).host), mountPoint: input.mountPoint,
+        input, mayBeMounted: false, view: { id: crypto.randomUUID(), name: input.name ?? 'MusicFS', mountPoint: input.mountPoint,
           autoMount: input.autoMount ?? true,
           directoryCacheSeconds: input.directoryCacheSeconds ?? 300,
           fileCacheMaxMiB: input.fileCacheMaxMiB ?? 8192, fileCacheMaxAgeHours: input.fileCacheMaxAgeHours ?? 168,
@@ -282,6 +289,18 @@ export async function createMountManager(options: {
       await removeReadCache(record);
       records.splice(records.indexOf(record), 1);
       await persist();
+    }),
+    rename: (id, name) => serialize(async () => {
+      const parsed = mountName.safeParse(name);
+      if (!parsed.success) throw new MountError('invalid_mount', '请填写 1—120 个字符的名称。');
+      const record = findRecord(id);
+      if (record.view.name === parsed.data) return view(record);
+      const input = normalizeInput({ ...record.input, name: parsed.data });
+      const wasMounted = record.mayBeMounted;
+      if (wasMounted) await stop(record);
+      if (wasMounted) return start(record, input);
+      record.input = input; record.view.name = parsed.data;
+      await persist(); return view(record);
     }),
     configureAutoMount: (id, enabled) => serialize(async () => {
       if (typeof enabled !== 'boolean') throw new MountError('invalid_mount', '请选择是否在启动时自动挂载。');

@@ -49,6 +49,7 @@
 | `POST /api/mounts/:id/mount` | 按保存的私有输入重新挂载，返回MountView |
 | `POST /api/mounts/:id/unmount` | 正常卸载，保留定义与已读片段，返回MountView |
 | `DELETE /api/mounts/:id` | 正常卸载后移除定义及其缓存命名空间；占用失败保留可操作状态，成功204 |
+| `PUT /api/mounts/:id/name` | `{name}`，保存管理名称与原生卷标，已挂载时正常重挂；忙时保留旧名称与挂载 |
 | `PUT /api/mounts/:id/auto-mount` | `{enabled}`，只修改下次启动的恢复设置，不立即重挂或卸载 |
 | `GET /api/mounts/:id/cache` | 实际VFS模式、原生路径、文件数/占用及采样时间；统计可滞后，未运行不启动原生进程 |
 | `PUT /api/mounts/:id/cache` | `{directoryCacheSeconds,fileCacheMaxMiB?,fileCacheMaxAgeHours?}`，保存并正常重挂；占用失败保留旧设置 |

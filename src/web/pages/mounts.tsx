@@ -14,6 +14,7 @@ export default function Mounts({ api }: { api: Api }) {
   const client = useQueryClient(); const { message } = App.useApp();
   const [open, setOpen] = useState(false); const [kind, setKind] = useState<'local' | 'remote'>('local'); const [form] = Form.useForm<Fields>();
   const [mountError, setMountError] = useState('');
+  const [renameTarget, setRenameTarget] = useState<MountView | null>(null); const [renameForm] = Form.useForm<{ name: string }>();
   const [cacheTarget, setCacheTarget] = useState<MountView | null>(null); const [cacheForm] = Form.useForm<MountCacheSettings>();
   const [cacheError, setCacheError] = useState('');
   const cacheStatus = useQuery({ queryKey: ['mount-cache', cacheTarget?.id],
@@ -48,6 +49,11 @@ export default function Mounts({ api }: { api: Api }) {
   }, onError: () => { void client.invalidateQueries({ queryKey: ['mounts'] }); } });
   const autoMount = useMutation({ mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.configureMountAutoMount(id, enabled),
     onSuccess: () => client.invalidateQueries({ queryKey: ['mounts'] }) });
+  const rename = useMutation({ mutationFn: ({ id, name }: { id: string; name: string }) => api.renameMount(id, name), onSuccess: async result => {
+    await client.invalidateQueries({ queryKey: ['mounts'] });
+    if (result.state === 'error') { message.error('名称已保存，重新挂载未完成，请查看挂载状态'); return; }
+    setRenameTarget(null); message.success('名称已更新');
+  }, onError: () => { void client.invalidateQueries({ queryKey: ['mounts'] }); } });
   const configureCache = useMutation({ mutationFn: ({ id, settings }: { id: string; settings: MountCacheSettings }) => api.configureMountCache(id, settings), onSuccess: async result => {
     await client.invalidateQueries({ queryKey: ['mounts'] });
     if (result.state === 'error') { setCacheError(result.error?.message ?? '设置已保存，重新挂载未完成，请检查后重试。'); return; }
@@ -62,7 +68,7 @@ export default function Mounts({ api }: { api: Api }) {
   const refresh = useMutation({ mutationFn: (id: string) => api.refreshMount(id), onSuccess: () => {
     message.success('已清除挂载目录缓存，下次打开目录时重新读取');
   } });
-  const changing = mount.isPending || unmount.isPending || remount.isPending || remove.isPending || install.isPending || configureCache.isPending || clearCache.isPending || refresh.isPending;
+  const changing = mount.isPending || unmount.isPending || remount.isPending || remove.isPending || install.isPending || configureCache.isPending || clearCache.isPending || refresh.isPending || rename.isPending;
   async function submit(values: Fields) {
     setMountError('');
     const source: MountInput['source'] = kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: values.url!, username: values.username!, password: values.password! };
@@ -90,6 +96,7 @@ export default function Mounts({ api }: { api: Api }) {
         {item.state === 'mounted' ? <Button loading={unmount.isPending && unmount.variables === item.id} disabled={changing} onClick={() => unmount.mutate(item.id)}>卸载</Button>
           : <Button loading={remount.isPending && remount.variables === item.id} disabled={changing || ['starting', 'unmounting'].includes(item.state)} onClick={() => remount.mutate(item.id)}>挂载</Button>}
         <Dropdown trigger={['click']} menu={{ items: [
+          { key: 'rename', label: '重命名', disabled: changing, onClick: () => { rename.reset(); setRenameTarget(item); renameForm.setFieldsValue({ name: item.name }); } },
           { key: 'remount', label: '重新挂载', disabled: changing, onClick: () => remount.mutate(item.id) },
           { key: 'refresh', label: '刷新目录缓存', disabled: changing || item.state !== 'mounted', onClick: () => refresh.mutate(item.id) },
           { key: 'cache', label: '缓存设置', disabled: changing, onClick: () => editCache(item) },
@@ -102,14 +109,21 @@ export default function Mounts({ api }: { api: Api }) {
         {kind === 'remote' && <><Form.Item label="WebDAV 地址" name="url" rules={[{ required: true, type: 'url', message: '请输入完整 WebDAV 地址' }]}><Input placeholder="https://music.example.com/dav" /></Form.Item>
           <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input autoComplete="off" /></Form.Item>
           <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]}><Input.Password autoComplete="off" /></Form.Item></>}
+        <Form.Item label="名称（可选）" name="name"><Input maxLength={120} placeholder="MusicFS" /></Form.Item>
         <Form.Item label={prerequisites.data?.kind === 'winfsp' ? '盘符或挂载目录（可选）' : '挂载目录'} name="mountPoint"
           extra={prerequisites.data?.kind === 'winfsp' ? '留空时自动分配盘符。' : undefined}
           rules={prerequisites.data?.kind === 'winfsp' ? [] : [{ required: true, whitespace: true, message: '请输入挂载目录' }]}>
           <Input placeholder={prerequisites.data?.kind === 'winfsp' ? 'M:，或留空自动选择' : '/home/me/MusicFS'} />
         </Form.Item>
-        <Collapse ghost items={[{ key: 'options', label: '更多设置', forceRender: true, children: <><Form.Item label="名称" name="name"><Input maxLength={120} placeholder="可选" /></Form.Item><Form.Item label="启动时自动挂载" name="autoMount" valuePropName="checked"><Switch /></Form.Item><MountCacheFields /></> }]} />
+        <Collapse ghost items={[{ key: 'options', label: '更多设置', forceRender: true, children: <><Form.Item label="启动时自动挂载" name="autoMount" valuePropName="checked"><Switch /></Form.Item><MountCacheFields /></> }]} />
         <Failure error={mount.error} />{mountError && <Alert className="feedback" type="error" showIcon title={mountError} />}
         <Button type="primary" htmlType="submit" block loading={mount.isPending}>挂载</Button>
+      </Form>
+    </Modal>
+    <Modal title="重命名挂载" open={renameTarget !== null} onCancel={() => setRenameTarget(null)} footer={null} destroyOnHidden>
+      <Form form={renameForm} layout="vertical" preserve={false} onFinish={({ name }) => { if (renameTarget) rename.mutate({ id: renameTarget.id, name }); }}>
+        <Form.Item label="名称" name="name" rules={[{ required: true, whitespace: true, message: '请输入名称' }, { max: 120 }]}><Input maxLength={120} autoFocus /></Form.Item>
+        <Failure error={rename.error} /><Button type="primary" htmlType="submit" loading={rename.isPending} block>{renameTarget?.state === 'mounted' ? '保存并重新挂载' : '保存'}</Button>
       </Form>
     </Modal>
     <Modal title={cacheTarget?.name + ' · 缓存设置'} open={cacheTarget !== null} onCancel={() => setCacheTarget(null)} footer={null} destroyOnHidden>

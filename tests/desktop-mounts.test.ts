@@ -39,6 +39,38 @@ function fakeControl() {
     setBusy(value: boolean) { busy = value; }, setListFailure(value: boolean) { listFailure = value; } };
 }
 
+test('mount names become native volume labels; renaming keeps identity and cache and respects busy files', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-name-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const options = { directory: join(directory, 'state'), binary: 'unused', localConnection,
+    control: fake.control, checkDependencies: async () => {} };
+  const manager = await createMountManager(options);
+  cleanup.push(() => manager.close());
+  const mount = await manager.mount({ mountPoint: join(directory, 'music'), source: { kind: 'local' } });
+  const native = () => fake.calls.filter(call => call.method === 'mount/mount').at(-1)!.parameters;
+  expect(mount.name).toBe('MusicFS');
+  expect(native().mountOpt).toMatchObject({ VolumeName: 'MusicFS' });
+  const namespace = native().fs;
+  const renamed = await manager.rename(mount.id, '我的音乐');
+  expect(renamed).toMatchObject({ id: mount.id, name: '我的音乐', state: 'mounted' });
+  expect(native()).toMatchObject({ fs: namespace, mountOpt: { VolumeName: '我的音乐' } });
+  const saved = JSON.parse(await readFile(join(options.directory, 'mounts.json'), 'utf8'));
+  expect(saved[0].input.name).toBe('我的音乐');
+  const recovered = await createMountManager(options);
+  expect((await recovered.list())[0]?.name).toBe('我的音乐');
+  fake.setBusy(true);
+  await expect(manager.rename(mount.id, '另一个名称')).rejects.toMatchObject({ code: 'mount_busy' });
+  expect((await manager.list())[0]).toMatchObject({ name: '我的音乐', error: { code: 'mount_busy' } });
+  fake.setBusy(false);
+  await manager.unmount(mount.id);
+  const mountsBefore = fake.mountCalls();
+  expect(await manager.rename(mount.id, '本地乐库')).toMatchObject({ name: '本地乐库', state: 'stopped' });
+  expect(fake.mountCalls()).toBe(mountsBefore);
+  await manager.remount(mount.id);
+  expect(native()).toMatchObject({ fs: namespace, mountOpt: { VolumeName: '本地乐库' } });
+});
+
 test('unchanged and recovered mount status leaves the saved file untouched; a disappeared mount is persisted', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-status-'));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
@@ -355,6 +387,8 @@ test('Windows mount requests keep drive letters and normalize Windows directory 
     { mountPoint: '*', mountType: 'cmount' },
     { mountPoint: 'C:\\MusicFS\\mount', mountType: 'cmount' }
   ]);
+  await manager.mount({ name: '这是超过原生卷标长度的中文音乐目录', mountPoint: 'N:', source: { kind: 'local' } });
+  expect(requests.at(-1)?.mountOpt).toMatchObject({ VolumeName: '这是超过原生卷标长度' });
 });
 
 test('rclone RC disk-full errors reach management HTTP without exposing private details or changing busy and dependency classification', async () => {

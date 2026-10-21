@@ -71,6 +71,7 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
     remount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/mount`, { method: 'POST' }),
     unmount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/unmount`, { method: 'POST' }),
     removeMount: (id: string) => request<void>(`/mounts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    renameMount: (id: string, name: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/name`, json('PUT', { name })),
     configureMountCache: (id: string, settings: MountCacheSettings) => request<MountView>(`/mounts/${encodeURIComponent(id)}/cache`, json('PUT', settings)),
     mountCacheStatus: (id: string, signal: AbortSignal) => request<MountCacheStatus>(`/mounts/${encodeURIComponent(id)}/cache`, { signal }),
     clearMountCache: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/cache`, { method: 'DELETE' }),

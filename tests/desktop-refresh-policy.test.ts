@@ -13,7 +13,7 @@ test('desktop restart runs a due directory update without an open page and inval
   let instanceId = ''; const publications: string[] = [];
   const unused = async (): Promise<never> => { throw new Error('Mount lifecycle is outside this publication probe'); };
   const mounts: MountManager = { list: async () => [], mount: unused, remount: unused, unmount: unused, remove: unused,
-    configureAutoMount: unused, configureCache: unused, cacheStatus: unused, clearCache: unused, refresh: unused, close: async () => {},
+    rename: unused, configureAutoMount: unused, configureCache: unused, cacheStatus: unused, clearCache: unused, refresh: unused, close: async () => {},
     async refreshLocal() {
       const published = service?.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value;
       if (published) publications.push(published.id);

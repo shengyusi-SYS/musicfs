@@ -1,5 +1,11 @@
 # MusicFS 当前交付物
 
+## dev.15 挂载名称
+
+应用 `0.1.0-dev.15`：挂载默认显示 MusicFS，添加时可自定义，已有项可在更多菜单重命名。保存已挂载项会正常重挂，保留 ID、来源和缓存；旧项重新挂载后采用新卷标。自动挂载仍在后台执行，管理页与托盘先可用。
+
+[Windows x64](../dist/releases/0.1.0-dev.15/musicfs-0.1.0-dev.15-windows-x64.zip)、[离线 Worker](../dist/releases/0.1.0-dev.15/musicfs-0.1.0-dev.15-worker.zip)、[源码](../dist/releases/0.1.0-dev.15/musicfs-0.1.0-dev.15-source.zip)、[作者包](../dist/releases/0.1.0-dev.15/musicfs-0.1.0-dev.15-plugin-author-kit.zip)、[清单](../dist/releases/0.1.0-dev.15/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.15/SHA256SUMS)。本次集中提供 Windows 更新，Linux 可使用相同源码构建；平台插件、公开API和音乐库 schema不变，未升级云端。具体核对见[挂载名称与启动](verification/mount-names.md)。
+
 ## dev.14 桌面常驻与管理登录
 
 2026-10-22：应用 `0.1.0-dev.14`，新增托盘入口、登录自启、分开的手动/自启打开页面选项、全局与逐项自动挂载和有限后台重试。管理页支持账号密码、记住登录与退出；桌面自动进入，手机通过短期二维码进入，局域网由用户在设置手动开启并即时生效。

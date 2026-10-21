@@ -13,7 +13,7 @@ const initial: ReadCacheStatus = {
 
 function fixture(readCache?: ReadCacheManager, prepareQuit?: () => Promise<void | (() => void)>) {
   const app = createDesktopHttp({ directory: '/unused', adminToken: 'fixture-admin', network: { access: 'local', port: 0 }, port: () => 8787,
-    mounts: { list: unused, mount: unused, remount: unused, unmount: unused, remove: unused, configureAutoMount: unused, configureCache: unused,
+    mounts: { list: unused, mount: unused, remount: unused, unmount: unused, remove: unused, rename: unused, configureAutoMount: unused, configureCache: unused,
       cacheStatus: unused, clearCache: unused, refresh: unused, refreshLocal: unused, close: unused },
     prerequisites: { inspect: unused, installWinFsp: unused, check: unused },
     https: { inspect: unused, enable: unused, trust: unused, restoreFileSizeLimit: unused, disable: unused, close: unused },

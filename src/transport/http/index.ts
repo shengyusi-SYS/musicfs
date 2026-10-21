@@ -148,6 +148,12 @@ export function createManagementApi(input: {
       ...(settings.fileCacheMaxMiB === undefined ? {} : { fileCacheMaxMiB: settings.fileCacheMaxMiB }),
       ...(settings.fileCacheMaxAgeHours === undefined ? {} : { fileCacheMaxAgeHours: settings.fileCacheMaxAgeHours }) }));
   });
+  app.put('/api/mounts/:id/name', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    const { name } = z.object({ name: z.string() }).strict().parse(await json(c));
+    input.mountAction?.(c.req.param('id'));
+    return c.json(await input.mounts.rename(c.req.param('id'), name));
+  });
   app.put('/api/mounts/:id/auto-mount', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
     const { enabled } = z.object({ enabled: z.boolean() }).strict().parse(await json(c));

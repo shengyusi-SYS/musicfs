@@ -1,6 +1,6 @@
 # MusicFS 实施与交付计划
 
-当前交付主线为 dev.14 桌面常驻、启动与自动挂载、管理账号及手机访问，按[已确认方案](musicfs-desktop-usability.md)实施；性能主线维持原停止决定。Windows/Linux、离线 Worker、作者包与源码的当前身份及升级步骤只在[发行页](../docs/release.md)维护；macOS 原生包和免费云端 CPU 的未验边界见本轮证据。
+当前桌面更新为 dev.15 的挂载名称与重命名，启动后台恢复沿用 dev.14，见[定向核对](../docs/verification/mount-names.md)。dev.14 常驻、登录与自动挂载的[已确认方案](musicfs-desktop-usability.md)已收口；性能主线维持原停止决定。产物身份及升级步骤只在[发行页](../docs/release.md)维护。
 
 性能主线按[Codex 完成标准](../docs/codex-goal.md)执行。上一轮已识别的路径已交付；本轮六领域独立评估和主代理复核又发现局部优化候选，详见[场景复评与ROI](musicfs-performance-review.md)。用户已授权按 O2 → O1 → O3 实施，不自动恢复历史验证矩阵。工程经验见[可复用结论](../docs/engineering-lessons.md)，产品范围仍以[统一需求](musicfs-requirements-and-technical-design.md)为准。
 
