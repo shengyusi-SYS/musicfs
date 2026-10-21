@@ -1,10 +1,10 @@
 import type { FileInfo, Json, ReadRequest, ReadResult } from '@musicfs/plugin-api';
-import { AudioReservationError, open, prepare, type AudioFormat, type AudioTags, type ReadRange, type TaggedPlan } from '@musicfs/audio-tags';
+import { AudioReservationError, prepare, type AudioFormat, type AudioTags, type ReadRange, type TaggedPlan } from '@musicfs/audio-tags';
 import { z } from 'zod';
 import { fail, type NeteaseClient } from './client';
 import { decodeFile, info, type MediaReference } from './reference';
 import { musicTags } from './metadata';
-import { packPlan, unpackPlan, type StoredPlan } from './plan-storage';
+import { packPlan, openStoredPlan, type StoredPlan } from './plan-storage';
 
 const reference = z.discriminatedUnion('version', [
   z.object({ version: z.literal(2), source: z.unknown(), planKey: z.string().min(1) }).strict(),
@@ -158,5 +158,5 @@ export async function taggedOpen(client: NeteaseClient, ref: Reference, input: R
   const saved = ref.version === 4 ? await reservedPlan(client, ref, readRange)
     : await plan(client, ref.version === 3 ? `tag-plan:${input.expectedContentId}` : ref.planKey);
   if (saved.content.contentId !== input.expectedContentId || saved.source.contentId !== info(ref.source).contentId) fail('content_changed', '网易云补标签文件版本已变化，请刷新目录。');
-  return open(await unpackPlan(client.ctx.cache!, saved), readRange, input.range, client.ctx.signal);
+  return openStoredPlan(client.ctx.cache!, saved, readRange, input.range, client.ctx.signal);
 }
