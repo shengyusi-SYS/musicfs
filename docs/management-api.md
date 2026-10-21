@@ -34,6 +34,7 @@
 | `POST /api/refreshes/:operationId/step` | 至多执行一页插件读取并保存检查点，返回 200 + RefreshView；其他请求持租约时只返回已有进度 |
 | `DELETE /api/refreshes/:operationId` | 先持久取消，返回 RefreshView，不存在为 404；迟到页不能覆盖取消 |
 | `GET /api/layout` | `{revision,nodes}`；nodes 为 null 表示按实例默认布局 |
+| `GET /api/layout/default` | 当前自动布局的 `LayoutNode[]` 编辑副本；沿用导出路径名称，只读取来源入口，不保存布局 |
 | `PUT /api/layout` | `{expectedRevision,nodes}`；冲突返回 409，节点合同见 library 类型 |
 | `GET /api/library?path=...` | 导出视图中的有序浅目录；文件元数据在实际 stat/读取时准备 |
 | `GET /api/mounts` | 正式桌面启动器装配的本机挂载状态；开发服务和 Worker 不提供 |
