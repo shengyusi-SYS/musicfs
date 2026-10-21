@@ -1,0 +1,283 @@
+{
+  "date": "2026-10-21",
+  "success": true,
+  "scope": "Windows 11 VM 192.0.2.74, dev.6 production App mount API using remote source pointed over loopback SSH reverse forward to real MusicFS Library/DAV offline MP3 prototype in WSL. Not a production NetEase plugin integration, Explorer GUI or audible playback acceptance.",
+  "mountAndRead": {
+    "scope": "Windows VM, native dev.6 App mount API, rclone/WinFsp, immutable offline MP3 prototype over loopback SSH forward",
+    "success": true,
+    "stage": "complete",
+    "executableSha256": "f29ef85c141c83e35abccefd3cbbdb05fa015024b4e1baf1519d972d7e0421a4",
+    "version": "0.1.0-dev.6",
+    "rclone": "v1.75.2",
+    "os": "Microsoft Windows NT 10.0.26100.0",
+    "winfsp": {
+      "state": "ready",
+      "version": "2025"
+    },
+    "mount": {
+      "milliseconds": 908.5501,
+      "mountPoint": "Z:",
+      "state": "mounted"
+    },
+    "listing": {
+      "lyricCalls": 0,
+      "files": 6,
+      "coverCalls": 0,
+      "sizes": [
+        1067471,
+        1067471,
+        1067471,
+        1067471,
+        1067471,
+        1067471
+      ],
+      "sourceRanges": 0,
+      "milliseconds": 30.276200000000003,
+      "preparations": 0
+    },
+    "openStage": {
+      "prepared": [
+        "0.mp3"
+      ],
+      "windowsMayReadDuringOpen": true,
+      "sourceRanges": 4
+    },
+    "sameHandleReads": [
+      {
+        "offset": 0,
+        "milliseconds": 8.3664,
+        "bytes": 64
+      },
+      {
+        "offset": 1067407,
+        "milliseconds": 7.9084,
+        "bytes": 64
+      },
+      {
+        "offset": 1048608,
+        "milliseconds": 5.6803,
+        "bytes": 64
+      },
+      {
+        "offset": 0,
+        "milliseconds": 14.1341,
+        "bytes": 64
+      }
+    ],
+    "fullRead": {
+      "matchesExpected": true,
+      "sha256": "234bf532e36333a32de7c3e1523a16d882e043c5f0a7b1e3173225838ef26f7a",
+      "bytes": 1067471
+    },
+    "shellMetadataError": "方法调用失败，因为 [System.__ComObject] 不包含名为“GetDetailsEx”的方法。",
+    "wmpMetadataError": "找不到“getItemInfoByType”的重载，参数计数为“2”",
+    "preparation": {
+      "lyricCalls": 1,
+      "transport": [
+        {
+          "method": "PROPFIND",
+          "path": "/dav/",
+          "range": null,
+          "status": 207
+        },
+        {
+          "method": "PROPFIND",
+          "path": "/dav/",
+          "range": null,
+          "status": 207
+        },
+        {
+          "method": "PROPFIND",
+          "path": "/dav/",
+          "range": null,
+          "status": 207
+        },
+        {
+          "method": "PROPFIND",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/",
+          "range": null,
+          "status": 207
+        },
+        {
+          "method": "PROPFIND",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/",
+          "range": null,
+          "status": 207
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=0-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=1003520-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=0-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=1067407-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=1048608-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=0-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=0-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=1003520-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=0-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=0-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=1003520-1067470",
+          "status": 206
+        },
+        {
+          "method": "GET",
+          "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+          "range": "bytes=0-1067470",
+          "status": 206
+        }
+      ],
+      "sourceRangeCount": 15,
+      "files": [
+        "0.mp3"
+      ],
+      "coverCalls": 1
+    },
+    "normalUnmount": true,
+    "normalQuit": true
+  },
+  "nativeMetadata": {
+    "scope": "Selected file metadata only; previous cold-listing/read verification is not rerun",
+    "success": true,
+    "stage": "complete",
+    "shellMetadata": {
+      "artist": [
+        "歌手甲",
+        "歌手乙"
+      ],
+      "title": "按需挂载：中文标题",
+      "album": "离线专辑",
+      "duration100ns": 10709375
+    },
+    "wmpMetadata": {
+      "artist": "歌手甲",
+      "title": "按需挂载：中文标题",
+      "album": "离线专辑",
+      "lyrics": "[00:00.00]原文\n[00:00.50]第二行\n",
+      "duration": 1.07
+    },
+    "prepared": [
+      "0.mp3"
+    ],
+    "normalUnmount": true,
+    "normalQuit": true
+  },
+  "sourceDurationControl": {
+    "scope": "Same original offline source, local Windows WMP only",
+    "seconds": 1.078,
+    "mountedTaggedSeconds": 1.07
+  },
+  "firstAttempt": {
+    "kind": "Harness assumptions corrected; not a production-code failure",
+    "result": {
+      "scope": "Windows VM, native dev.6 App mount API, rclone/WinFsp, immutable offline MP3 prototype over loopback SSH forward",
+      "success": false,
+      "stage": "single-file-read",
+      "executableSha256": "f29ef85c141c83e35abccefd3cbbdb05fa015024b4e1baf1519d972d7e0421a4",
+      "version": "0.1.0-dev.6",
+      "rclone": "v1.75.2",
+      "os": "Microsoft Windows NT 10.0.26100.0",
+      "winfsp": {
+        "state": "ready",
+        "version": "2025"
+      },
+      "mount": {
+        "milliseconds": 1865.6733000000002,
+        "mountPoint": "Z:",
+        "state": "mounted"
+      },
+      "listing": {
+        "lyricCalls": 0,
+        "files": 6,
+        "coverCalls": 0,
+        "sizes": [
+          1067471,
+          1067471,
+          1067471,
+          1067471,
+          1067471,
+          1067471
+        ],
+        "sourceRanges": 0,
+        "milliseconds": 37.3373,
+        "preparations": 0
+      },
+      "error": "Open without read prepared a file",
+      "normalUnmount": false,
+      "cleanupError": "Mount record was not removed",
+      "normalQuit": true
+    },
+    "corrections": [
+      "Windows emitted selected-file GETs during FileStream open/length; zero work is required for enumeration, not for opening the selected file.",
+      "PowerShell empty-array wrapping made the mount-list assertion report an error; final verification checks literal empty JSON list.",
+      "Native metadata follow-up used FolderItem.ExtendedProperty and WMP getItemInfo after initial COM method/signature errors; no cold-scan rerun for metadata."
+    ]
+  },
+  "cleanup": {
+    "normalUnmount": true,
+    "normalQuit": true,
+    "ownedProcessesRemaining": 0,
+    "driveRemoved": true,
+    "vmTemporaryDirectoryRemoved": true,
+    "sshReverseForwardClosed": true,
+    "sshControlConnectionClosed": true,
+    "wslFixtureStopped": true
+  },
+  "limits": [
+    "Six immutable synthesized MP3 files only; no real 4000-track timing or platform/cloud requests.",
+    "1MiB legal ID3 padding per file; in-memory prototype, not a deployed persistent padding/version design.",
+    "Actual WinFsp mount and OS filesystem/metadata consumers verified; no Explorer visible-window UX, cover display, lyric scrolling or audible output claimed.",
+    "Windows may read ahead during opening; the selected-file preparation began at open rather than first explicit FileStream.Read. No other song was prepared.",
+    "No Windows host invocation, network/system setting changes, WinFsp reinstall, cloud deployment or new downloads."
+  ]
+}

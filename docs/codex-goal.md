@@ -4,7 +4,7 @@
 
 ## 本次范围修订（优先）
 
-**后续真实使用反馈已重开性能工作：PERF21。** App创建的rclone磁盘直接进入冷歌曲目录仍等全部准确属性，用户明确优先验证真正按需。小样本已证实预定N+B表示可在现有Library/DAV/rclone准确列目录、首读仅准备一首；现成HTTP no-head因0大小和同句柄seek问题不采用。当前只完成可行性，生产首读版本冻结、紧凑padding、超预算政策和Windows入口仍待接线/必要验收。下述dev.6“完成条件已满足”是此前交付时结论，不代表当前已无高ROI工作。[新证据](verification/lazy-mount-feasibility.md)、[当前出口](../outputs/musicfs-implementation-plan.md)
+**后续真实使用反馈已重开性能工作：PERF21。** App创建的rclone磁盘直接进入冷歌曲目录仍等全部准确属性，用户明确优先验证真正按需。小样本已证实预定N+B表示可在现有Library/DAV/rclone准确列目录、打开/读取仅准备一首；现成HTTP no-head因0大小和同句柄seek问题不采用。Windows VM恢复连接后，正式App/WinFsp消费端也已通过1MiB预算、6文件冷枚举30.3ms/0准备、单首随机读和Shell/WMP字段检查；这是未生产接线的原型。生产首读版本冻结、紧凑padding及超预算政策仍待实施。下述dev.6“完成条件已满足”是此前交付时结论，不代表当前已无高ROI工作。[新证据](verification/lazy-mount-feasibility.md)、[当前出口](../outputs/musicfs-implementation-plan.md)
 
 真实冷验证用时12分58秒，推翻了仅凭本地/缓存路径便认为优化完成的结论。已实现SDK批量、头尾合并、两阶段清单与单文件按需准备：同规模新实例空缓存清单24.945秒，首次单首HEAD约307ms；准确全属性仍走原持久分页。随后200首批量经两次真实请求及本地Worker验证，4k离线基础调用43次。最后ROI复盘未见仍有足够证据的高收益项，生成对应产物后收口；不把仅列名字变快冒充全库标签或挂载完成。[当前证据](verification/deferred-catalogue.md)
 

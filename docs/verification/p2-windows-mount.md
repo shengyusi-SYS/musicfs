@@ -2,6 +2,8 @@
 
 日期：2026-10-21。用户重新开放 Windows 验证范围，并提供测试虚拟机；全部操作从 WSL 经 SSH 进入该虚拟机，没有调用物理 Windows 宿主。此记录补充 [桌面宿主记录](p2-desktop-host.md)，不把原来跳过的全部 Windows 图形、恢复及客户端测试改写为通过。
 
+后续PERF21的**真正按需挂载原型**已在同VM完成限定验收：正式dev.6 App远程挂载到WSL离线Library/DAV，6个带1MiB预留的MP3冷目录30.3ms/零准备，打开仅处理所选一首，同句柄seek、完整字节及Shell/WMP字段通过，正常卸载退出并清理。未修改网易云生产插件，也不算资源管理器可见窗口或实播验收；方法、原始回执和边界见[按需挂载Windows记录](lazy-mount-feasibility.md#windows-vm实际-appwinfsp-路径)。
+
 ## 环境与实际入口
 
 - Windows 11 企业版 LTSC，系统版本 `10.0.26100.1742`，PowerShell `5.1.26100.1591`。
