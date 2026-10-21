@@ -16,6 +16,7 @@ const file = (entry: Entry | undefined) => { if (entry?.kind !== 'file' || !entr
 /** Real source media and public plugin operations, with all transport/cache work confined to memory. */
 function fixture(format: Format) {
   const stored = memoryCache(); const calls: Record<string, number> = {}; let reservations = 0;
+  let playlist = [1, 2];
   let lyric = '[00:00.00]原文\n[00:00.50]第二行\n'; let image = cover;
   const cache: PluginCache & { values: typeof stored.values } = { ...stored,
     async put(key, value, options) {
@@ -54,7 +55,7 @@ function fixture(format: Format) {
     state: { accountId: '42' }, requireSession() {},
     async call(endpoint: unknown, params: Record<string, Json> = {}) {
       if (endpoint === endpoints.userPlaylists) { hit('user'); return { playlist: [{ id: 900, userId: 42, specialType: 5, name: '喜欢的音乐' }], more: false }; }
-      if (endpoint === endpoints.playlist) { hit('playlist'); return { playlist: { trackIds: [{ id: 1 }, { id: 2 }], trackCount: 2, tracks: [] } }; }
+      if (endpoint === endpoints.playlist) { hit('playlist'); return { playlist: { trackIds: playlist.map(id => ({ id })), trackCount: playlist.length, tracks: [] } }; }
       if (endpoint === endpoints.songs) { hit('details'); return { songs: String(params.ids).split(',').map(id => song(Number(id))) }; }
       if (endpoint === endpoints.playback) { hit('playback'); return { data: String(params.id).split(',').map(id => ({ id: Number(id), url: `https://m1.music.126.net/${id}.${format}`, expi: 1200, level: params.level, type: format, md5: Number(id).toString(16).padStart(32, '0'), size: bytes.length })) }; }
       if (endpoint === endpoints.lyric) { hit('lyrics'); return { lrc: { lyric }, tlyric: { lyric: '[00:00.00]Translation' }, romalrc: { lyric: '[00:00.00]Romanization' } }; }
@@ -62,10 +63,54 @@ function fixture(format: Format) {
     },
   }) as unknown as NeteaseClient;
   return { client: createClient(), cache, calls, bytes, get reservations() { return reservations; }, reopen: createClient,
+    playlist(ids: number[]) { playlist = ids; },
     reset() { for (const key of Object.keys(calls)) delete calls[key]; },
     lyrics(value: string) { lyric = value; }, picture(value: Uint8Array) { image = new Uint8Array(value); },
     expire(prefix: string) { for (const [key, item] of stored.values) if (key.startsWith(prefix)) item.expiresAt = 0; } };
 }
+
+test('unopened NetEase files retain their representation across unchanged refresh, insertion and reorder', async () => {
+  const f = fixture('mp3');
+  const scan = async () => (await list(f.reopen(), 'liked')).items.map(file);
+  const bySong = (items: ReturnType<typeof file>[]) => new Map(items.map(item => [JSON.parse(item.fileRef).source.id, item]));
+  const first = bySong(await scan());
+  const expiry = [...f.cache.values].filter(([key]) => key.startsWith('reservation:')).map(([key, value]) => [key, value.expiresAt]);
+  expect(bySong(await scan())).toEqual(first);
+  expect([...f.cache.values].filter(([key]) => key.startsWith('reservation:')).map(([key, value]) => [key, value.expiresAt])).toEqual(expiry);
+  f.playlist([3, 1, 2]); const inserted = bySong(await scan());
+  for (const id of ['1', '2']) {
+    expect(inserted.get(id)?.fileRef).toBe(first.get(id)?.fileRef);
+    expect(inserted.get(id)?.info).toEqual(first.get(id)?.info);
+  }
+  expect(inserted.get('1')?.name).not.toBe(first.get('1')?.name); // Keep the existing numbered ordering contract.
+  f.playlist([2, 1, 3]); const reordered = bySong(await scan());
+  for (const id of ['1', '2', '3']) expect(reordered.get(id)?.fileRef).toBe(inserted.get(id)?.fileRef);
+  expect(f.calls.lyrics ?? 0).toBe(0); expect(f.calls.cover ?? 0).toBe(0); expect(f.calls.range ?? 0).toBe(0);
+  expect(f.reservations).toBe(0);
+});
+
+test('an unopened reservation expires without preparing audio and never masquerades as a prepared file', async () => {
+  const f = fixture('mp3');
+  const first = file((await list(f.reopen(), 'liked')).items[0]);
+  f.expire('reservation:');
+  const next = file((await list(f.reopen(), 'liked')).items[0]);
+  expect(next.info?.contentId).not.toBe(first.info?.contentId);
+  expect(f.reservations).toBe(0); expect(f.calls.lyrics ?? 0).toBe(0); expect(f.calls.range ?? 0).toBe(0);
+  const required = f.reopen(); required.ctx.fileInfo = 'required';
+  const prepared = file((await list(required, 'liked')).items[0]);
+  expect(JSON.parse(prepared.fileRef).version).toBe(2);
+  expect(f.calls.lyrics).toBe(2); expect(f.calls.range).toBeGreaterThan(0);
+  expect(file((await list(f.reopen(), 'liked')).items[0]).fileRef).toBe(prepared.fileRef);
+});
+
+test('permanent metadata policy also retains unopened reservation identities without a sliding expiry', async () => {
+  const f = fixture('mp3'); f.client.ctx.config = { metadataCacheDays: 0 };
+  const first = (await list(f.client, 'liked')).items;
+  const reservations = [...f.cache.values].filter(([key]) => key.startsWith('reservation:'));
+  expect(reservations).toHaveLength(2); expect(reservations.every(([, value]) => value.expiresAt === undefined)).toBe(true);
+  expect((await list(f.client, 'liked')).items).toEqual(first);
+  expect(f.reservations).toBe(0);
+});
 
 for (const format of ['mp3', 'flac', 'm4a'] as const) {
   test(`NetEase reserved ${format}: catalogue/stat need no preparation, one GET freezes one accurate tagged file`, async () => {

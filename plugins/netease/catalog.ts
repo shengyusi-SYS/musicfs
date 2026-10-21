@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
 import { info, sourceReader, resolveVariants, type Resolution } from './media';
-import { audioPolicy, labels } from './configuration';
-import { songKey, descriptorKey, deferredFileRef, reservedFile, prepareSongFile, type PreparedFile } from './tagged';
+import { audioPolicy, labels, metadataCacheExpiry } from './configuration';
+import { songKey, descriptorKey, reservationKey, deferredFileRef, reservedFile, prepareSongFile, type PreparedFile, type ReservedGeneration } from './tagged';
 import { batchSize, compactSong, playlistScan, scanSongs, scanVersions, verifyScan } from './scan';
 
 const rootsList = [ ['liked', '喜欢的歌曲'], ['daily', '每日推荐歌曲'], ['created', '自建歌单'], ['favorites', '收藏歌单'], ['recommended', '每日推荐歌单'] ] as const;
@@ -58,14 +58,21 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
     return { song, songId: ids[index]!, position: offset + index + 1, resolution, files };
   }));
   const keys = candidates.flatMap(item => item.files.map(file => file.key));
-  const saved = client.ctx.cache!.getMany ? await client.ctx.cache!.getMany(keys) : await Promise.all(keys.map(key => client.ctx.cache!.get(key)));
+  const lazyReservations = client.ctx.fileInfo !== 'required' && client.ctx.cache?.putIfAbsent && generation;
+  const lookupKeys = lazyReservations ? [...keys, ...keys.map(reservationKey)] : keys;
+  const saved = client.ctx.cache!.getMany ? await client.ctx.cache!.getMany(lookupKeys) : await Promise.all(lookupKeys.map(key => client.ctx.cache!.get(key)));
   const ready = new Map(keys.map((key, index) => [key, saved[index] as unknown as PreparedFile | undefined]));
+  const reservations = new Map(keys.map((key, index) => [key, saved[keys.length + index] as unknown as ReservedGeneration | undefined]));
+  const created = new Map<string, ReservedGeneration>();
   const saveSeeds = async (items: typeof candidates) => {
     // File references outlive scan/song caches, so retain only published compact seeds without an expiry.
     const seeds = new Map(items.flatMap(item => item.files.map(file => [descriptorKey(file.key), item.song as Json] as const)));
-    const writes = [...seeds].map(([key, value]) => ({ key, value }));
+    const expiresAt = metadataCacheExpiry(client.ctx.config);
+    const writes: { key: string; value: Json; expiresAt?: number }[] = [...[...seeds].map(([key, value]) => ({ key, value })),
+      ...[...created].map(([key, value]) => ({ key: reservationKey(key), value: value as unknown as Json,
+        ...(expiresAt === null ? {} : { expiresAt }) }))];
     if (client.ctx.cache!.putMany) await client.ctx.cache!.putMany(writes);
-    else for (const item of writes) await client.ctx.cache!.put(item.key, item.value);
+    else for (const item of writes) await client.ctx.cache!.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
   };
   const entry = (item: typeof candidates[number], candidate: typeof item.files[number], file?: PreparedFile): Entry => {
     const media = candidate.variant.reference;
@@ -86,8 +93,15 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
   if (client.ctx.fileInfo !== 'required') {
     const items = candidates.flatMap(item => {
       count(item);
-      return item.files.map(candidate => entry(item, candidate, ready.get(candidate.key)
-        ?? (client.ctx.cache!.putIfAbsent && generation ? reservedFile(candidate.variant.reference, candidate.key, generation) : undefined)));
+      return item.files.map(candidate => {
+        let file = ready.get(candidate.key);
+        if (!file && lazyReservations) {
+          let reserved = reservations.get(candidate.key) ?? created.get(candidate.key);
+          if (!reserved) { reserved = lazyReservations; created.set(candidate.key, reserved); }
+          file = reservedFile(candidate.variant.reference, candidate.key, reserved);
+        }
+        return entry(item, candidate, file);
+      });
     });
     await saveSeeds(candidates);
     statistics.files = items.length;

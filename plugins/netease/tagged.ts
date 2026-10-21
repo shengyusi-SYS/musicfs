@@ -48,7 +48,10 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
     const saved = await cache.get(previous);
     if (saved !== undefined && saved !== null) {
       const file = { fileRef: JSON.stringify({ version: 2, source, planKey: previous }), info: (saved as unknown as TaggedPlan).content };
-      if (ready) await cache.put(ready.key, file as unknown as Json, ready.expiresAt === null ? undefined : { expiresAt: ready.expiresAt });
+      if (ready) {
+        if (cache.putMany) await cache.putMany(readyWrites(ready, file));
+        else for (const item of readyWrites(ready, file)) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
+      }
       return file;
     }
   }
@@ -63,7 +66,7 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
   const file = { fileRef: JSON.stringify({ version: 2, source, planKey }), info: prepared.content };
   const writes = [...(missingAsset ? [{ key: asset.key, value: asset.value }, { key: marker, value: true }] : []),
     { key: planKey, value: packed.plan as unknown as Json }, { key: inputKey, value: planKey },
-    ...(ready ? [{ key: ready.key, value: file as unknown as Json, ...(ready.expiresAt === null ? {} : { expiresAt: ready.expiresAt }) }] : [])];
+    ...(ready ? readyWrites(ready, file) : [])];
   if (cache.putMany) await cache.putMany(writes);
   else for (const item of writes) await cache.put(item.key, item.value, 'expiresAt' in item ? { expiresAt: item.expiresAt } : undefined);
   if (asset) known.add(asset.key);
@@ -73,12 +76,19 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
 export type PreparedFile = { fileRef: string; info: FileInfo };
 export const songKey = (source: MediaReference, sourceInfo: FileInfo, song: Record<string, unknown>) => hash([source, sourceInfo, song]).then(value => `ready:${value}`);
 export const descriptorKey = (key: string) => key.replace(/^ready:/, 'tag-seed:');
+export const reservationKey = (key: string) => key.replace(/^ready:/, 'reservation:');
+export type ReservedGeneration = { id: string; modifiedAt: string };
+function readyWrites(ready: { key: string; expiresAt: number | null }, file: PreparedFile): { key: string; value: Json; expiresAt?: number }[] {
+  return [{ key: ready.key, value: file as unknown as Json, ...(ready.expiresAt === null ? {} : { expiresAt: ready.expiresAt }) },
+    // A prepared file now owns its dependency expiry. Never reuse an older unprepared reservation after that expiry.
+    { key: reservationKey(ready.key), value: null, expiresAt: Date.now() }];
+}
 export const deferredFileRef = (source: MediaReference, key: string) => JSON.stringify({ version: 3, source, descriptorKey: descriptorKey(key) });
 const reserveBytes = 1_048_576;
 const reservedInfo = (ref: ReservedReference): FileInfo => ({ ...info(ref.source), size: info(ref.source).size + reserveBytes,
   contentId: `netease-reserved-v1:${ref.generation}:${ref.descriptorKey.slice('tag-seed:'.length)}`, modifiedAt: ref.modifiedAt });
 /** A scan generation is shared by its pages. Prepared ready entries retain their previous generation. */
-export function reservedFile(source: MediaReference, key: string, generation: { id: string; modifiedAt: string }): PreparedFile {
+export function reservedFile(source: MediaReference, key: string, generation: ReservedGeneration): PreparedFile {
   const ref: ReservedReference = { version: 4, source, descriptorKey: descriptorKey(key), generation: generation.id, modifiedAt: generation.modifiedAt };
   return { fileRef: JSON.stringify(ref), info: reservedInfo(ref) };
 }
@@ -132,8 +142,9 @@ async function reservedPlan(client: NeteaseClient, ref: ReservedReference, readR
   if (packed.asset) await cache.put(packed.asset.key, packed.asset.value);
   const winner = await cache.putIfAbsent(key, { plan: packed.plan, expiresAt: material.expiresAt } as unknown as Json) as unknown as ReservedPlan;
   // The permanent first winner owns bytes; a TTL only controls reuse by future catalogue scans.
-  await cache.put(readyKey, { fileRef: JSON.stringify(ref), info: content } as unknown as Json,
-    winner.expiresAt === null ? undefined : { expiresAt: winner.expiresAt });
+  const writes = readyWrites({ key: readyKey, expiresAt: winner.expiresAt }, { fileRef: JSON.stringify(ref), info: content });
+  if (cache.putMany) await cache.putMany(writes);
+  else for (const item of writes) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
   return winner.plan;
 }
 
