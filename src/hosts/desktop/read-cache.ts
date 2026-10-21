@@ -109,7 +109,7 @@ export async function createDesktopReadCache(input: {
       const reservation = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response(null) });
       const port = reservation.port; await reservation.stop(true);
       const started = await input.control.call<{ id: string; addr: string }>('serve/start', { type: 'webdav', fs: `${remote}:`, addr: `127.0.0.1:${port}`,
-        _config: { BufferSize: 128 * 1024 }, vfsOpt: { ReadOnly: true, CacheMode: 'full',
+        _config: { BufferSize: 128 * 1024, LowLevelRetries: 1 }, vfsOpt: { ReadOnly: true, CacheMode: 'full',
           CacheMaxSize: settings.maxMiB * 1024 * 1024, CacheMaxAge: settings.maxAgeHours === 0 ? 'off' : `${settings.maxAgeHours}h`,
           ReadAhead: 0, HandleCaching: '0s', ChunkSize: 1024 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0, DirCacheTime: '300s' } });
       running = { id: started.id, address: `http://${started.addr}` };

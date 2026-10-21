@@ -8,16 +8,16 @@
     },
     "actualMode": "full",
     "state": "active",
-    "directory": "/tmp/musicfs-shared-dav-5vMFhH/rclone/cache/vfs/musicfs_shared_reads",
+    "directory": "/tmp/musicfs-shared-dav-rOzCjf/rclone/cache/vfs/musicfs_shared_reads",
     "bytesUsed": 3178624,
     "files": 1,
-    "sampledAt": "2026-10-21T15:32:01.355Z",
+    "sampledAt": "2026-10-21T15:42:51.683Z",
     "message": null
   },
   "reports": [
     {
       "operation": "first-ffprobe",
-      "milliseconds": 852.380883,
+      "milliseconds": 829.946366,
       "metadata": {
         "format": {
           "duration": "120.000000",
@@ -53,7 +53,7 @@
           },
           "phase": "read",
           "sentBytes": 2097108,
-          "consumedBytes": 1275592
+          "consumedBytes": 835584
         }
       ],
       "preparations": 1,
@@ -70,7 +70,7 @@
     },
     {
       "operation": "repeat-ffprobe",
-      "milliseconds": 52.92316400000004,
+      "milliseconds": 57.04785300000003,
       "metadata": {
         "format": {
           "duration": "120.000000",
@@ -83,12 +83,21 @@
       "source": [
         {
           "range": {
-            "start": 1048576,
-            "end": 2097151
+            "start": 753664,
+            "end": 1802239
           },
           "phase": "read",
           "sentBytes": 1048576,
-          "consumedBytes": 983040
+          "consumedBytes": 1048576
+        },
+        {
+          "range": {
+            "start": 1802240,
+            "end": 3899391
+          },
+          "phase": "read",
+          "sentBytes": 2097152,
+          "consumedBytes": 492512
         }
       ],
       "preparations": 0,
@@ -106,17 +115,7 @@
     {
       "operation": "finite-first",
       "dav": [],
-      "source": [
-        {
-          "range": {
-            "start": 1966080,
-            "end": 3014655
-          },
-          "phase": "read",
-          "sentBytes": 442368,
-          "consumedBytes": 294912
-        }
-      ],
+      "source": [],
       "preparations": 0,
       "sourceSize": 4802394,
       "finalSize": 5850970,
@@ -189,8 +188,8 @@
             "end": 2097151
           },
           "phase": "read",
-          "sentBytes": 2097108,
-          "consumedBytes": 540672
+          "sentBytes": 1589248,
+          "consumedBytes": 114688
         }
       ],
       "preparations": 1,
