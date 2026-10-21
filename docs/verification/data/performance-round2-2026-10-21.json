@@ -127,5 +127,235 @@
     "tests/refresh.test.ts",
     "tests/qq-read-performance.test.ts",
     "tests/qq-refresh-performance.test.ts"
-  ]
+  ],
+  "desktop_refresh": {
+    "date": "2026-10-21",
+    "scope": "single user with 4000 already prepared files and 100 entries per page; production SQLite/library/Hono DAV and management, controlled source and no external requests",
+    "before": {
+      "noYieldMemory": {
+        "ms": 5247.64,
+        "scheduledForegroundTimerMs": 5243.76,
+        "commits": 40,
+        "maxCommitMs": 279.05,
+        "sumCommitMs": 5217.33,
+        "note": "Recorded command PERF10_MEMORY=1 bun /tmp/musicfs-perf10-desktop.ts; raw receipt scope text predated memory toggle. This is memory SQLite, not disk."
+      },
+      "yieldOnlyDisk": {
+        "ms": 7491.15,
+        "scheduledForegroundTimerMs": 33.34,
+        "commits": 40,
+        "maxCommitMs": 353.81,
+        "sumCommitMs": 7383.29
+      }
+    },
+    "after": {
+      "productionDisk": {
+        "ms": 47.16,
+        "scheduledForegroundTimerMs": 3.87,
+        "commits": 40,
+        "maxCommitMs": 9.05,
+        "sumCommitMs": 29.84
+      },
+      "waitingRefreshStillRunning": true,
+      "foreground": [
+        {
+          "name": "baseline Range",
+          "ms": 16.52,
+          "status": 206,
+          "bytes": 4
+        },
+        {
+          "name": "UI status during waiting refresh",
+          "ms": 2.31,
+          "status": 200,
+          "bytes": 42
+        },
+        {
+          "name": "UI instances during waiting refresh",
+          "ms": 0.14,
+          "status": 200,
+          "bytes": 116
+        },
+        {
+          "name": "UI refresh status during waiting refresh",
+          "ms": 0.3,
+          "status": 200,
+          "bytes": 388
+        },
+        {
+          "name": "player HEAD during waiting refresh",
+          "ms": 0.79,
+          "status": 200,
+          "bytes": 0
+        },
+        {
+          "name": "player HEAD during waiting refresh",
+          "ms": 0.46,
+          "status": 200,
+          "bytes": 0
+        },
+        {
+          "name": "player HEAD during waiting refresh",
+          "ms": 0.4,
+          "status": 200,
+          "bytes": 0
+        },
+        {
+          "name": "player seek during waiting refresh",
+          "ms": 0.49,
+          "status": 206,
+          "bytes": 4
+        },
+        {
+          "name": "player directory scan during waiting refresh",
+          "ms": 431.69,
+          "status": 207,
+          "bytes": 2014299
+        },
+        {
+          "name": "UI status scheduled during hot 40-page drain",
+          "ms": 0.23,
+          "status": 200,
+          "bytes": 42
+        }
+      ]
+    },
+    "sql": {
+      "before": "entries(attempt_id) outer join then json_each(page)",
+      "after": "json_each(page) outer EXISTS lookup entries(attempt_id, identity)",
+      "sameStatementsAndBindings": true
+    },
+    "validation": {
+      "tests": "24 pass, 654 assertions; SQLite + local workerd D1; runner scheduling and close; no elapsed-time unit assertions",
+      "typecheck": "all three TS projects passed"
+    },
+    "limits": "Controlled fixture measures local application scheduling and SQL work, not platform latency or cloud billed CPU. PROPFIND remains about 432ms and is a separate candidate. No Windows host or Cloudflare access."
+  },
+  "file_metadata": {
+    "date": "2026-10-21",
+    "scope": "One controlled 4000-entry PROPFIND allprop decomposition using the actual library, disk SQLite and xmldom in Bun. No platform traffic or listening server. These timings are not Cloudflare CPU measurements or real-player latency.",
+    "entries": 4000,
+    "responseBytes": 2014299,
+    "originalMeasurementFromRoiAgent": {
+      "metadataMs": 379.69,
+      "metadataSha256Calls": 4000,
+      "repeatMetadataMs": 368.98,
+      "repeatMetadataSha256Calls": 4000,
+      "xmlMs": 57.2
+    },
+    "weakReuseWithDefaultWebCrypto": {
+      "script": "/tmp/musicfs-propfind-phases.ts",
+      "parentMs": 2.29,
+      "listMs": 12.49,
+      "metadataMs": 377.31,
+      "metadataWebCryptoCalls": 4000,
+      "repeatMetadataMs": 1.69,
+      "repeatMetadataWebCryptoCalls": 0,
+      "xmlMs": 56.95,
+      "serializerMs": 24.22,
+      "domAndAssemblyMs": 32.74,
+      "responseMs": 0.69
+    },
+    "weakReuseWithSharedNativeAdapter": {
+      "script": "/tmp/musicfs-propfind-phases-native.ts",
+      "parentMs": 2.12,
+      "listMs": 10.94,
+      "metadataMs": 6.06,
+      "nativeCallsThroughFirstMetadataIncludingOneParent": 4001,
+      "metadataWebCryptoCalls": 0,
+      "repeatMetadataMs": 4.31,
+      "repeatNativeCalls": 0,
+      "repeatMetadataWebCryptoCalls": 0,
+      "xmlMs": 57.33,
+      "serializerMs": 21.18,
+      "domAndAssemblyMs": 36.15,
+      "responseMs": 1.29
+    },
+    "workerBuildVerification": {
+      "defaultBrowserPolyfillProbeBytes": 921221,
+      "defaultBrowserPolyfillWorkerdResult": "HTTP 500: createHash2 is not a function",
+      "explicitNativeImportProbeBytes": 353,
+      "explicitNativeImportUnicodeSha256MatchesWebCrypto": true,
+      "productionFactoryUnicodeEtagParity": true,
+      "note": "Probe byte sizes describe only the tiny standalone hash probe, not the product bundle. Native import requires nodejs_compat and the narrowly scoped Bun onResolve helper."
+    }
+  },
+  "packed_netease_worker": {
+    "runtime": "local workerd + D1, packed NetEase SDK, all outbound responses controlled",
+    "tracks": 24,
+    "cold": {
+      "pages": 7,
+      "queries": [
+        36,
+        37,
+        37,
+        37,
+        37,
+        37,
+        31
+      ],
+      "maxQueries": 37,
+      "transportRequests": 80
+    },
+    "warm": {
+      "pages": 1,
+      "queries": [
+        24
+      ],
+      "maxQueries": 24,
+      "transportRequests": 3
+    },
+    "storage": {
+      "planBytes": 55143,
+      "sharedArtworkCount": 1
+    },
+    "sharedPlanRead": {
+      "bytes": 51228,
+      "metadata": true,
+      "tailRange": true
+    },
+    "calls": {
+      "/api/login/qrcode/unikey": 1,
+      "/api/login/qrcode/client/login": 1,
+      "/api/w/nuser/account/get": 1,
+      "/api/user/playlist": 2,
+      "/api/v6/playlist/detail": 4,
+      "/api/v3/song/detail": 1,
+      "/api/song/enhance/player/url/v1": 3,
+      "/api/v1/album/1": 1,
+      "/api/song/lyric/v1": 24,
+      "/cover.png": 1,
+      "/1.mp3": 4,
+      "/2.mp3": 2,
+      "/3.mp3": 2,
+      "/4.mp3": 2,
+      "/5.mp3": 2,
+      "/6.mp3": 2,
+      "/7.mp3": 2,
+      "/8.mp3": 2,
+      "/9.mp3": 2,
+      "/10.mp3": 2,
+      "/11.mp3": 2,
+      "/12.mp3": 2,
+      "/13.mp3": 2,
+      "/14.mp3": 2,
+      "/15.mp3": 2,
+      "/16.mp3": 2,
+      "/17.mp3": 2,
+      "/18.mp3": 2,
+      "/19.mp3": 2,
+      "/20.mp3": 2,
+      "/21.mp3": 2,
+      "/22.mp3": 2,
+      "/23.mp3": 2,
+      "/24.mp3": 2
+    }
+  },
+  "final_validation": {
+    "affected_tests": 126,
+    "assertions": 1785,
+    "typecheck": "all three projects passed",
+    "dependency_boundaries": "221 modules, 853 dependencies; no violations",
+    "scope": "offline fixtures/local workerd only; no platform/Cloudflare calls or Windows host"
+  }
 }

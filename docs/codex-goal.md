@@ -1,6 +1,6 @@
 # MusicFS Codex 主线目标
 
-日期：2026-10-21。当前目标：**持续全面优化性能，直到没有足够高 ROI 的优化方向。** 已在本任务建立 active Codex 目标；本文件定义执行规则和完成条件，[实施计划](../outputs/musicfs-implementation-plan.md)保存候选、优先级及下一步，[性能设计与证据](architecture/refresh-performance.md)保存实现取舍与效果。
+日期：2026-10-21。主线目标：**持续全面优化性能，直到没有足够高 ROI 的优化方向。** 已在本任务建立Codex目标，当前状态以任务目标控件为准；本文件定义执行规则和完成条件，[实施计划](../outputs/musicfs-implementation-plan.md)保存候选、优先级及下一步，[性能设计与证据](architecture/refresh-performance.md)保存实现取舍与效果。
 
 ## 本次范围修订（优先）
 

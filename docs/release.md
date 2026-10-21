@@ -1,5 +1,15 @@
 # MusicFS 当前交付物
 
+## dev.5 性能优化更新
+
+2026-10-21，应用`0.1.0-dev.5`、API`0.1.7`、schema9；网易云仍`alpha.10`，QQ更新为`alpha.13`。提供[Windows x64](../dist/releases/musicfs-0.1.0-dev.5-windows-x64.zip)、[Worker构建包](../dist/releases/musicfs-0.1.0-dev.5-worker.zip)、[对应源码](../dist/releases/musicfs-0.1.0-dev.5-source.zip)与[校验和](../dist/releases/musicfs-0.1.0-dev.5-checksums.txt)。较早归档及其统一清单保留原样；本次没有云部署或Windows宿主操作。
+
+先正常退出旧后台，再解压完整新目录启动，沿用原数据和授权。已有网易云alpha.10可保留，无需为本轮核心优化重新安装；使用QQ时再在插件页安装随包alpha.13。QQ升级使该实例旧缓存冷失效，第一次仍需准备，后续才能复用新索引。schema9无需再迁移；来自schema8仍自动升至9。
+
+主要改进是共用目录索引、已发布描述/ETag复用、原样保存配置不重建、暂时失败原进度续试、QQ热准备与读取路由复用，以及刷新SQL索引和桌面检查点让步。4,000条离线热检查点由约7.5秒降至47ms、前台排队约4ms；冷元数据分段约380→6ms，整次列目录还需输出约2MB XML。这些数值不等于真实平台整库耗时；完整效果、ROI停止理由和验证范围见[性能设计](architecture/refresh-performance.md)与[实施计划](../outputs/musicfs-implementation-plan.md)。
+
+受影响集成126项通过，三套类型与导入边界通过；实际本地workerd验证生产入口、原生SHA256与打包网易云SDK预算/音频Range。Worker按免费约束组织工作，但真实免费CPU和4k整层响应额度仍未确认。Windows为WSL交叉构建，本次不重跑已跳过的原生矩阵，也不将历史VM验收改记为dev.5通过。
+
 ## dev.4 刷新性能更新
 
 2026-10-21，应用`0.1.0-dev.4`、API`0.1.7`、schema9；网易云`alpha.10`，QQ`alpha.12`（共用音频准备窗口更新）。本轮单独提供[Windows x64更新包](../dist/releases/musicfs-0.1.0-dev.4-windows-x64.zip)、[对应源码](../dist/releases/musicfs-0.1.0-dev.4-source.zip)与[校验和](../dist/releases/musicfs-0.1.0-dev.4-checksums.txt)；下方dev.3整套归档及其统一清单保持原样，没有重打其他目标或部署云端。
