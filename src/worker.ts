@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { createWorkerChanges } from './hosts/worker/changes';
-import { createWorkerService, type WorkerAssets } from './hosts/worker/service';
+import { createWorkerRuntime, createWorkerService, type WorkerAssets, type WorkerRuntime } from './hosts/worker/service';
 import type { RegisteredPlugin } from './hosts/worker/plugins';
 export { assertPluginModule } from './core/extensions';
 
@@ -11,12 +11,19 @@ export type WorkerBindings = {
   CF_ACCOUNT_ID: string; CF_WORKER_NAME: string; CF_API_TOKEN: string;
 };
 export default function createWorker(registrations: RegisteredPlugin[]) {
+  const runtimes = new WeakMap<D1Database, WorkerRuntime>();
+  const runtime = (db: D1Database) => {
+    let value = runtimes.get(db);
+    if (!value) { value = createWorkerRuntime(db, registrations); runtimes.set(db, value); }
+    return value;
+  };
   return {
     fetch(request: Request, env: WorkerBindings, context: { waitUntil(promise: Promise<unknown>): void }) {
       const changes = createWorkerChanges({ db: env.DB, registrations, waitUntil: promise => context.waitUntil(promise),
         accountId: env.CF_ACCOUNT_ID, scriptName: env.CF_WORKER_NAME, apiToken: env.CF_API_TOKEN });
       const service = createWorkerService({ db: env.DB, registrations, adminToken: env.ADMIN_TOKEN,
         dav: { username: env.DAV_USERNAME, password: env.DAV_PASSWORD }, assets: env.ASSETS, changes,
+        runtime: runtime(env.DB),
         fixedLength: size => new FixedLengthStream(size), waitUntil: promise => context.waitUntil(promise) });
       return service.app.fetch(request);
     },
@@ -25,10 +32,8 @@ export default function createWorker(registrations: RegisteredPlugin[]) {
         accountId: env.CF_ACCOUNT_ID, scriptName: env.CF_WORKER_NAME, apiToken: env.CF_API_TOKEN });
       const signal = AbortSignal.timeout(60_000);
       if (await changes.stepNext(signal)) return;
-      const service = createWorkerService({ db: env.DB, registrations, adminToken: env.ADMIN_TOKEN,
-        dav: { username: env.DAV_USERNAME, password: env.DAV_PASSWORD }, changes });
       // The native scheduler is a slow fallback when no management page is open.
-      await service.library.refreshes.stepNext(signal);
+      await runtime(env.DB).library.refreshes.stepNext(signal);
     }
   };
 }

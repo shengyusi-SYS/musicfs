@@ -16,18 +16,25 @@ export type WorkerPluginChanges = {
 };
 export type WorkerAssets = { fetch(request: Request): Promise<Response> };
 
-/** The registry supplies executable code; only the publication use case activates it in D1. */
-export function createWorkerService(input: {
-  db: D1Database; registrations: RegisteredPlugin[]; adminToken: string; dav: ReadCredentials;
-  changes: WorkerPluginChanges; assets?: WorkerAssets; fixedLength?: DavOptions['fixedLength'];
-  waitUntil?: (promise: Promise<unknown>) => void;
-}) {
-  const store = createD1Store(input.db);
-  const registry = createWorkerRegistry(store, input.registrations);
+/** Binding-backed domain services retain published view data, never a request or execution context. */
+export function createWorkerRuntime(db: D1Database, registrations: RegisteredPlugin[]) {
+  const store = createD1Store(db);
+  const registry = createWorkerRegistry(store, registrations);
   // A shared adaptive plugin algorithm can spend more items on cache hits.
   // Reserve room for source checks and the atomic refresh checkpoint under Free's 50-query ceiling.
   const sources = createSources(store, registry, fetch, Date.now, { cacheQueries: 32, requests: 50 });
   const library = createLibrary(sources, store, undefined, { execution: 'deferred' });
+  return { store, sources, library };
+}
+export type WorkerRuntime = ReturnType<typeof createWorkerRuntime>;
+
+/** Request credentials, publication and waitUntil belong to this invocation; D1 remains authoritative. */
+export function createWorkerService(input: {
+  db: D1Database; registrations: RegisteredPlugin[]; adminToken: string; dav: ReadCredentials;
+  changes: WorkerPluginChanges; assets?: WorkerAssets; fixedLength?: DavOptions['fixedLength'];
+  waitUntil?: (promise: Promise<unknown>) => void; runtime?: WorkerRuntime;
+}) {
+  const { store, sources, library } = input.runtime ?? createWorkerRuntime(input.db, input.registrations);
   const app = new Hono();
   app.use('*', async (c, next) => {
     await next();
