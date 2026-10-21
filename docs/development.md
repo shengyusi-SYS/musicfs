@@ -57,7 +57,7 @@ bun run build:author-kit
 bun run package:release
 ```
 
-`build:desktop`已构建共用页面及三个插件；Worker命令必须显式选择这三个插件，空参数仍表示空注册表。`package:release`只打包既有产物，不偷偷重建；各包写入同一源码内容摘要、页面摘要与插件修订，发生输入变更则先重建。结果位于`dist/releases/`，先在该目录执行`sha256sum -c SHA256SUMS`，再解压对应目标验收。构建身份保留基线Git提交与dirty标志，并以实际内容摘要判断输入是否一致，不把工作区构建描述成干净提交构建。
+`build:desktop`已构建共用页面及三个插件；Worker命令必须显式选择这三个插件，空参数仍表示空注册表。`package:release`只打包既有产物，不偷偷重建；各包写入同一源码内容摘要、页面摘要与插件修订，发生输入变更则先重建。每次发行的 ZIP、`plugins/`、`release-manifest.json` 和 `SHA256SUMS` 放在 `dist/releases/<版本>/`；先进入对应版本目录执行 `sha256sum -c SHA256SUMS`，再解压目标包验收。重新打包同版本会在全部打包成功后替换该版本目录，其它版本保持不变。构建身份保留基线Git提交与dirty标志，并以实际内容摘要判断输入是否一致，不把工作区构建描述成干净提交构建。
 
 作者旅程见[指南](plugin-authoring.md)。在仓库外构建后，可运行`bun scripts/probe-desktop-product.ts --plugin-archive /绝对路径/自有插件.zip --plugin-id 自有插件ID`验证与最小示例相同合同的已知音频及双实例；此参数只用于该验收样本，不适用于任意插件音频。系统解压后的产品验收增加`--directory /绝对路径/解压目录`。探针不重建应用，本轮结果见[发行记录](verification/p4-release-artifacts.md)。
 

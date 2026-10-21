@@ -1,5 +1,21 @@
 # MusicFS 当前交付物
 
+## dev.7 真正按需挂载更新（已接线，待打包验收）
+
+2026-10-21，应用 `0.1.0-dev.7`、API `0.1.9`、schema9；网易云与 QQ 均为 `0.1.0-alpha.14`。本版按版本建立发行目录 `dist/releases/0.1.0-dev.7/`，包含 [Windows x64](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-windows-x64.zip)、[Linux x64](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-linux-x64.zip)、[Worker](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-worker.zip)、[作者包](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-plugin-author-kit.zip)、[对应源码](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-source.zip)、`plugins/` 中的三个独立插件，以及 [版本清单](../dist/releases/0.1.0-dev.7/release-manifest.json)和 [SHA256SUMS](../dist/releases/0.1.0-dev.7/SHA256SUMS)。历史归档保持原链接；重新打包仅替换同版本目录，不覆盖其它版本。
+
+网易云 alpha.14 默认对 MP3、FLAC、M4A 发布“上游准确大小 + 1MiB”的最终文件描述。列目录、PROPFIND 和 HEAD 不再为这些文件准备整库标签，首次 GET 才补齐所读单曲的资料、封面和歌词；播放器或 Windows 的预读也可能触发这次单曲准备。填充使用格式合法的空白区段，持久计划仅记录区段长度，读取时生成，不在数据库逐首保存 1MiB 空白。音频编码和原音频字节保持不变。
+
+第一次成功准备通过 API 0.1.9 的可选原子缓存写入固定同一文件版本，后续读取及资料 TTL 到期不会悄悄改变该版本的字节。ready 索引的 TTL 只决定未来目录刷新是否复用旧版本。若单曲资料超过 1MiB 预算，则保存该曲准确的非预留表示，当前读取返回 `content_changed` 并提示刷新目录；不截断歌词、缩减封面或按旧大小输出更长文件。刷新后使用该单曲准确描述，其余歌曲仍按需读取。
+
+QQ alpha.14 因共用音频工具更新而重建，目录准备策略不变；APE 不默认采用预留表示。旧插件的 `deferredInfo` 与持久“准备文件”任务继续兼容，不能把本版网易云的冷目录能力推及所有来源。
+
+先正常退出旧后台，解压完整新目录启动，沿用原数据；在插件页安装随包网易云 alpha.14，再刷新相关内容源生成新描述，保留实例与授权。只更新核心不会自动替换现有插件或旧目录。schema9 不变，无额外数据库迁移。
+
+用户已接受的限制仍然存在：完整下载或缓存每首预留文件会额外占用 1MiB；播放器逐首读取标签时仍要处理对应歌曲；歌词与多歌手的显示取决于播放器；M4A 需读取完整 `moov`，分片 MP4 不在当前方案内。此前 Windows VM 与 WSL 的实际 App 挂载原型已覆盖 MP3/FLAC/M4A；这些证据不等于 dev.7 正式发行物的目标系统验收。[格式证据与限制](verification/lazy-mount-feasibility.md)
+
+本轮网易云离线集成 5 项／168 断言及音频工具 23 项回归已通过。正式打包 SDK 经本地 workerd/D1 以受控响应验证200首：冷清单1页26SQL且0标签计划，HEAD及完整allprop均0上游请求；首次GET仅准备1首、32SQL、5次传输，持久计划1,044B，完整标签与尾Range通过。热刷新25SQL、3次成员/歌单请求并复用已读曲版本。这些是离线计数，不是平台耗时或免费云端CPU证据。[接线回执](verification/lazy-mount-feasibility.md#dev7-正式接线与本地-worker-验证) 编译 App 冒烟、最终归档及校验仍在收口，暂不记录为通过。没有为本轮再次请求音乐平台、部署云端或重跑原生系统全矩阵。
+
 ## dev.6 按需文件准备更新
 
 2026-10-21，应用`0.1.0-dev.6`、API`0.1.8`、schema9；网易云`alpha.13`、QQ`alpha.13`。提供[Windows x64](../dist/releases/musicfs-0.1.0-dev.6-windows-x64.zip)、[Linux x64](../dist/releases/musicfs-0.1.0-dev.6-linux-x64.zip)、[Worker](../dist/releases/musicfs-0.1.0-dev.6-worker.zip)、[作者包](../dist/releases/musicfs-0.1.0-dev.6-plugin-author-kit.zip)、[对应源码](../dist/releases/musicfs-0.1.0-dev.6-source.zip)与[本版校验和](../dist/releases/musicfs-0.1.0-dev.6-checksums.txt)。旧归档保留自身身份，本轮不重新打包macOS或部署云端。

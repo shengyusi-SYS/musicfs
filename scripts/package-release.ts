@@ -166,8 +166,9 @@ async function main() {
     }
   }
 
-  const directory = resolve('dist/releases'); await mkdir(directory, { recursive: true });
-  const staging = await mkdtemp(join(directory, '.packaging-'));
+  const releasesDirectory = resolve('dist/releases'); await mkdir(releasesDirectory, { recursive: true });
+  const directory = join(releasesDirectory, releaseVersion);
+  const staging = await mkdtemp(join(releasesDirectory, `.packaging-${releaseVersion}-`));
   try {
     const sourceDirectory = join(staging, 'source');
     await copyProjectSource(sourceDirectory, reference);
@@ -191,9 +192,9 @@ async function main() {
     const checksums = [...archives, ...pluginFiles, manifestFile].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)
       .map(item => `${item.sha256}  ${item.file}`).join('\n') + '\n';
     await Bun.write(join(staging, 'SHA256SUMS'), checksums);
-    await mkdir(join(directory, 'plugins'), { recursive: true });
-    for (const item of [...archives, ...pluginFiles, manifestFile]) await rename(join(staging, item.file), join(directory, item.file));
-    await rename(join(staging, 'SHA256SUMS'), join(directory, 'SHA256SUMS'));
+    await rm(sourceDirectory, { recursive: true });
+    await rm(directory, { recursive: true, force: true });
+    await rename(staging, directory);
     console.log(JSON.stringify({ directory, version: releaseVersion, sourceDigest: reference.source.digest,
       archives: archives.map(item => ({ file: item.file, bytes: item.bytes, sha256: item.sha256 })),
       plugins: pluginFiles.map(item => ({ file: item.file, bytes: item.bytes, sha256: item.sha256 })), targetRuntimeVerified: false }));
