@@ -130,33 +130,42 @@ export async function createDesktopReadCache(input: {
   const assertIdle = () => { if (active) throw new MountError('mount_busy', '仍有 WebDAV 音频正在读取，请停止播放或扫描后重试。'); };
   const files: FileView = { ...input.view, async open(file, range, signal): Promise<ReadResult> {
     if (!accepting) throw new LibraryError('source_failed', 'Desktop is stopping');
-    if (settings.maxMiB === 0) return input.view.open(file, range, signal);
+    const key = settings.maxMiB === 0 ? undefined : keyFor(file);
     active++;
-    const key = keyFor(file), old = pinned.get(key);
-    pinned.set(key, { file, readers: (old?.readers ?? 0) + 1 });
+    if (key !== undefined) {
+      const old = pinned.get(key);
+      pinned.set(key, { file, readers: (old?.readers ?? 0) + 1 });
+    }
     let released = false; let onAbort: (() => void) | undefined;
     const release = () => {
       if (released) return; released = true; active--;
       if (onAbort) signal.removeEventListener('abort', onAbort);
-      const item = pinned.get(key)!; if (--item.readers === 0) pinned.delete(key);
+      if (key !== undefined) {
+        const item = pinned.get(key)!; if (--item.readers === 0) pinned.delete(key);
+      }
     };
     try {
-      await assertCurrent(file, signal);
-      await management;
-      const known = entries.has(key); entries.set(key, file);
-      await ensure();
-      if (!known) await input.control.call('vfs/forget', { fs: `${remote}:`, dir: key.slice(0, 2) });
-      failures.delete(key);
-      const response = await fetch(`${running!.address}/${key.slice(0, 2)}/${key}`, { signal,
-        headers: range ? { Range: `bytes=${range.start}-${range.end}` } : {} });
       const expectedLength = range ? range.end - range.start + 1 : file.handle.content.size;
-      if (response.status !== (range ? 206 : 200) || response.headers.get('content-length') !== String(expectedLength)
-        || range && response.headers.get('content-range') !== `bytes ${range.start}-${range.end}/${file.handle.content.size}`) {
-        await response.body?.cancel(); const failure = failures.get(key); failures.delete(key);
-        throw failure ?? new LibraryError('source_failed', 'Cached audio returned an unexpected response');
+      let result: ReadResult;
+      if (key === undefined) result = await input.view.open(file, range, signal);
+      else {
+        await assertCurrent(file, signal);
+        await management;
+        const known = entries.has(key); entries.set(key, file);
+        await ensure();
+        if (!known) await input.control.call('vfs/forget', { fs: `${remote}:`, dir: key.slice(0, 2) });
+        failures.delete(key);
+        const response = await fetch(`${running!.address}/${key.slice(0, 2)}/${key}`, { signal,
+          headers: range ? { Range: `bytes=${range.start}-${range.end}` } : {} });
+        if (response.status !== (range ? 206 : 200) || response.headers.get('content-length') !== String(expectedLength)
+          || range && response.headers.get('content-range') !== `bytes ${range.start}-${range.end}/${file.handle.content.size}`) {
+          await response.body?.cancel(); const failure = failures.get(key); failures.delete(key);
+          throw failure ?? new LibraryError('source_failed', 'Cached audio returned an unexpected response');
+        }
+        try { await assertCurrent(file, signal); } catch (error) { await response.body?.cancel(); throw error; }
+        result = { content: file.handle.content, servedRange: range ?? null, body: response.body! };
       }
-      try { await assertCurrent(file, signal); } catch (error) { await response.body?.cancel(); throw error; }
-      const reader = response.body!.getReader(); let received = 0;
+      const reader = result.body.getReader(); let received = 0;
       onAbort = () => { void reader.cancel(signal.reason).catch(() => {}).finally(release); };
       signal.addEventListener('abort', onAbort, { once: true });
       if (signal.aborted) onAbort();
@@ -165,16 +174,16 @@ export async function createDesktopReadCache(input: {
           try {
             signal.throwIfAborted(); const next = await reader.read();
             if (next.done) { reader.releaseLock(); release();
-              if (received !== expectedLength) throw new LibraryError('invalid_source', 'Cached audio ended early');
+              if (received !== expectedLength) throw new LibraryError('invalid_source', 'Audio ended early');
               controller.close(); return; }
             received += next.value.length;
-            if (received > expectedLength) throw new LibraryError('invalid_source', 'Cached audio exceeded its declared length');
+            if (received > expectedLength) throw new LibraryError('invalid_source', 'Audio exceeded its declared length');
             controller.enqueue(next.value);
           } catch (error) { await reader.cancel(error).catch(() => {}); release(); controller.error(error); }
         },
         async cancel(reason) { try { await reader.cancel(reason); } finally { release(); } }
       }, { highWaterMark: 0 });
-      return { content: file.handle.content, servedRange: range ?? null, body };
+      return { ...result, body };
     } catch (error) { release(); throw error; }
   } };
   return {

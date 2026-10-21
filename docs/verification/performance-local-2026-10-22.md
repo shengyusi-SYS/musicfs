@@ -36,3 +36,7 @@ O1移除了视图中完整原始快照的额外引用，来源入口从现有投
 正式`prepare → packPlan → openStoredPlan → open`，一首带32,768B图片的MP3，只取64B尾部音频。改动前恢复计划要读取43,692B封面base64、一次缓存查询；新codec知道图片长度后，变为0B/0次查询，响应仍是相同64B音频、相同内容身份和大小。完整下载、图片相交Range和旧codec仍读取图片；开始已取消的请求不查图片。原有三格式完整恢复检查继续通过，生产插件接线后[codec与预留表示](../../tests/netease-plan-storage.test.ts)两组共12项通过。
 
 只改网易云私有存储codec，QQ无相同codec，不扩公共工具合同。结果不代表减少源音频CDN字节；桌面命中VFS时本来就不走这段，免费Worker或未命中VFS的中段/尾段读取收益更直接。没有访问平台、目标VM或云端。
+
+## 应用场景续评：关闭缓存后的在途读取
+
+原容量0路径直接返回底层流，跳过活动计数；读取或准备未结束时退出门禁误认为空闲。修复后同样从open开始跟踪，沿原流包装在EOF、失败、consumer cancel或AbortSignal后释放，不预读、不计算缓存键、不启动rclone。忙退出拒绝、停止接收后的恢复及原HTTP接线一并复用；[模块](../../tests/desktop-read-cache.test.ts)和[HTTP](../../tests/desktop-read-cache-http.test.ts)共12项/36断言通过。仅使用临时目录与回环夹具，不访问平台、真实系统挂载或云端；这是退出可靠性收益，不是播放吞吐提升。
