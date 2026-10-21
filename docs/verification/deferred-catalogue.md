@@ -67,3 +67,11 @@ SDK的v3详情源码注释数量不超过1,000，但当前使用的是富详情�
 用户追问200是否为上限后，只对富详情端点发起一次500首真实请求。HTTP200、业务200、约310ms，但仅返回201个请求内ID，缺少299首；没有额外ID、没有429或Retry-After。完整性检查立即停止，未请求播放版本、歌词、封面或音频，也未改原实例。[匿名记录](data/netease-sdk-batch-500-2026-10-21.json)
 
 这证明当前实际富详情路径不能直接将500首视为支持良好的批次；不能据一次样本断言精确上限是200或201。SDK v3详情的“不要超过1000”注释不适用于这条已观察到返回不完整的富详情路径。200仍是已实际完整验证的默认值；现有生产检查会在缺ID时失败、保留旧目录，不把截断响应发布为完整成功。未扩大平台探测范围，不修改发行代码或批次。
+
+### 上游及独立实现核对
+
+2026-10-21检索：未找到Binaryify SDK上游精确描述“500首请求只回201首”的issue；不据此声称没有该issue。相关历史[issue #452](https://github.com/Binaryify/NeteaseCloudMusicApi/issues/452)报告歌单超过1000首时返回不完整，[issue #380](https://github.com/Binaryify/NeteaseCloudMusicApi/issues/380)报告歌单详情仅返回第一首；二者属于歌单接口，不作为旧歌曲详情200首上限的证明。
+
+更直接的独立实现记录来自[FeelUOwn网易云插件源码](https://github.com/feeluown/feeluown-netease/blob/master/fuo_netease/api.py)：`songs_detail`对旧`/api/song/detail`记载实测不超过200，`songs_detail_v3`对v3记载不超过1000。[另一实现源码](https://github.com/leonsama/netease-music-downloader/blob/master/api.py)的`getSongsDetial`则注释旧接口一次最多201首，与本项目500请求只回201的观测吻合。独立实现不是所用SDK的维护者承诺，请求方式亦有差异；这些记录增强“旧版与v3容量不同”的判断，不等于网易云官方SLA或当前精确硬上限。
+
+因此保持旧版富详情200首有明确的跨项目依据。若研究更大批量，应比较其他接口返回资料的完整度与所需回补请求，不能只把当前常量改成500/1000。本轮只查公开资料，没有新增音乐平台请求或改发行物。
