@@ -1,10 +1,12 @@
 # MusicFS 当前交付物
 
-## dev.9 App挂载读取缓存（正在打包）
+## dev.9 App挂载读取缓存
 
 应用`0.1.0-dev.9`，API0.1.9/schema10和插件alpha.15保持。App挂载启用rclone原生稀疏读取缓存，可设置容量与未访问保留时间（默认每挂载8GiB/7天）；同时限制初始预读，防止扫描文件头时预取大量音频。实际WSL/FUSE+HTTP离线对照：跨真实卸载/重挂的头尾重读0次GET，同路径同大小正常更新后读取新字节，完整65MiB顺序读取正确。挂载测试12项/111断言、三套类型及依赖边界通过。
 
 本次仅生成Windows更新及对应源码，不重建或部署Worker。正常退出旧后台，解压完整新版启动，在App中重新挂载；已有网易云/QQ alpha.15无需重新安装或刷新整库。这不等于Windows资源管理器整体十多秒等待已经重新实测。直接DAV客户端仍依赖其自身音频缓存，共用资料/标签与字节缓存的区别见[挂载设计](architecture/desktop-mounts.md#直接webdav与播放器)。
+
+产物位于`dist/releases/0.1.0-dev.9/`：[Windows x64](../dist/releases/0.1.0-dev.9/musicfs-0.1.0-dev.9-windows-x64.zip)、[对应源码](../dist/releases/0.1.0-dev.9/musicfs-0.1.0-dev.9-source.zip)、[版本清单](../dist/releases/0.1.0-dev.9/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.9/SHA256SUMS)。仅复用既有运行时/工具做WSL交叉构建，不调用Windows宿主，不新增平台请求。源码构建身份`459621b`；三个文件摘要已校验，Windows目标系统运行仍未在本轮重验。
 
 ## dev.8 缓存策略与目录自动更新
 

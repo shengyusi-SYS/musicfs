@@ -11,6 +11,7 @@ flowchart LR
   TLS --> Native[Windows 原生连接设置]
   Native --> Client[系统证书 / WebClient / 文件上限]
   Mount --> RC[随包 rclone RC]
+  RC <--> ReadCache[原生稀疏读取缓存 只存已读片段]
   RC --> Bridge[Windows WinFsp / Linux FUSE / macOS NFS]
   Bridge --> Drive[盘符或目录]
   Explorer[Windows 原生 WebClient] --> TLS
@@ -63,7 +64,7 @@ flowchart LR
 | 头尾已读，真实卸载/重挂后再读 | 关闭后无字节缓存 | 无字节缓存 | 0次DAV GET、0次源请求，排除了原内核页缓存/句柄复用 |
 | 同路径、同大小、Last-Modified更新 | — | — | 旧片段失效，取得新版本字节 |
 
-匿名计数见[原始结果](../verification/data/mount-read-ahead-2026-10-21.json)。探针只生成字节，不验证音频解码、不访问平台，不代表Windows资源管理器整体耗时。首次资料准备、未缓存区段、版本变化和容量/时间淘汰后仍需要请求；不因命中一个范围就宣称整曲已缓存。
+匿名计数见[原始结果](../verification/data/mount-read-ahead-2026-10-21.json)，受影响挂载测试12项/111断言、三套TypeScript与依赖边界检查通过。探针只生成字节，不验证音频解码、不访问平台，不代表Windows资源管理器整体耗时。首次资料准备、未缓存区段、版本变化和容量/时间淘汰后仍需要请求；不因命中一个范围就宣称整曲已缓存。原生配置语义见[rclone读取缓存说明](https://rclone.org/commands/rclone_mount/#vfs-file-caching)，本项目使用的固定版本见[1.75.2 VFS配置](https://github.com/rclone/rclone/blob/v1.75.2/vfs/vfscommon/options.go)。
 
 ## 直接WebDAV与播放器
 
