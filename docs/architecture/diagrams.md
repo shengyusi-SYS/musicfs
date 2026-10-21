@@ -18,6 +18,24 @@ flowchart LR
   Publish[完整刷新发布新snapshot.id] --> Header
 ```
 
+## 音频读取与挂载缓存管理
+
+目录、资料和标签计划的缓存与音频正文分属不同模块。App挂载复用rclone稀疏文件；直接DAV仍是来源流，不假定客户端都有磁盘缓存。缓存管理查询原生采样，不建第二套磁盘索引。证据与适用边界见[缓存消费](../verification/cache-consumption-2026-10-21.md)。
+
+```mermaid
+flowchart LR
+  App[App挂载消费] --> VFS[rclone原生稀疏缓存]
+  VFS -->|缺失范围| DAV[共用DAV与library]
+  Direct[直接DAV播放器] --> DAV
+  DAV --> Source[来源插件 资料及固定标签计划]
+  Source -->|需要源音频| CDN[平台CDN]
+  UI[缓存管理] --> Mounts[桌面mounts模块]
+  Mounts -->|查询实际模式与占用采样| VFS
+  Mounts --> Stop[正常卸载所选挂载]
+  Stop --> Clear[删除该挂载片段及索引]
+  Clear --> Remount[按原设置重挂]
+```
+
 ## 核心与共用页面升级
 
 核心/WebUI升级保留云端实际代码集合；插件安装仍沿既有后台发布流程。具体操作见[Worker升级说明](../worker.md#升级核心与-webui保留云端插件)。

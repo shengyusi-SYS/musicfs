@@ -1,0 +1,161 @@
+{
+  "scope": "Existing Windows VM; final dev.10 native Shell property re-entry across a real App remount; prepared tag plan, initially empty VFS cache; offline MP3 only",
+  "success": true,
+  "stage": "complete",
+  "executableSha256": "971f239d4366ab19020aaa3aa9e89671d6f2590f867fe7e15199be7bf5fc491a",
+  "version": "0.1.0-dev.10",
+  "rclone": "v1.75.2",
+  "os": "Microsoft Windows NT 10.0.26100.0",
+  "winfsp": {
+    "state": "ready",
+    "version": "2025"
+  },
+  "mount": {
+    "state": "mounted",
+    "mountPoint": "Z:"
+  },
+  "passes": [
+    {
+      "operation": "first-shell",
+      "milliseconds": 167.22920000000002,
+      "state": {
+        "dav": [
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "GET",
+            "range": "bytes=0-1048575",
+            "status": 206
+          },
+          {
+            "method": "GET",
+            "range": "bytes=5787648-5850969",
+            "status": 206
+          },
+          {
+            "method": "GET",
+            "range": "bytes=1048576-3145727",
+            "status": 206
+          }
+        ],
+        "source": [
+          {
+            "range": {
+              "start": 4739072,
+              "end": 4802393
+            },
+            "phase": "read",
+            "sentBytes": 63322,
+            "consumedBytes": 63322
+          },
+          {
+            "range": {
+              "start": 44,
+              "end": 2097151
+            },
+            "phase": "read",
+            "sentBytes": 2097108,
+            "consumedBytes": 2097108
+          }
+        ],
+        "preparations": 0,
+        "sourceSize": 4802394,
+        "finalSize": 5850970,
+        "libraryPath": "实例 & #/Music",
+        "selected": "Track 1.mp3",
+        "title": "Cache fixture title",
+        "names": [
+          "Track 1.mp3",
+          "Track 2.mp3",
+          "Track 3.mp3"
+        ]
+      },
+      "metadata": {
+        "artist": [
+          "Fixture artist"
+        ],
+        "title": "Cache fixture title",
+        "album": "Fixture album",
+        "duration100ns": 1200587500
+      }
+    },
+    {
+      "operation": "shell-after-remount",
+      "milliseconds": 100.7214,
+      "state": {
+        "dav": [
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          },
+          {
+            "method": "PROPFIND",
+            "range": null,
+            "status": 207
+          }
+        ],
+        "source": [],
+        "preparations": 0,
+        "sourceSize": 4802394,
+        "finalSize": 5850970,
+        "libraryPath": "实例 & #/Music",
+        "selected": "Track 1.mp3",
+        "title": "Cache fixture title",
+        "names": [
+          "Track 1.mp3",
+          "Track 2.mp3",
+          "Track 3.mp3"
+        ]
+      },
+      "metadata": {
+        "artist": [
+          "Fixture artist"
+        ],
+        "title": "Cache fixture title",
+        "album": "Fixture album",
+        "duration100ns": 1200587500
+      }
+    }
+  ],
+  "normalUnmount": true,
+  "normalQuit": true
+}
