@@ -24,7 +24,7 @@ export type RefreshRecord = {
   task: RefreshTask | null; pending: string[]; seen: string[]; known: string[];
   refreshedDirectories: number; failures: InstanceRefresh['failures']; error?: RefreshFailure;
   createdAt: string; updatedAt: string;
-  retryAt?: number; rateLimitRetries?: number;
+  retryAt?: number; rateLimitRetries?: number; temporaryRetries?: number;
 };
 export type SnapshotHeader = Pick<Snapshot, 'stamp' | 'id' | 'kind' | 'completedAt' | 'statistics'>;
 export type RefreshPage = { items: (Root | Entry)[]; nextCursor?: string; publish?: SnapshotHeader };

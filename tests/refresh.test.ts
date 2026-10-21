@@ -83,6 +83,109 @@ test('exhausting rate-limit retries stops the instance instead of requesting ano
   expect(job.status).toBe('failed'); expect(visited).toEqual(Array(6).fill('a'));
 });
 
+test('a temporary second-page failure keeps its cursor and resumes across controllers without repeating the first page', async () => {
+  const f = await setup(); let now = 1000;
+  const previous = await f.library.refresh(f.id, directory, signal());
+  const calls: (string | undefined)[] = [];
+  f.source.list = async (_ctx, _ref, cursor) => {
+    calls.push(cursor);
+    if (cursor === undefined) return { ok: true, value: { items: [entry('first')], nextCursor: 'second' } };
+    if (calls.length === 2) return { ok: false, error: { kind: 'temporary', message: 'Fixture connection interrupted' } };
+    return page([entry('last')]);
+  };
+  const rebuild = () => createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => now);
+  const refresh = rebuild(); const job = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
+  await refresh.step(job.operationId, signal());
+  const candidate = (await f.store.refreshRecord(job.operationId))!.task;
+  const waiting = await refresh.step(job.operationId, signal());
+  expect(waiting).toMatchObject({ status: 'running', retryAt: new Date(3000).toISOString(),
+    current: { pages: 1, entries: 1 }, error: { sourceFault: { kind: 'temporary' } } });
+  expect((await f.store.refreshRecord(job.operationId))!.task).toEqual(candidate);
+  expect(f.store.snapshot(f.id, key)?.value).toEqual(previous);
+  expect(await f.store.readyRefreshes(now, 1)).toEqual([]); expect(f.store.nextBackgroundWorkAt()).toBe(3000);
+  expect(await rebuild().step(job.operationId, signal())).toEqual(waiting); expect(calls).toEqual([undefined, 'second']);
+  now = 3000;
+  const completed = await rebuild().step(job.operationId, signal());
+  expect(completed).toMatchObject({ status: 'completed', current: { pages: 2, entries: 2 } });
+  expect(completed.retryAt).toBeUndefined(); expect(completed.error).toBeUndefined();
+  expect(calls).toEqual([undefined, 'second', 'second']);
+  expect(f.store.snapshot(f.id, key)?.value?.items).toEqual([entry('first'), entry('last')]);
+});
+
+test('temporary retries stop after two waits and only then let an instance continue to its next directory', async () => {
+  let now = 1000; const visited: string[] = [];
+  const f = await setup(plugin({
+    roots: async () => ({ ok: true, value: { items: ['a', 'b'].map(ref => ({ sourceId: ref, name: ref, directoryRef: ref })) } }),
+    list: async (_ctx, ref) => {
+      visited.push(ref);
+      return ref === 'a' ? { ok: false, error: { kind: 'temporary', message: 'Fixture still offline' } } : page([entry('available')]);
+    }
+  }));
+  const rebuild = () => createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => now);
+  const job = await rebuild().start(f.id, { kind: 'instance' });
+  await rebuild().step(job.operationId, signal());
+  const first = await rebuild().step(job.operationId, signal());
+  expect(first).toMatchObject({ current: { directoryRef: 'a' }, failures: [], retryAt: new Date(3000).toISOString() });
+  now = 3000;
+  const second = await rebuild().step(job.operationId, signal());
+  expect(second).toMatchObject({ current: { directoryRef: 'a' }, failures: [], retryAt: new Date(11_000).toISOString() });
+  now = 11_000;
+  const next = await rebuild().step(job.operationId, signal());
+  expect(next).toMatchObject({ status: 'running', current: { directoryRef: 'b' },
+    failures: [{ directoryRef: 'a', error: { sourceFault: { kind: 'temporary' } } }] });
+  expect(next.retryAt).toBeUndefined(); expect(next.error).toBeUndefined(); expect(visited).toEqual(['a', 'a', 'a']);
+  expect((await rebuild().step(job.operationId, signal())).status).toBe('completed');
+  expect(visited).toEqual(['a', 'a', 'a', 'b']);
+  expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'a' })?.error).toBe('temporary');
+});
+
+test('temporary and rate-limit counters remain independent, and a successful page resets both', async () => {
+  let now = 1000; let calls = 0;
+  const f = await setup(plugin({ list: async (_ctx, _ref, cursor) => {
+    calls++;
+    if (calls === 1 || calls === 3 || calls === 5) return { ok: false, error: { kind: 'temporary', message: 'Fixture transient failure' } };
+    if (calls === 2) return { ok: false, error: { kind: 'rate_limited', message: 'Fixture limited', retryAfterSeconds: 7 } };
+    return cursor === undefined ? { ok: true, value: { items: [entry('first')], nextCursor: 'second' } } : page([entry('last')]);
+  } }));
+  const refresh = createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => now);
+  const job = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
+  expect((await refresh.step(job.operationId, signal())).retryAt).toBe(new Date(3000).toISOString());
+  now = 3000;
+  expect((await refresh.step(job.operationId, signal())).retryAt).toBe(new Date(10_000).toISOString());
+  expect(await f.store.refreshRecord(job.operationId)).toMatchObject({ temporaryRetries: 1, rateLimitRetries: 1 });
+  now = 10_000;
+  expect((await refresh.step(job.operationId, signal())).retryAt).toBe(new Date(18_000).toISOString());
+  now = 18_000;
+  expect(await refresh.step(job.operationId, signal())).toMatchObject({ status: 'running', current: { pages: 1 } });
+  const accepted = (await f.store.refreshRecord(job.operationId))!;
+  expect(accepted.temporaryRetries).toBeUndefined(); expect(accepted.rateLimitRetries).toBeUndefined();
+  // The next page gets its own first short retry rather than inheriting the previous page's count.
+  expect((await refresh.step(job.operationId, signal())).retryAt).toBe(new Date(20_000).toISOString());
+  now = 20_000;
+  expect((await refresh.step(job.operationId, signal())).status).toBe('completed'); expect(calls).toBe(6);
+});
+
+test('cancelling a temporary wait stops future source calls', async () => {
+  let now = 1000; let calls = 0;
+  const f = await setup(plugin({ list: async () => { calls++; return { ok: false, error: { kind: 'temporary', message: 'Fixture offline' } }; } }));
+  const refresh = createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => now);
+  const job = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
+  expect((await refresh.step(job.operationId, signal())).status).toBe('running');
+  await refresh.cancel(job.operationId); now = 20_000;
+  expect((await refresh.step(job.operationId, signal())).status).toBe('cancelled'); expect(calls).toBe(1);
+});
+
+test('authentication, invalid configuration and changed content failures do not enter temporary retries', async () => {
+  for (const kind of ['needs_auth', 'invalid_config', 'content_changed'] as const) {
+    const f = await setup(plugin({ list: async () => ({ ok: false, error: { kind, message: 'Fixture needs explicit correction' } }) }));
+    const refresh = createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => 1000);
+    const job = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
+    const failed = await refresh.step(job.operationId, signal());
+    expect(failed).toMatchObject({ status: 'failed', error: { sourceFault: { kind } } });
+    expect(failed.retryAt).toBeUndefined();
+  }
+});
+
 test('42 pages resume across Library controllers, publish once, and preserve ordered entries and additive statistics', async () => {
   const fixture = await setup();
   await fixture.library.contentSources(fixture.id, signal());

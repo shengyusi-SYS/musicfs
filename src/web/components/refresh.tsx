@@ -116,7 +116,9 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
   const needsAuth = value?.error?.sourceFault?.kind === 'needs_auth' || value?.failures.some(item => item.error.sourceFault?.kind === 'needs_auth');
   const waiting = operation.active && value?.retryAt && Date.parse(value.retryAt) > Date.now();
   const progress = value?.current?.progress;
-  const title = !value ? '正在读取刷新状态' : waiting ? '来源要求等待，稍后自动继续' : value.status === 'queued' ? '目录已加入准备队列'
+  const waitingTitle = value?.error?.sourceFault?.kind === 'temporary'
+    ? '来源暂时请求失败，稍后从当前进度继续' : '来源限流，等待后自动继续';
+  const title = !value ? '正在读取刷新状态' : waiting ? waitingTitle : value.status === 'queued' ? '目录已加入准备队列'
     : value.status === 'running' ? '正在准备目录' : value.status === 'completed' ? (value.failures.length ? '刷新完成，部分目录保留上次内容' : '目录刷新完成')
       : value.status === 'cancelled' ? '刷新已取消' : value.status === 'superseded' ? '刷新已被较新的操作替代' : '刷新失败，已保留上次成功内容';
   return <>

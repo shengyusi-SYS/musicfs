@@ -6,6 +6,7 @@ import { assertInfo } from './file-info';
 import type { RefreshFailure, RefreshPage, RefreshRecord, RefreshScope, RefreshStore, RefreshTask, RefreshView, Refreshes } from './refresh-types';
 
 const active = (status: RefreshRecord['status']) => status === 'queued' || status === 'running';
+const temporaryRetryDelays = [2_000, 8_000];
 const sameStamp = (a: SourceStamp, b: SourceStamp) => a.id === b.id && a.epoch === b.epoch
   && a.pluginRevision === b.pluginRevision && a.pluginGeneration === b.pluginGeneration;
 const task = (key: SnapshotKey): RefreshTask => ({ key, attemptId: crypto.randomUUID(), pages: 0, entries: 0, children: [] });
@@ -35,7 +36,8 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
       : { kind: 'directory', ref: scope.directoryRef };
     const date = timestamp();
     const previous = await store.currentRefresh(stamp.id);
-    const cooling = previous && sameStamp(previous.stamp, stamp) && (previous.retryAt ?? 0) > now() ? previous : undefined;
+    const cooling = previous && sameStamp(previous.stamp, stamp) && previous.error?.sourceFault?.kind === 'rate_limited'
+      && (previous.retryAt ?? 0) > now() ? previous : undefined;
     return view(await store.createRefresh({ operationId: crypto.randomUUID(), stamp, scope, status: 'queued', revision: 1,
       leaseToken: null, leaseUntil: null, task: task(key), pending: [], seen: [],
       known: scope.kind === 'instance' ? await store.knownDirectoryRefs(stamp.id) : [], refreshedDirectories: 0, failures: [],
@@ -47,6 +49,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     for (const value of values) if (!included.has(value)) { target.push(value); included.add(value); }
   }
   function advance(record: RefreshRecord) {
+    delete record.retryAt; delete record.rateLimitRetries; delete record.temporaryRetries; delete record.error;
     if (record.scope.kind !== 'instance' || !record.pending.length) { record.status = 'completed'; return; }
     if (record.seen.length >= (budgets.directories ?? 1000)) {
       record.status = 'failed'; record.error = { code: 'invalid_source', message: 'Instance refresh directory budget exceeded' }; return;
@@ -59,7 +62,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     if (previous.pages >= budgets.pages) throw new LibraryError('invalid_source', 'Source pagination budget exceeded');
     if (!page || !Array.isArray(page.items)) throw new LibraryError('invalid_source', 'Source returned an invalid page');
     const next = structuredClone(record); const current = next.task!;
-    delete next.retryAt; delete next.rateLimitRetries; delete next.error;
+    delete next.retryAt; delete next.rateLimitRetries; delete next.temporaryRetries; delete next.error;
     if (page.progress !== undefined) {
       const parsed = workProgress.safeParse(page.progress);
       if (!parsed.success || parsed.data.completed > parsed.data.total || current.progress &&
@@ -164,6 +167,11 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
         return await store.commitRefresh(claimed, saved) === 'stale' ? superseded(claimed) : project(saved);
       } else if (sourceFault?.kind === 'rate_limited') {
         next.status = 'failed'; next.error = failureOf(error);
+      } else if (sourceFault?.kind === 'temporary' && (claimed.temporaryRetries ?? 0) < temporaryRetryDelays.length) {
+        next.status = 'running'; next.retryAt = now() + temporaryRetryDelays[claimed.temporaryRetries ?? 0]!;
+        next.temporaryRetries = (claimed.temporaryRetries ?? 0) + 1; next.error = failureOf(error);
+        const saved = checkpoint(claimed, next);
+        return await store.commitRefresh(claimed, saved) === 'stale' ? superseded(claimed) : project(saved);
       } else if (claimed.scope.kind === 'instance' && claimed.task?.key.kind === 'directory') {
         next.failures.push({ directoryRef: claimed.task.key.ref, error: failureOf(error) });
         advance(next);
