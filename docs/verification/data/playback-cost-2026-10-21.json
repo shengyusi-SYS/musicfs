@@ -1,0 +1,142 @@
+{
+  "runtime": "WSL native FUSE + production mount manager/rclone1.75.2 + Library/DAV/SQLite + existing packed NetEase SDK; loopback HTTP only",
+  "sample": {
+    "codec": "MP3",
+    "bitrateBitsPerSecond": 320000,
+    "nominalSeconds": 180,
+    "sourceBytes": 7201436,
+    "sourceRequestDelayMs": 120,
+    "urlResolutionDelayMs": 120,
+    "cdnBytesPerSecond": 1048576,
+    "consumed": "first3MiB, one forward seek to5MiB, then through EOF; 64KiB fast consumer"
+  },
+  "preparation": {
+    "milliseconds": 262.4,
+    "sdkUrls": 1,
+    "cdnRequests": 1,
+    "auxiliary": 2
+  },
+  "result": [
+    {
+      "profile": "legacy",
+      "bufferKiB": 16384,
+      "initialChunkKiB": 131072,
+      "firstAudioMs": 1023,
+      "seekMs": 2078,
+      "sequentialReadMaxMs": 1034.8,
+      "sequentialReadMs": 4015.3,
+      "audioConsumedBytes": 5104284,
+      "equivalentAudioSeconds": 127.6,
+      "elapsedMs": 7436.6,
+      "sixtyFourKiBPlaybackWindowMs": 1638.4,
+      "readsExceedingPlaybackWindow": 0,
+      "sdkUrls": 1,
+      "cdnRequests": 1,
+      "sourceBytes": 7201436,
+      "sourceRanges": [
+        {
+          "start": 0,
+          "end": 7201435
+        }
+      ],
+      "davRanges": [
+        {
+          "start": 0,
+          "end": 8250011
+        }
+      ],
+      "auxiliary": 0
+    },
+    {
+      "profile": "dev9",
+      "bufferKiB": 128,
+      "initialChunkKiB": 256,
+      "firstAudioMs": 329.3,
+      "seekMs": 313.2,
+      "sequentialReadMaxMs": 378.5,
+      "sequentialReadMs": 6226.4,
+      "audioConsumedBytes": 5104284,
+      "equivalentAudioSeconds": 127.6,
+      "elapsedMs": 6928.2,
+      "sixtyFourKiBPlaybackWindowMs": 1638.4,
+      "readsExceedingPlaybackWindow": 0,
+      "sdkUrls": 7,
+      "cdnRequests": 7,
+      "sourceBytes": 7611036,
+      "sourceRanges": [
+        {
+          "start": 0,
+          "end": 786431
+        },
+        {
+          "start": 786432,
+          "end": 2883583
+        },
+        {
+          "start": 2883584,
+          "end": 7077887
+        },
+        {
+          "start": 5242880,
+          "end": 5505023
+        },
+        {
+          "start": 5505024,
+          "end": 6029311
+        },
+        {
+          "start": 6029312,
+          "end": 7077887
+        },
+        {
+          "start": 7077888,
+          "end": 7201435
+        }
+      ],
+      "davRanges": [
+        {
+          "start": 0,
+          "end": 262143
+        },
+        {
+          "start": 262144,
+          "end": 786431
+        },
+        {
+          "start": 786432,
+          "end": 1835007
+        },
+        {
+          "start": 1835008,
+          "end": 3932159
+        },
+        {
+          "start": 3932160,
+          "end": 8126463
+        },
+        {
+          "start": 6291456,
+          "end": 6553599
+        },
+        {
+          "start": 6553600,
+          "end": 7077887
+        },
+        {
+          "start": 7077888,
+          "end": 8126463
+        },
+        {
+          "start": 8126464,
+          "end": 8250011
+        }
+      ],
+      "auxiliary": 0
+    }
+  ],
+  "limits": [
+    "offline fixed-delay model; not a real platform latency/rate-limit assertion",
+    "same-handle native reads; no GUI/decoder playback claim",
+    "cold VFS for both profiles; permanent tagged plan already prepared"
+  ]
+}

@@ -25,6 +25,19 @@ export type MountView = {
 
 export type MountCacheSettings = { directoryCacheSeconds: number; fileCacheMaxMiB?: number; fileCacheMaxAgeHours?: number };
 
+export type MountCacheStatus = {
+  mountId: string;
+  configuredMode: 'off' | 'full';
+  actualMode: 'off' | 'minimal' | 'writes' | 'full' | null;
+  directory: string;
+  state: 'active' | 'inactive' | 'unavailable';
+  /** Native VFS samples, not a live filesystem scan; null when no VFS is active. */
+  bytesUsed: number | null;
+  files: number | null;
+  sampledAt: string;
+  message: string | null;
+};
+
 export interface MountManager {
   list(): Promise<MountView[]>;
   mount(input: MountInput): Promise<MountView>;
@@ -32,6 +45,8 @@ export interface MountManager {
   unmount(id: string): Promise<MountView>;
   remove(id: string): Promise<void>;
   configureCache(id: string, settings: MountCacheSettings): Promise<MountView>;
+  cacheStatus(id: string): Promise<MountCacheStatus>;
+  clearCache(id: string): Promise<MountView>;
   refresh(id: string): Promise<void>;
   refreshLocal(): Promise<void>;
   close(): Promise<void>;

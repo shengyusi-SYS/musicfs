@@ -1,7 +1,7 @@
 import type { Json, PluginFault } from '@musicfs/plugin-api';
 import type { Status, SourceInstance, PluginInstallation, PluginInspection, SourceConfiguration, ContentSources, DirectoryStatus, DirectoryListing, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
 import type { PluginChange } from '../contracts/plugin-changes';
-import type { MountCacheSettings, MountInput, MountView } from '../contracts/mounts';
+import type { MountCacheSettings, MountCacheStatus, MountInput, MountView } from '../contracts/mounts';
 import type { RefreshScope, RefreshView } from '../contracts/refreshes';
 import type { DesktopNetworkSettings, DesktopNetworkView } from '../contracts/desktop';
 import type { MountPrerequisitesView } from '../contracts/mount-prerequisites';
@@ -59,6 +59,8 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     unmount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/unmount`, { method: 'POST' }),
     removeMount: (id: string) => request<void>(`/mounts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     configureMountCache: (id: string, settings: MountCacheSettings) => request<MountView>(`/mounts/${encodeURIComponent(id)}/cache`, json('PUT', settings)),
+    mountCacheStatus: (id: string, signal: AbortSignal) => request<MountCacheStatus>(`/mounts/${encodeURIComponent(id)}/cache`, { signal }),
+    clearMountCache: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/cache`, { method: 'DELETE' }),
     refreshMount: (id: string) => request<void>(`/mounts/${encodeURIComponent(id)}/cache/refresh`, { method: 'POST' }),
     mountPrerequisites: (signal: AbortSignal) => request<MountPrerequisitesView>('/desktop/mount-prerequisites', { signal }),
     installWinFsp: () => request<MountPrerequisitesView>('/desktop/mount-prerequisites/install', { method: 'POST' }),

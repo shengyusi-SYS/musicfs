@@ -4,7 +4,7 @@
 
 ## 当前状态与下一出口
 
-**缓存系统下一步规划：** 用户要求整体考虑App挂载、直接WebDAV及播放器重复扫描/播放。已形成[缓存优化方案、工作量、风险与ROI](musicfs-cache-optimization-plan.md)：推荐先投入约1—3人日收口dev.9消费端/播放请求成本、缓存状态清理和直接DAV收益调查；共享磁盘缓存仅在该调查支持时增加2—4人日。免费Worker不强行统一存储，本轮仅规划，未将候选功能记作已实现。
+**缓存系统当前收口：** [缓存优化方案](musicfs-cache-optimization-plan.md)的B/C/D已完成：播放起步块调至1MiB以减少SDK/CDN调用，挂载缓存可查询实际状态与定向清理，实际FFprobe开放GET证明仅做短Range缓存覆盖不足，因此不实施候选E，Worker缓存延后。A使用最终dev.10 Windows包做小样本消费/重挂/清理验收，之后打包；不恢复真实全库或平台压力测试。[证据与边界](../docs/verification/cache-consumption-2026-10-21.md)
 
 **当前续接PERF22：** dev.8后重进仍慢，用户截图确认有公网下载；实际WSL/HTTP/FUSE复现rclone默认预读放大与音频字节未缓存，已按原生VFS缩小初始范围、开启可配置的稀疏缓存，连续读取保留递增分块。跨重挂头尾读取0次GET，同路径同大小更新仍能取得新字节。范围、取舍和其它DAV客户端边界统一见[挂载设计](../docs/architecture/desktop-mounts.md#文件头扫描与读取范围)；此前目录枚举测试不能证明资源管理器的文件信息扫描已优化。
 

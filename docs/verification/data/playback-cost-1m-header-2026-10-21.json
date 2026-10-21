@@ -1,0 +1,46 @@
+{
+  "runtime": "WSL native FUSE + production mount manager/rclone1.75.2 + Library/DAV/SQLite + existing packed NetEase SDK; loopback HTTP only",
+  "sample": {
+    "codec": "MP3",
+    "bitrateBitsPerSecond": 320000,
+    "nominalSeconds": 180,
+    "sourceBytes": 7201436,
+    "sourceRequestDelayMs": 120,
+    "urlResolutionDelayMs": 120,
+    "cdnBytesPerSecond": 1048576,
+    "consumed": "one64-byte header read,120ms observation,close"
+  },
+  "artifactSha256": "d49e0b616ae19fc91a06be991f1c55a80aa94490d0421bf7f12b95c279c5cee5",
+  "preparation": {
+    "milliseconds": 262.3,
+    "sdkUrls": 1,
+    "cdnRequests": 1,
+    "auxiliary": 2
+  },
+  "result": [
+    {
+      "profile": "candidate1m",
+      "bufferKiB": 128,
+      "initialChunkKiB": 1024,
+      "cacheMode": "full",
+      "headerMs": 5.7,
+      "sdkUrls": 0,
+      "cdnRequests": 0,
+      "sourceBytes": 0,
+      "sourceRanges": [],
+      "davRanges": [
+        {
+          "start": 0,
+          "end": 1048575
+        }
+      ],
+      "auxiliary": 0
+    }
+  ],
+  "limits": [
+    "offline fixed-delay model; not a real platform latency/rate-limit assertion",
+    "same-handle native reads; no GUI/decoder playback claim",
+    "cold VFS for both profiles; permanent tagged plan already prepared",
+    "loopback delayed stream Content-Length restored from its declared Content-Range before SDK delivery"
+  ]
+}

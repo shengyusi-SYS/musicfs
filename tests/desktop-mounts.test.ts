@@ -14,6 +14,7 @@ function fakeControl() {
   const mounted = new Map<string, string>();
   const remotes = new Map<string, Record<string, unknown>>();
   const calls: { method: string; parameters: Record<string, unknown> }[] = [];
+  let statistics: unknown = { opt: { CacheMode: 3 }, diskCache: { path: '/test/cache', bytesUsed: 0, files: 0 } };
   let mountCalls = 0; let closed = false; let busy = false; let listFailure = false;
   const control: RcloneControl = {
     async call<T>(method: string, parameters: Record<string, unknown> = {}) {
@@ -24,6 +25,7 @@ function fakeControl() {
       if (method === 'operations/list' && listFailure) throw new MountError('mount_failed', 'Cannot list remote');
       if (method === 'mount/types') value = { mountTypes: ['mount', 'cmount', 'nfsmount'] };
       if (method === 'mount/listmounts') value = { mountPoints: [...mounted].map(([MountPoint, Fs]) => ({ MountPoint, Fs })) };
+      if (method === 'vfs/stats') value = statistics;
       if (method === 'mount/mount') { mountCalls++; await Bun.sleep(20); mounted.set(String(parameters.mountPoint), String(parameters.fs)); value = { mountPoint: parameters.mountPoint }; }
       if (method === 'mount/unmount') { if (busy) throw new MountError('mount_busy', 'busy'); mounted.delete(String(parameters.mountPoint)); }
       return value as T;
@@ -32,8 +34,69 @@ function fakeControl() {
     async close() { closed = true; }
   };
   return { control, remotes, calls, mountCalls: () => mountCalls, closed: () => closed,
+    setStatistics(value: unknown) { statistics = value; },
     setBusy(value: boolean) { busy = value; }, setListFailure(value: boolean) { listFailure = value; } };
 }
+
+test('cache status separates configured and native modes, samples only the selected VFS, and stays inactive without rclone', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-cache-status-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const manager = await createMountManager({ directory: join(directory, 'state'), binary: 'unused', localConnection,
+    control: fake.control, checkDependencies: async () => {} });
+  cleanup.push(() => manager.close());
+  const mount = await manager.mount({ mountPoint: join(directory, 'music'), source: { kind: 'local' } });
+  const name = `musicfs_${mount.id.replaceAll('-', '')}`;
+  const path = join(directory, 'state', 'cache', 'vfs', name);
+  fake.setStatistics({ fs: 'https://private-user:private-password@example.invalid/',
+    opt: { CacheMode: 3, secret: 'private-password' }, diskCache: { path, bytesUsed: 32768, files: 2, private: 'private-password' } });
+  const status = await manager.cacheStatus(mount.id);
+  expect(status).toMatchObject({ mountId: mount.id, configuredMode: 'full', actualMode: 'full', state: 'active', directory: path,
+    bytesUsed: 32768, files: 2, message: null });
+  expect(Number.isFinite(Date.parse(status.sampledAt))).toBe(true);
+  expect(JSON.stringify(status)).not.toContain('private-password');
+  expect(fake.calls.filter(call => call.method === 'vfs/stats').at(-1)?.parameters).toEqual({ fs: `${name}:` });
+  fake.setStatistics({ opt: { CacheMode: 'off' } });
+  expect(await manager.cacheStatus(mount.id)).toMatchObject({ configuredMode: 'full', actualMode: 'off', bytesUsed: null, files: null });
+  await manager.unmount(mount.id);
+  const before = fake.calls.length;
+  expect(await manager.cacheStatus(mount.id)).toMatchObject({ state: 'inactive', actualMode: null, directory: path, bytesUsed: null, files: null });
+  expect(fake.calls).toHaveLength(before);
+});
+
+test('read-cache clearing preserves busy mounts and clears only the selected namespace before a normal remount', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-cache-clear-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const state = join(directory, 'state');
+  const fake = fakeControl();
+  const manager = await createMountManager({ directory: state, binary: 'unused', localConnection,
+    control: fake.control, checkDependencies: async () => {} });
+  cleanup.push(async () => { fake.setBusy(false); await manager.close(); });
+  const first = await manager.mount({ mountPoint: join(directory, 'first'), source: { kind: 'local' }, fileCacheMaxMiB: 64 });
+  const second = await manager.mount({ mountPoint: join(directory, 'second'), source: { kind: 'local' } });
+  const fragment = (id: string, kind = 'vfs') => join(state, 'cache', kind, `musicfs_${id.replaceAll('-', '')}`, 'track');
+  for (const id of [first.id, second.id]) for (const kind of ['vfs', 'vfsMeta']) {
+    const path = fragment(id, kind); await mkdir(join(path, '..'), { recursive: true }); await Bun.write(path, 'cached-fragment');
+  }
+  fake.setBusy(true);
+  await expect(manager.clearCache(first.id)).rejects.toMatchObject({ code: 'mount_busy' });
+  expect(await Bun.file(fragment(first.id)).text()).toBe('cached-fragment');
+  expect((await manager.list()).find(mount => mount.id === first.id)?.fileCacheMaxMiB).toBe(64);
+  expect(fake.mountCalls()).toBe(2);
+  fake.setBusy(false);
+  expect(await manager.clearCache(first.id)).toMatchObject({ id: first.id, state: 'mounted', fileCacheMaxMiB: 64 });
+  expect(fake.mountCalls()).toBe(3);
+  for (const kind of ['vfs', 'vfsMeta']) {
+    expect(await Bun.file(fragment(first.id, kind)).exists()).toBe(false);
+    expect(await Bun.file(fragment(second.id, kind)).text()).toBe('cached-fragment');
+  }
+  await manager.unmount(first.id);
+  const cached = fragment(first.id); await mkdir(join(cached, '..'), { recursive: true }); await Bun.write(cached, 'new-fragment');
+  const before = fake.calls.length;
+  expect(await manager.clearCache(first.id)).toMatchObject({ state: 'stopped', fileCacheMaxMiB: 64 });
+  expect(await Bun.file(cached).exists()).toBe(false); expect(fake.calls).toHaveLength(before);
+  expect(await Bun.file(fragment(second.id)).text()).toBe('cached-fragment');
+});
 
 test('directory cache settings default to five minutes and change only after a normal unmount', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-cache-'));
@@ -51,7 +114,7 @@ test('directory cache settings default to five minutes and change only after a n
   expect(mounted.directoryCacheSeconds).toBe(300);
   expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '300s', CacheMode: 'full', CacheMaxSize: 8192 * 1024 * 1024, CacheMaxAge: '168h', ReadAhead: 0 });
   expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters).toMatchObject({
-    _config: { BufferSize: 128 * 1024 }, vfsOpt: { ChunkSize: 256 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0 }
+    _config: { BufferSize: 128 * 1024 }, vfsOpt: { ChunkSize: 1024 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0 }
   });
   const updated = await manager.configureCache(mounted.id, { directoryCacheSeconds: 0 });
   expect(updated).toMatchObject({ id: mounted.id, directoryCacheSeconds: 0, state: 'mounted' });

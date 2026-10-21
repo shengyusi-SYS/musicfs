@@ -7,6 +7,7 @@ import type { MountCacheSettings, MountInput, MountView } from '../../contracts/
 import { Failure } from '../components/feedback';
 
 const labels: Record<MountView['state'], string> = { starting: '正在挂载', mounted: '已挂载', unmounting: '正在卸载', stopped: '已卸载', error: '挂载失败' };
+const cacheModes = { off: '关闭（off）', minimal: '最少缓存（minimal）', writes: '写入缓存（writes）', full: '片段读缓存（full）' };
 type Fields = { name?: string; mountPoint: string; directoryCacheSeconds: number; fileCacheMaxMiB: number; fileCacheMaxAgeHours: number;
   url?: string; username?: string; password?: string };
 function MountCacheFields() {
@@ -33,6 +34,9 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
   const [mountError, setMountError] = useState('');
   const [cacheTarget, setCacheTarget] = useState<MountView | null>(null); const [cacheForm] = Form.useForm<MountCacheSettings>();
   const [cacheError, setCacheError] = useState('');
+  const cacheStatus = useQuery({ queryKey: ['mount-cache', cacheTarget?.id],
+    queryFn: ({ signal }) => api.mountCacheStatus(cacheTarget!.id, signal), enabled: cacheTarget !== null,
+    refetchOnWindowFocus: false, refetchOnReconnect: false, retry: false });
   const prerequisites = useQuery({ queryKey: ['mount-prerequisites'], queryFn: ({ signal }) => api.mountPrerequisites(signal),
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2 });
   const install = useMutation({ mutationFn: () => api.installWinFsp(), onSuccess: value => {
@@ -61,13 +65,19 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
     if (result.state === 'error') { setCacheError(result.error?.message ?? '设置已保存，重新挂载未完成，请检查后重试。'); return; }
     setCacheTarget(null); message.success(result.state === 'mounted' ? '挂载缓存设置已保存并重新挂载' : '挂载缓存设置已保存');
   }, onError: () => { void client.invalidateQueries({ queryKey: ['mounts'] }); } });
+  const clearCache = useMutation({ mutationFn: (id: string) => api.clearMountCache(id), onSuccess: async result => {
+    setCacheTarget(result);
+    await Promise.all([client.invalidateQueries({ queryKey: ['mounts'] }), client.invalidateQueries({ queryKey: ['mount-cache', result.id] })]);
+    if (result.state === 'error') { setCacheError(result.error?.message ?? '缓存已清理，重新挂载未完成，请检查后重试。'); return; }
+    setCacheError(''); message.success(result.state === 'mounted' ? '读取缓存已清理并重新挂载' : '读取缓存已清理');
+  }, onError: () => { void client.invalidateQueries({ queryKey: ['mounts'] }); } });
   const refresh = useMutation({ mutationFn: (id: string) => api.refreshMount(id), onSuccess: () => {
     message.success('已清除挂载目录缓存，下次打开目录时重新读取');
   } });
   const quit = useMutation({ mutationFn: () => api.quitDesktop(), onSuccess: async () => {
     await client.cancelQueries(); onStopped();
   } });
-  const changing = mount.isPending || unmount.isPending || remount.isPending || remove.isPending || quit.isPending || install.isPending || configureCache.isPending || refresh.isPending;
+  const changing = mount.isPending || unmount.isPending || remount.isPending || remove.isPending || quit.isPending || install.isPending || configureCache.isPending || clearCache.isPending || refresh.isPending;
   async function submit(values: Fields) {
     setMountError('');
     const source: MountInput['source'] = kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: values.url!, username: values.username!, password: values.password! };
@@ -98,9 +108,9 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
       { title: '操作', key: 'action', render: (_, item) => <Space wrap>
         <Button loading={remount.isPending && remount.variables === item.id} disabled={changing || ['starting', 'unmounting'].includes(item.state)} onClick={() => remount.mutate(item.id)}>重新挂载</Button>
         {['mounted', 'starting', 'unmounting', 'error'].includes(item.state) && <Button loading={unmount.isPending && unmount.variables === item.id} disabled={changing} onClick={() => unmount.mutate(item.id)}>卸载</Button>}
-        <Button disabled={changing} onClick={() => { configureCache.reset(); setCacheError(''); setCacheTarget(item); cacheForm.setFieldsValue({
+        <Button disabled={changing} onClick={() => { configureCache.reset(); clearCache.reset(); setCacheError(''); setCacheTarget(item); cacheForm.setFieldsValue({
           directoryCacheSeconds: item.directoryCacheSeconds ?? 300, fileCacheMaxMiB: item.fileCacheMaxMiB ?? 8192,
-          fileCacheMaxAgeHours: item.fileCacheMaxAgeHours ?? 168 }); }}>缓存设置</Button>
+          fileCacheMaxAgeHours: item.fileCacheMaxAgeHours ?? 168 }); }}>缓存管理</Button>
         <Button loading={refresh.isPending && refresh.variables === item.id} disabled={changing || item.state !== 'mounted'} onClick={() => refresh.mutate(item.id)}>刷新挂载目录</Button>
         <Button danger loading={remove.isPending && remove.variables === item.id} disabled={changing} onClick={() => remove.mutate(item.id)}>移除</Button>
       </Space> }
@@ -120,15 +130,30 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
         <Failure error={mount.error} />{mountError && <Alert type="error" showIcon title={mountError} />}<Space><Button type="primary" htmlType="submit" loading={mount.isPending}>挂载</Button><Button disabled={mount.isPending} onClick={() => setOpen(false)}>取消</Button></Space>
       </Form>
     </Modal>
-    <Modal title={`挂载缓存设置${cacheTarget ? ` · ${cacheTarget.name}` : ''}`} open={cacheTarget !== null}
-      onCancel={() => { if (!configureCache.isPending) setCacheTarget(null); }} footer={null} destroyOnHidden closable={!configureCache.isPending} mask={{ closable: !configureCache.isPending }}>
+    <Modal title={`挂载缓存管理${cacheTarget ? ` · ${cacheTarget.name}` : ''}`} open={cacheTarget !== null}
+      onCancel={() => { if (!changing) setCacheTarget(null); }} footer={null} destroyOnHidden closable={!changing} mask={{ closable: !changing }}>
+      <div className="page-actions"><Typography.Text strong>读取缓存状态</Typography.Text>
+        <Button loading={cacheStatus.isFetching} disabled={changing} onClick={() => void cacheStatus.refetch()}>查询状态</Button></div>
+      <Failure error={cacheStatus.error} retry={() => void cacheStatus.refetch()} />
+      {cacheStatus.data && <>
+        <Typography.Paragraph>配置：{cacheModes[cacheStatus.data.configuredMode]}；实际：{cacheStatus.data.actualMode ? cacheModes[cacheStatus.data.actualMode] : cacheStatus.data.state === 'inactive' ? '未运行' : '暂不可用'}</Typography.Paragraph>
+        {cacheStatus.data.actualMode && cacheStatus.data.actualMode !== cacheStatus.data.configuredMode && <Alert type="warning" showIcon title="实际缓存模式与配置不同，请重新挂载使配置生效。" />}
+        <Typography.Paragraph>原生已用空间：{cacheStatus.data.bytesUsed === null ? '—' : `${(cacheStatus.data.bytesUsed / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 })} MiB`}；文件条目：{cacheStatus.data.files ?? '—'}</Typography.Paragraph>
+        <Typography.Paragraph type="secondary">读取缓存目录：</Typography.Paragraph>
+        <Typography.Paragraph copyable style={{ wordBreak: 'break-all' }}>{cacheStatus.data.directory}</Typography.Paragraph>
+        <Typography.Paragraph type="secondary">采样时间：{new Date(cacheStatus.data.sampledAt).toLocaleString()}。统计来自原生 VFS，可能滞后，不表示整曲已完整缓存。未运行时不统计磁盘占用，已存片段仍可清理。</Typography.Paragraph>
+        {cacheStatus.data.message && <Alert type="warning" showIcon title={cacheStatus.data.message} />}
+      </>}
+      <Typography.Paragraph>清理只删除此挂载已存的读取片段及其索引，不刷新平台内容。活动挂载会先正常卸载，清理后按原设置重新挂载；占用导致卸载失败时保留缓存和设置。</Typography.Paragraph>
+      <Button danger loading={clearCache.isPending} disabled={!cacheStatus.data || changing} onClick={() => { if (cacheTarget) clearCache.mutate(cacheTarget.id); }}>清理读取缓存</Button>
+      <Failure error={clearCache.error} />
       <Typography.Paragraph>已挂载的连接会在保存后正常卸载并重新挂载；文件占用导致卸载失败时，保留原设置和挂载。已卸载的连接只保存设置。</Typography.Paragraph>
       <Form form={cacheForm} layout="vertical" preserve={false} onFinish={settings => {
         if (cacheTarget) { setCacheError(''); configureCache.mutate({ id: cacheTarget.id, settings }); }
       }}>
         <MountCacheFields />
         <Failure error={configureCache.error} />{cacheError && <Alert type="error" showIcon title={cacheError} />}
-        <Space><Button type="primary" htmlType="submit" loading={configureCache.isPending}>保存</Button><Button disabled={configureCache.isPending} onClick={() => setCacheTarget(null)}>取消</Button></Space>
+        <Space><Button type="primary" htmlType="submit" loading={configureCache.isPending} disabled={changing && !configureCache.isPending}>保存设置</Button><Button disabled={changing} onClick={() => setCacheTarget(null)}>关闭</Button></Space>
       </Form>
     </Modal>
   </section>;

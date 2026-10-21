@@ -1,7 +1,7 @@
 import { access, lstat, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { join, posix, win32 } from 'node:path';
 import { z } from 'zod';
-import type { MountCacheSettings, MountInput, MountManager, MountView } from '../../contracts/mounts';
+import type { MountCacheSettings, MountCacheStatus, MountInput, MountManager, MountView } from '../../contracts/mounts';
 import { createRcloneControl, MountError, writePrivateJson, type RcloneControl } from './rclone-control';
 
 export { MountError } from './rclone-control';
@@ -24,6 +24,11 @@ const viewSchema = z.object({
   state: z.enum(['starting', 'mounted', 'unmounting', 'stopped', 'error']), error: z.object({ code: z.string(), message: z.string() }).optional()
 });
 const recordsSchema = z.array(z.object({ input: inputSchema, view: viewSchema, mayBeMounted: z.boolean().default(false) }));
+const modes = ['off', 'minimal', 'writes', 'full'] as const;
+const nativeStatsSchema = z.object({
+  opt: z.object({ CacheMode: z.union([z.enum(modes), z.number().int().min(0).max(3)]) }),
+  diskCache: z.object({ path: z.string(), bytesUsed: z.number().nonnegative(), files: z.number().int().nonnegative() }).optional()
+});
 type RecordEntry = { input: MountInput; view: MountView; mayBeMounted: boolean };
 type MountPoint = { MountPoint: string; Fs: string };
 type Connection = { url: string; username: string; password: string };
@@ -51,6 +56,10 @@ export async function createMountManager(options: {
   const persist = () => writePrivateJson(statePath, records);
   const view = (record: RecordEntry): MountView => structuredClone(record.view);
   const remoteName = (record: RecordEntry) => `musicfs_${record.view.id.replaceAll('-', '')}`;
+  const cachePath = (record: RecordEntry, kind: 'vfs' | 'vfsMeta') => join(options.directory, 'cache', kind, remoteName(record));
+  const removeReadCache = async (record: RecordEntry) => {
+    for (const kind of ['vfs', 'vfsMeta'] as const) await rm(cachePath(record, kind), { recursive: true, force: true });
+  };
   const equalPoint = (a: string, b: string) => platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
   const activePoints = async () => (await control.call<{ mountPoints: MountPoint[] }>('mount/listmounts')).mountPoints;
   function normalizeInput(value: MountInput): MountInput {
@@ -188,7 +197,7 @@ export async function createMountManager(options: {
           CacheMaxAge: record.view.fileCacheMaxAgeHours === 0 ? 'off' : `${record.view.fileCacheMaxAgeHours}h`, ReadAhead: 0,
           // Persist downloaded-range metadata on close, before an immediate normal remount.
           HandleCaching: '0s',
-          ChunkSize: 256 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0,
+          ChunkSize: 1024 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0,
           DirCacheTime: record.view.directoryCacheSeconds === 0 ? 'off' : `${record.view.directoryCacheSeconds}s` } });
       record.view.mountPoint = result.mountPoint;
       const mounted = (await activePoints()).some(point => equalPoint(point.MountPoint, result.mountPoint));
@@ -251,7 +260,7 @@ export async function createMountManager(options: {
       await stop(record);
       // rclone namespaces sparse data and metadata by this stable remote name.
       // Unmount keeps them for reuse; removing the definition also releases its cache.
-      for (const kind of ['vfs', 'vfsMeta']) await rm(join(options.directory, 'cache', kind, remoteName(record)), { recursive: true, force: true });
+      await removeReadCache(record);
       records.splice(records.indexOf(record), 1);
       await persist();
     }),
@@ -271,6 +280,37 @@ export async function createMountManager(options: {
       record.input = input; record.view.directoryCacheSeconds = parsed.data.directoryCacheSeconds;
       record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? 8192; record.view.fileCacheMaxAgeHours = input.fileCacheMaxAgeHours ?? 168;
       await persist(); return view(record);
+    }),
+    cacheStatus: id => serialize(async () => {
+      const record = findRecord(id);
+      const result: MountCacheStatus = { mountId: id, configuredMode: record.view.fileCacheMaxMiB === 0 ? 'off' : 'full',
+        actualMode: null, directory: cachePath(record, 'vfs'), state: 'inactive', bytesUsed: null, files: null,
+        sampledAt: new Date().toISOString(), message: null };
+      if (!record.mayBeMounted) return result;
+      try {
+        const owned = (await activePoints()).some(point => equalPoint(point.MountPoint, record.view.mountPoint) && point.Fs === `${remoteName(record)}:`);
+        if (!owned) return result;
+        const stats = nativeStatsSchema.parse(await control.call('vfs/stats', { fs: `${remoteName(record)}:` }));
+        result.state = 'active';
+        result.actualMode = typeof stats.opt.CacheMode === 'number' ? modes[stats.opt.CacheMode]! : stats.opt.CacheMode;
+        if (stats.diskCache) {
+          result.directory = stats.diskCache.path;
+          result.bytesUsed = stats.diskCache.bytesUsed; result.files = stats.diskCache.files;
+        }
+      } catch (error) {
+        result.state = 'unavailable'; result.message = errorView(error).message;
+      }
+      result.sampledAt = new Date().toISOString();
+      return result;
+    }),
+    clearCache: id => serialize(async () => {
+      const record = findRecord(id);
+      const wasMounted = record.mayBeMounted;
+      // Busy files keep both the live mount and all cached fragments intact.
+      if (wasMounted) await stop(record);
+      await removeReadCache(record);
+      if (wasMounted) return start(record, normalizeInput(record.input));
+      return view(record);
     }),
     refresh: id => serialize(async () => {
       const record = findRecord(id);

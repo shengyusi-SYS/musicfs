@@ -124,6 +124,14 @@ export function createManagementApi(input: {
     await input.mounts.remove(c.req.param('id'));
     return c.body(null, 204);
   });
+  app.get('/api/mounts/:id/cache', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    return c.json(await input.mounts.cacheStatus(c.req.param('id')));
+  });
+  app.delete('/api/mounts/:id/cache', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    return c.json(await input.mounts.clearCache(c.req.param('id')));
+  });
   app.put('/api/mounts/:id/cache', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
     const settings = z.object({ directoryCacheSeconds: z.number().int().min(0).max(2_147_483_647),
