@@ -43,7 +43,7 @@ export async function createDesktopService(input: { directory: string; adminToke
     // Notify the desktop consumer only after the complete directory pointer changed.
     if (result === 'committed' && args[2]?.publish) refreshMounts();
     return result;
-  } }, undefined, { execution: 'deferred', sha256 });
+  } }, undefined, { execution: 'deferred', sha256, publishedViews: { views: 32, estimatedBytes: 32 * 1024 * 1024 } });
   const changes = createDesktopChanges({ store: { ...store, commitChange(...args: Parameters<typeof store.commitChange>) {
     const result = store.commitChange(...args);
     if (result && args[2].kind === 'activate') refreshMounts();

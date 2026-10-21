@@ -143,6 +143,28 @@ test('bounded views evict least-recently used entries and oversized directories 
   expect(reads).toBe(6);
 });
 
+test('the desktop view budget retains two large directories across repeated switching', async () => {
+  const large = (id: string): Snapshot => ({ ...snapshot(id), kind: 'directory', items: Array.from({ length: 6000 }, (_, index) => ({
+    kind: 'file', entryId: String(index), name: `${index}.mp3`, fileRef: `${id}:${index}:${'r'.repeat(650)}`,
+    info: { contentId: `prepared:${index}`, size: 5_000_000, mediaType: 'audio/mpeg' }
+  })) });
+  const values = new Map([['liked', large('liked')], ['playlist', large('playlist')]]);
+  const reads: string[] = [];
+  const store: Pick<LibraryStore, 'snapshot' | 'snapshotHeader'> = {
+    snapshotHeader: (_id, key) => { const { items: _items, ...header } = values.get(key.ref)!; return { ...header, error: null }; },
+    snapshot: (_id, key) => { reads.push(key.ref); return { value: values.get(key.ref)!, error: null }; }
+  };
+  const views = createPublishedViews(store, ensure, value => value.kind === 'directory' ? value.items.map(entry => ({
+    id: entry.entryId, name: entry.name, ref: entry.kind === 'file' ? entry.fileRef : entry.directoryRef
+  })) : [], { views: 32, estimatedBytes: 32 * 1024 * 1024 });
+  const first = await views.get(stamp, key('liked'), signal());
+  expect(first.estimatedBytes).toBeGreaterThan(8 * 1024 * 1024);
+  await views.get(stamp, key('playlist'), signal());
+  expect(await views.get(stamp, key('liked'), signal())).toBe(first);
+  await views.get(stamp, key('playlist'), signal());
+  expect(reads).toEqual(['liked', 'playlist']);
+});
+
 test('publication between header and row reads retries against the new durable identity', async () => {
   let headers = 0; let reads = 0;
   const store: Pick<LibraryStore, 'snapshot' | 'snapshotHeader'> = {

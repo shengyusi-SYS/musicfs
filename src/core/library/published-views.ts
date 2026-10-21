@@ -5,7 +5,8 @@ import { LibraryError, type LibraryStore, type Snapshot, type SnapshotKey } from
 
 type Named<T> = T & { pathName: string };
 export type NamedView<T> = { entries: Named<T>[]; byName: ReadonlyMap<string, Named<T>> };
-type PublishedView<T> = NamedView<T> & { snapshot: Snapshot; estimatedBytes: number };
+type PublishedView<T> = NamedView<T> & { estimatedBytes: number };
+export type PublishedViewLimits = { views: number; estimatedBytes: number };
 type Load = { stamp: SourceStamp; key: SnapshotKey; snapshotId: string; snapshot?: Snapshot };
 const stampKey = (stamp: SourceStamp) => JSON.stringify([stamp.id, stamp.pluginId, stamp.epoch, stamp.pluginRevision, stamp.pluginGeneration]);
 const matches = (snapshot: Pick<Snapshot, 'stamp' | 'id'>, load: Load) => snapshot.id === load.snapshotId && stampKey(snapshot.stamp) === stampKey(load.stamp);
@@ -20,7 +21,7 @@ export function createPublishedViews<T extends { id: string; name: string }>(
   store: Pick<LibraryStore, 'snapshot' | 'snapshotHeader'>,
   ensure: (stamp: SourceStamp, key: SnapshotKey, signal: AbortSignal) => Promise<Snapshot>,
   project: (snapshot: Snapshot, key: SnapshotKey) => T[],
-  limits = { views: 32, estimatedBytes: 8 * 1024 * 1024 }
+  limits: PublishedViewLimits = { views: 32, estimatedBytes: 8 * 1024 * 1024 }
 ) {
   const cache = new LRUCache<string, PublishedView<T>, Load>({
     max: limits.views, maxSize: limits.estimatedBytes, ignoreFetchAbort: true,
@@ -31,11 +32,12 @@ export function createPublishedViews<T extends { id: string; name: string }>(
       if (!snapshot || !matches(snapshot, context)) return undefined;
       if (snapshot.kind !== context.key.kind) throw new LibraryError('invalid_source', 'Invalid published snapshot kind');
       const view = await namedView(project(snapshot, context.key));
-      // Estimate retained strings plus child objects/Map slots. This is a bound on the cache's accounting,
+      // Estimate publication strings plus child objects/Map slots; the raw snapshot is not retained.
+      // This is a bound on the cache's accounting,
       // not an exact JavaScript heap measurement; oversized directories are usable without being retained.
       const estimatedBytes = Math.max(1, JSON.stringify(snapshot).length * 2
         + view.entries.reduce((size, entry) => size + 256 + entry.pathName.length * 2, 256));
-      return { ...view, snapshot, estimatedBytes };
+      return { ...view, estimatedBytes };
     }
   });
   return {

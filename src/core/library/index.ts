@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ByteRange, FileInfo, Outcome, ReadResult } from '@musicfs/plugin-api';
 import type { Sources, SourceStamp } from '../sources';
-import { createPublishedViews, namedView, type NamedView } from './published-views';
+import { createPublishedViews, namedView, type NamedView, type PublishedViewLimits } from './published-views';
 import { createRefreshes } from './refresh';
 import { createRefreshSchedules, type RefreshScheduleStore } from './schedules';
 import { assertInfo } from './file-info';
@@ -98,7 +98,8 @@ type MetadataGroup = { stamp: SourceStamp; entries: [ViewEntry, Resolved][] };
 
 export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore & Partial<RefreshScheduleStore>,
   budgets: { pages: number; entries: number; directories?: number } = { pages: 10_000, entries: 100_000 },
-  options: { execution?: 'inline' | 'deferred'; sha256?: (bytes: Uint8Array) => string | Promise<string>; now?: () => number } = {}) {
+  options: { execution?: 'inline' | 'deferred'; sha256?: (bytes: Uint8Array) => string | Promise<string>; now?: () => number;
+    publishedViews?: PublishedViewLimits } = {}) {
   const hash = options.sha256 ?? webSha256;
   const digest = (value: unknown) => hash(new TextEncoder().encode(JSON.stringify(value)));
   const refreshes = createRefreshes(sources, store, budgets, options.now);
@@ -157,23 +158,20 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       modifiedAt: entry.kind === 'file' ? entry.info?.modifiedAt ?? value.completedAt : value.completedAt,
       target: entry.kind === 'directory' ? { kind: 'directory', stamp: value.stamp, ref: entry.directoryRef }
         : { kind: 'file', stamp: value.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }),
-          ...(entry.deferredInfo === true && entry.info === undefined ? { deferredDirectory: key.ref } : {}) } })));
+          ...(entry.deferredInfo === true && entry.info === undefined ? { deferredDirectory: key.ref } : {}) } })), options.publishedViews);
   async function refreshInstance(instanceId: string, signal: AbortSignal): Promise<InstanceRefresh> {
     signal.throwIfAborted();
     const result = await drain(await refreshes.start(instanceId, { kind: 'instance' }), signal);
     return { refreshedDirectories: result.refreshedDirectories, failures: result.failures };
   }
-  async function rootsSnapshot(instanceId: string, signal: AbortSignal) {
+  async function rootsView(instanceId: string, signal: AbortSignal) {
     const stamp = await sources.view(instanceId);
-    const { snapshot: value } = await publishedViews.get(stamp, { kind: 'roots', ref: '' }, signal);
-    if (value.kind !== 'roots') throw new LibraryError('invalid_source', 'Invalid root snapshot');
-    return { stamp, value };
+    return publishedViews.get(stamp, { kind: 'roots', ref: '' }, signal);
   }
   async function sourceDirectory(target: Extract<Target, { kind: 'source' }>, signal: AbortSignal): Promise<Extract<Target, { kind: 'directory' }>> {
-    const { stamp, value } = await rootsSnapshot(target.instanceId, signal);
-    const root = value.items.find(item => item.sourceId === target.sourceId);
-    if (!root) throw new LibraryError('not_found', 'Content source no longer exists');
-    return { kind: 'directory', stamp, ref: root.directoryRef };
+    const root = (await rootsView(target.instanceId, signal)).entries.find(item => item.id === target.sourceId);
+    if (!root || root.target.kind !== 'directory') throw new LibraryError('not_found', 'Content source no longer exists');
+    return root.target;
   }
   async function children(target: Target, signal: AbortSignal): Promise<NamedView<Child>> {
     if (target.kind === 'instances') return namedView((await sources.instances()).map(instance => ({
@@ -355,7 +353,10 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
         ? { source: { instanceId: resolved.target.stamp.id, directoryRef: resolved.target.ref } } : {}) };
     },
     async contentSources(instanceId: string, signal: AbortSignal) {
-      return (await rootsSnapshot(instanceId, signal)).value.items;
+      return (await rootsView(instanceId, signal)).entries.map(entry => {
+        if (entry.target.kind !== 'directory') throw new LibraryError('invalid_source', 'Invalid root target');
+        return { sourceId: entry.id, name: entry.name, directoryRef: entry.target.ref };
+      });
     },
     layout: () => store.layout(),
     async saveLayout(expectedRevision: number, nodes: unknown) {
