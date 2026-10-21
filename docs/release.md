@@ -1,5 +1,15 @@
 # MusicFS 当前交付物
 
+## dev.13 界面与目录整理
+
+2026-10-22：应用 `0.1.0-dev.13`，包含来源添加与登录流程、插件安装、播放器连接和目录浏览的界面重构，以及新的目录整理工作区。支持批量添加、原位改名、拖动与明确移动、搜索、撤销和重做；自动目录可直接开始整理，统一保存后发布。
+
+交付位于 `dist/releases/0.1.0-dev.13/`：[Windows x64](../dist/releases/0.1.0-dev.13/musicfs-0.1.0-dev.13-windows-x64.zip)、[Linux x64](../dist/releases/0.1.0-dev.13/musicfs-0.1.0-dev.13-linux-x64.zip)、[离线 Worker](../dist/releases/0.1.0-dev.13/musicfs-0.1.0-dev.13-worker.zip)、[源码](../dist/releases/0.1.0-dev.13/musicfs-0.1.0-dev.13-source.zip)、[作者包](../dist/releases/0.1.0-dev.13/musicfs-0.1.0-dev.13-plugin-author-kit.zip)、[版本清单](../dist/releases/0.1.0-dev.13/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.13/SHA256SUMS)。三个独立插件在同目录的 `plugins/` 中。
+
+正常退出旧后台，解压完整新版后启动。API 0.1.9、schema10、网易云 alpha.17 和 QQ alpha.16 不变；此次界面更新无需重装插件或刷新整库。云端使用需另行部署 Worker 包。
+
+本地示例已走通主要界面流程与目录整理，33 项定向回归、三套类型、模块边界和正式页面构建通过；见[界面走查](verification/ui-redesign.md)及[目录整理记录](verification/directory-workspace.md)。本次在 WSL 构建并核对归档与校验和，未重新进行目标系统验收或部署云端。
+
 ## dev.12 应用场景性能优化
 
 2026-10-22：应用`0.1.0-dev.12`，API0.1.9/schema10不变，网易云alpha.17、QQ alpha.16。包含无变化挂载状态写盘减法、桌面32MiB路径索引与紧凑保留、单曲资料等待优化，以及本轮应用场景修正：未读文件身份在资料期限内稳定、纯音频Range跳过无关共享封面、复用有效播放版本定位、关闭缓存时仍跟踪在途读取。顺序文件名和已接受的1MiB预留不变。

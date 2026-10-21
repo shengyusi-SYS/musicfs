@@ -4,11 +4,11 @@
 
 ## 当前事实
 
-本轮交付为dev.12：Windows/Linux、离线Worker、源码与作者包，API0.1.9/schema10不变，网易云alpha.17/QQ alpha.16。应用场景优化有定向模块证据，Linux正式程序以临时数据和sample完成一次离线冒烟；Windows未重跑VM、Worker未部署或测免费CPU。历史证据按各自版本判断，产物身份只查[发行页](release.md)。
+当前交付为 dev.13：Windows/Linux、离线 Worker、源码与作者包，包含界面流程与目录整理工作区。API 0.1.9/schema10、网易云 alpha.17/QQ alpha.16 不变。界面证据来自独立 WSL 示例服务，性能证据沿用 dev.12 及各自记录；本次没有重跑目标系统或云端验收。产物身份统一见[发行页](release.md)。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
-| 界面与使用流程重构 | [真实页面走查](verification/ui-redesign.md)、[目录整理工作区](verification/directory-workspace.md) | 当前源码与独立本地服务；尚未进入桌面发行归档 |
+| 界面与使用流程重构 | [真实页面走查](verification/ui-redesign.md)、[目录整理工作区](verification/directory-workspace.md) | 独立本地服务走查；源码与界面已进入 dev.13 发行归档 |
 | 局部性能优化 | [O2/O1/O3与应用场景核对](verification/performance-local-2026-10-22.md) | 正式模块、有界样本和Linux发行冒烟；未重测Windows或真实整库 |
 | 冷刷新与 SDK 请求减法 | [真实冷基线](verification/real-netease-cold-dev5.md)、[请求减法](verification/netease-cold-request-reduction.md)、[两阶段清单](verification/deferred-catalogue.md) | 完整清单、全库标签和全库入库是不同工作范围 |
 | 真正按需挂载与格式 | [Windows / WSL 可行性及生产接线](verification/lazy-mount-feasibility.md) | MP3/FLAC/M4A 的具体预留方案；APE 与容器/播放器限制分别记录 |
