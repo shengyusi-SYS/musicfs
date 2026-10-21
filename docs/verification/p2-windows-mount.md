@@ -4,6 +4,8 @@
 
 后续PERF21的**真正按需挂载原型**已在同VM完成限定验收：正式dev.6 App远程挂载到WSL离线Library/DAV，6个带1MiB预留的MP3冷目录30.3ms/零准备，打开仅处理所选一首，同句柄seek、完整字节及Shell/WMP字段通过，正常卸载退出并清理。未修改网易云生产插件，也不算资源管理器可见窗口或实播验收；方法、原始回执和边界见[按需挂载Windows记录](lazy-mount-feasibility.md#windows-vm实际-appwinfsp-路径)。
 
+随后补FLAC/M4A同入口：四文件冷枚举39.1ms/零准备，每格式只准备所选一首，Windows同句柄随机读/完整文件与音频payload/完整和seek PCM均保持；Shell/WMP基本字段通过，但WMP Lyrics为空，M4A Shell只返回第一位歌手，不宣称全部展示兼容。APE未验本轮路线。[格式记录](lazy-mount-feasibility.md#flacm4a后续windows格式验证)
+
 ## 环境与实际入口
 
 - Windows 11 企业版 LTSC，系统版本 `10.0.26100.1742`，PowerShell `5.1.26100.1591`。
