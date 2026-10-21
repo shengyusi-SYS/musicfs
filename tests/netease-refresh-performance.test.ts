@@ -12,6 +12,8 @@ function fixture(count: number, seed = 0) {
   const calls: Record<string, number> = {}; const ids = Array.from({ length: count }, (_, i) => i + 1);
   let title = 'Song'; let playlist = [...ids]; let representation = 'original';
   const song = (id: number) => ({ id, name: `${title} ${id}`, ar: [{ name: 'Artist' }], al: { id: 1, name: 'Album', picUrl: 'https://p1.music.126.net/cover.png' }, no: id, cd: '1' });
+  const richSong = (id: number) => ({ id, name: `${title} ${id}`, artists: [{ name: 'Artist' }],
+    album: { id: 1, name: 'Album', picUrl: 'https://p1.music.126.net/cover.png', artists: [{ name: 'Artist' }], publishTime: 1577836800000, size: count }, no: id, disc: '1' });
   const hit = (key: string) => { calls[key] = (calls[key] ?? 0) + 1; };
   const client = {
     ctx: { instanceId: 'offline', config: { quality: 'standard' }, signal: new AbortController().signal, cache,
@@ -19,15 +21,24 @@ function fixture(count: number, seed = 0) {
         const url = new URL(String(input));
         if (url.hostname === 'p1.music.126.net') { hit('cover'); return new Response(cover, { headers: { 'content-type': 'image/png' } }); }
         expect(url.hostname).toBe('m1.music.126.net'); hit('range');
-        const match = /^bytes=(\d+)-(\d+)$/.exec(new Headers(init?.headers).get('range') ?? '')!;
-        const start = Number(match[1]); const end = Number(match[2]);
+        const ranges = new Headers(init?.headers).get('range')!.slice(6).split(',').map(value => {
+          const [start, end] = value.split('-').map(Number); return { start: start!, end: end! };
+        });
+        if (ranges.length > 1) {
+          const boundary = 'offline-refresh-ranges';
+          const chunks = ranges.flatMap(range => [`--${boundary}\r\nContent-Type: audio/mpeg\r\nContent-Range: bytes ${range.start}-${range.end}/${bytes.length}\r\n\r\n`,
+            bytes.slice(range.start, range.end + 1), '\r\n']);
+          const body = new Uint8Array(await new Blob([...chunks, `--${boundary}--\r\n`]).arrayBuffer());
+          return new Response(body, { status: 206, headers: { 'content-length': String(body.length), 'content-type': `multipart/byteranges; boundary=${boundary}` } });
+        }
+        const { start, end } = ranges[0]!;
         return new Response(bytes.slice(start, end + 1), { status: 206, headers: { 'content-length': String(end - start + 1), 'content-range': `bytes ${start}-${end}/${bytes.length}` } });
       } },
     state: { accountId: '42' }, requireSession() {},
     async call(endpoint: unknown, params: Record<string, Json> = {}) {
       if (endpoint === endpoints.userPlaylists) { hit('user'); return { playlist: [{ id: 900, userId: 42, specialType: 5, name: 'Likes' }], more: false }; }
       if (endpoint === endpoints.playlist) { hit('playlist'); return { playlist: { trackIds: playlist.map(id => ({ id })), trackCount: playlist.length, tracks: playlist.slice(0, seed).map(song) } }; }
-      if (endpoint === endpoints.songs) { hit('details'); return { songs: String(params.ids).split(',').map(id => song(Number(id))) }; }
+      if (endpoint === endpoints.songs) { hit('details'); return { songs: String(params.ids).split(',').map(id => richSong(Number(id))) }; }
       if (endpoint === endpoints.playback) { hit('playback'); return { data: String(params.id).split(',').map(id => ({ id: Number(id), url: `https://m1.music.126.net/${id}.mp3`, expi: 1200, level: params.level, type: 'mp3', md5: representation === 'original' ? Number(id).toString(16).padStart(32, '0') : 'f'.repeat(32), size: bytes.length })) }; }
       if (endpoint === endpoints.album) { hit('album'); return { album: { artist: { name: 'Artist' }, publishTime: 1577836800000, size: count } }; }
       if (endpoint === endpoints.lyric) { hit('lyrics'); return { lrc: { lyric: `[00:00.00]Lyrics ${params.id}` } }; }
@@ -85,16 +96,16 @@ test('4000-track small membership changes reuse old work and only prepare newly 
   f.reset(); f.setPlaylist([4001, ...Array.from({ length: 4000 }, (_, i) => i + 1)]);
   const added = await scan(); const addedCalls = { ...f.calls };
   expect(added.files).toHaveLength(4001);
-  expect(addedCalls).toEqual({ user: 1, playlist: 2, playback: 1, lyrics: 1, range: 2 });
+  expect(addedCalls).toEqual({ user: 1, playlist: 2, details: 1, playback: 1, lyrics: 1, range: 1 });
   const oldInfo = cold.files[0]!.kind === 'file' ? cold.files[0]!.info : undefined;
   expect(oldInfo?.modifiedAt).toBeDefined(); expect(added.files[1]).toMatchObject({ info: oldInfo });
-  // Reusing facts does not renew their original expiry indefinitely. Fresh playlist seeds are excluded.
-  const unchangedSong = (key: string) => key.startsWith('song:') && Number(key.slice(5)) > 10 && Number(key.slice(5)) <= 4000;
+  // Reusing rich facts does not renew their expiry, including sparse playlist seeds enriched on the first scan.
+  const unchangedSong = (key: string) => key.startsWith('song:') && Number(key.slice(5)) >= 1 && Number(key.slice(5)) <= 4000;
   expect([...f.cache.values].filter(([key]) => unchangedSong(key)).map(([key, item]) => [key, item.expiresAt]))
     .toEqual(expiry.filter(([key]) => unchangedSong(String(key))));
   f.reset(); f.setPlaylist([...Array.from({ length: 4001 }, (_, i) => i + 1), 4002]);
   await scan(); const addedWithoutDetails = { ...f.calls };
-  expect(addedWithoutDetails).toEqual({ user: 1, playlist: 2, details: 1, playback: 1, lyrics: 1, range: 2 });
+  expect(addedWithoutDetails).toEqual({ user: 1, playlist: 2, details: 1, playback: 1, lyrics: 1, range: 1 });
   f.reset(); f.setPlaylist(Array.from({ length: 4000 }, (_, i) => i + 1)); const removed = await scan();
   expect(removed.entries).toEqual(cold.entries); expect(f.calls).toEqual({ user: 1, playlist: 2 });
   f.reset();

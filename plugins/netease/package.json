@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@musicfs/audio-tags": "workspace:*",
+    "@remix-run/multipart-parser": "0.16.5",
     "NeteaseCloudMusicApi": "4.32.0",
     "p-limit": "7.3.3",
     "tough-cookie": "6.0.2",

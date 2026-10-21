@@ -17,6 +17,8 @@ const source = new Uint8Array(await Bun.file('tests/fixtures/source-metadata/sou
 const picture = new Uint8Array(32_768); picture.set(cover);
 const ids = Array.from({ length: 24 }, (_, i) => i + 1);
 const song = (id: number) => ({ id, name: `Song ${id}`, ar: [{ name: 'Artist' }], al: { id: 1, name: 'Album', picUrl: 'https://p1.music.126.net/cover.png' }, no: id, cd: '1' });
+const richSong = (id: number) => ({ id, name: `Song ${id}`, artists: [{ name: 'Artist' }],
+  album: { id: 1, name: 'Album', picUrl: 'https://p1.music.126.net/cover.png', artists: [{ name: 'Artist' }], publishTime: 1577836800000, size: 24 }, no: id, disc: '1' });
 let requests = 0;
 const calls: Record<string, number> = {};
 await Bun.write(join(root, 'netease.mjs'), Bun.file('dist/netease/org.musicfs.netease/index.mjs'));
@@ -29,8 +31,16 @@ const mf = new Miniflare({ modulesRoot: root, modules: [{ type: 'ESModule', path
   outboundService: async (request: Request) => {
     requests++; const url = new URL(request.url); const path = url.pathname.replace(/^\/(eapi|weapi)\//, '/api/'); calls[path] = (calls[path] ?? 0) + 1;
     if (url.hostname === 'm1.music.126.net') {
-      const match = /^bytes=(\d+)-(\d+)$/.exec(request.headers.get('range') ?? ''); assert(match);
-      const start = Number(match[1]); const end = Number(match[2]);
+      const rangeHeader = request.headers.get('range') ?? ''; assert.match(rangeHeader, /^bytes=\d+-\d+(?:,\d+-\d+)*$/);
+      const ranges = rangeHeader.slice(6).split(',').map(value => { const [start, end] = value.split('-').map(Number); return { start: start!, end: end! }; });
+      if (ranges.length > 1) {
+        const boundary = 'offline-worker-ranges';
+        const chunks = ranges.flatMap(range => [`--${boundary}\r\nContent-Type: audio/mpeg\r\nContent-Range: bytes ${range.start}-${range.end}/${source.length}\r\n\r\n`,
+          source.slice(range.start, range.end + 1), '\r\n']);
+        const body = new Uint8Array(await new Blob([...chunks, `--${boundary}--\r\n`]).arrayBuffer());
+        return new Response(body, { status: 206, headers: { 'content-length': String(body.length), 'content-type': `multipart/byteranges; boundary=${boundary}` } });
+      }
+      const { start, end } = ranges[0]!;
       return new Response(source.slice(start, end + 1), { status: 206, headers: { 'content-length': String(end - start + 1), 'content-range': `bytes ${start}-${end}/${source.length}` } });
     }
     if (url.hostname === 'p1.music.126.net') return new Response(picture, { headers: { 'content-type': 'image/png' } });
@@ -40,7 +50,7 @@ const mf = new Miniflare({ modulesRoot: root, modules: [{ type: 'ESModule', path
     if (path === '/api/w/nuser/account/get') return Response.json({ code: 200, profile: { userId: 42, nickname: 'Offline' } });
     if (path === '/api/user/playlist') return Response.json({ code: 200, playlist: [{ id: 8, userId: 42, specialType: 5 }], more: false });
     if (path === '/api/v6/playlist/detail') return Response.json({ code: 200, playlist: { trackIds: ids.map(id => ({ id })), trackCount: ids.length, tracks: ids.slice(0, 10).map(song) } });
-    if (path === '/api/v3/song/detail') return Response.json({ code: 200, songs: ids.map(song) });
+    if (path === '/api/song/detail/') return Response.json({ code: 200, songs: ids.map(richSong) });
     if (path === '/api/song/enhance/player/url/v1') {
       const data = encrypt.eapiReqDecrypt(new URLSearchParams(await request.text()).get('params')!)!.data;
       const selected = JSON.parse(String(data.ids)) as number[];

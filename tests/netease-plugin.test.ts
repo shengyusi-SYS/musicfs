@@ -50,7 +50,7 @@ function fixture() {
       playlistCalls.push(String(decrypted!.data.id));
       return json({ code: 200, playlist: { trackCount: playlistIds.length + (wrongTrackCount ? 1 : 0), trackIds: playlistIds.map(id => ({ id })) } });
     }
-    if (path === '/api/v3/song/detail') return json({ code: 200, songs: [...new Set(playlistIds)].reverse().map(id => ({ id, name: `歌曲${id}`, ar: [{ name: '歌手' }] })) });
+    if (path === '/api/song/detail/') return json({ code: 200, songs: [...new Set(playlistIds)].reverse().map(id => ({ id, name: `歌曲${id}`, artists: [{ name: '歌手' }] })) });
     if (path === '/api/song/enhance/player/url/v1') {
       const parameters = new URLSearchParams(await req.text()); const decrypted = encrypt.eapiReqDecrypt(parameters.get('params')!);
       const ids = JSON.parse(String(decrypted!.data.ids)) as number[];
@@ -373,8 +373,8 @@ test('NetEase prepares album positions, cover and three lyric forms once, and ca
   const native = f.ctx.fetch; const counts = { album: 0, lyrics: 0, cover: 0 };
   f.ctx.fetch = (async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input);
-    if (url.pathname.endsWith('/v3/song/detail')) return Response.json({ code: 200, songs: [{ id: 1, name: '来源歌名', ar: [{ name: '第一歌手' }, { name: '第二歌手' }],
-      al: { id: 55, name: '来源专辑', picUrl: 'https://p1.music.126.net/cover.jpg' }, no: 7, cd: '2' }] });
+    if (url.pathname.endsWith('/song/detail/')) return Response.json({ code: 200, songs: [{ id: 1, name: '来源歌名', artists: [{ name: '第一歌手' }, { name: '第二歌手' }],
+      album: { id: 55, name: '来源专辑', picUrl: 'https://p1.music.126.net/cover.jpg' }, no: 7, disc: '2' }] });
     if (url.pathname.endsWith('/v1/album/55')) { counts.album++; return Response.json({ code: 200, album: { id: 55, artists: [{ name: '专辑歌手' }], publishTime: Date.UTC(2020, 1, 2, 16), size: 12 } }); }
     if (url.pathname.endsWith('/song/lyric/v1')) counts.lyrics++;
     if (url.hostname === 'p1.music.126.net') { expect(url.searchParams.get('param')).toBe('500y500'); counts.cover++; return new Response(jpeg, { headers: { 'Content-Type': 'image/jpg' } }); }

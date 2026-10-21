@@ -16,8 +16,28 @@ const pick = (value: Record<string, unknown>, keys: string[]) => Object.fromEntr
 export function compactSong(input: unknown): Record<string, unknown> | undefined {
   const song = object(input); const artists = song.ar ?? song.artists;
   if (typeof song.name !== 'string' || !song.name || !Array.isArray(artists) || !artists.every(item => typeof object(item).name === 'string' && object(item).name)) return;
-  return { ...pick(song, ['id', 'name', 'no', 'cd', 'publishTime']), ar: artists.map(item => pick(object(item), ['name'])),
-    al: pick(object(song.al ?? song.album), ['id', 'name', 'picUrl', 'artists', 'artist', 'publishTime', 'size']) };
+  const album = object(song.al ?? song.album);
+  return { ...pick(song, ['id', 'name', 'no', 'publishTime']), ...((song.cd ?? song.disc) === undefined ? {} : { cd: song.cd ?? song.disc }),
+    ...(song.richDetail === true ? { richDetail: true } : {}), ar: artists.map(item => pick(object(item), ['name'])),
+    al: { ...pick(album, ['id', 'name', 'picUrl', 'publishTime', 'size']),
+      ...(Array.isArray(album.artists) ? { artists: album.artists.map(item => pick(object(item), ['name'])) } : {}),
+      ...(album.artist === undefined ? {} : { artist: pick(object(album.artist), ['name']) }) } };
+}
+function needsDetail(song: Record<string, unknown> | undefined) {
+  if (!song) return true;
+  if (song.richDetail === true) return false;
+  const album = object(song.al); const artists = album.artists ?? (album.artist ? [album.artist] : []);
+  const hasArtists = Array.isArray(artists) && artists.some(item => typeof object(item).name === 'string' && String(object(item).name).trim());
+  const hasDate = [album.publishTime, song.publishTime].some(value => typeof value === 'number' && Number.isFinite(value) && value > 0);
+  return !hasArtists || !hasDate;
+}
+function mergeSeed(saved: Record<string, unknown>, seed: Record<string, unknown> | undefined) {
+  if (!seed) return saved;
+  const cachedAlbum = object(saved.al); const album = object(seed.al);
+  // A current playlist owns names/cover references. Reuse rich album fields only
+  // for the same album, rather than replacing them with a sparse playlist seed.
+  if (album.id !== cachedAlbum.id) return seed;
+  return { ...saved, ...seed, al: { ...cachedAlbum, ...album }, ...(saved.richDetail === true ? { richDetail: true } : {}) };
 }
 async function membership(client: NeteaseClient, playlistId: string) {
   const result = object((await client.call(endpoints.playlist, { id: playlistId })).playlist);
@@ -59,19 +79,22 @@ export async function scanSongs(client: NeteaseClient, scan: SongScan, offset: n
   const byId = new Map((Array.isArray(seeds) ? seeds : []).map(item => { const song = object(item); return [trackId(song.id), song]; }));
   if (object(cached).complete === true) return { start, songs: ids.map(id => byId.get(id)!) };
   // Membership is always fresh. Stable song facts can be shared across scans and playlists.
-  const fresh = new Map(byId);
-  const absent = [...new Set(ids)].filter(id => !byId.has(id));
+  const fresh = new Map([...byId].filter(([, song]) => !needsDetail(song)));
+  const incomplete = [...new Set(ids)].filter(id => needsDetail(byId.get(id)));
   const cache = client.ctx.cache!;
-  if (cache.getMany && absent.length) {
-    const saved = await cache.getMany(absent.map(id => `song:${id}`));
-    saved.forEach((song, index) => { if (song) byId.set(absent[index]!, object(song)); });
+  if (cache.getMany && incomplete.length) {
+    const saved = await cache.getMany(incomplete.map(id => `song:${id}`));
+    saved.forEach((song, index) => { if (song) { const id = incomplete[index]!; byId.set(id, mergeSeed(object(song), byId.get(id))); } });
   }
-  const missing = [...new Set(ids)].filter(id => !byId.has(id));
+  const missing = [...new Set(ids)].filter(id => needsDetail(byId.get(id)));
   if (missing.length) {
     const details = await client.call(endpoints.songs, { ids: missing.join(',') });
     if (!Array.isArray(details.songs)) fail('temporary', '网易云未返回完整歌曲详情。');
-    for (const item of details.songs) { const song = compactSong(item); if (song) { byId.set(trackId(song.id), song); fresh.set(trackId(song.id), song); } }
-    for (const id of ids) if (!byId.has(id)) fail('temporary', '网易云歌曲详情分页不完整。');
+    for (const item of details.songs) { const song = compactSong(item); if (song) {
+      const id = trackId(song.id); const rich = mergeSeed(song, byId.get(id)); rich.richDetail = true;
+      byId.set(id, rich); fresh.set(id, rich);
+    } }
+    for (const id of missing) if (byId.get(id)?.richDetail !== true) fail('temporary', '网易云歌曲详情分页不完整。');
   }
   const expiresAt = Date.now() + lifetime;
   const writes = [{ key, value: { complete: true, songs: [...new Set(ids)].map(id => byId.get(id)!) } as Json, expiresAt },

@@ -38,9 +38,15 @@ async function cached(client: NeteaseClient, key: string, read: () => Promise<Js
   try { return await result; } catch (error) { if (reads.get(key) === result) reads.delete(key); throw error; }
 }
 
-async function cover(client: NeteaseClient, albumId: string, url: string): Promise<{ picture: AudioTags['cover']; expiresAt: number }> {
+const coverHosts = new Set(['p1.music.126.net', 'p2.music.126.net', 'p3.music.126.net', 'p4.music.126.net']);
+function coverKey(url: URL): string {
+  // These image hosts are shards of the same resource; album IDs do not identify artwork bytes.
+  return coverHosts.has(url.host) ? `cover:netease:${url.pathname}${url.search}` : `cover:url:${url.href}`;
+}
+
+async function cover(client: NeteaseClient, url: string): Promise<{ picture: AudioTags['cover']; expiresAt: number }> {
   const sized = new URL(url); sized.searchParams.set('param', '500y500');
-  const asset = await cached(client, `cover:${albumId}:${sized.href}`, async () => {
+  const asset = await cached(client, coverKey(sized), async () => {
     const response = await client.ctx.fetch(sized, { signal: client.ctx.signal });
     if (response.status === 404) { await response.body?.cancel(); return null; }
     if (response.status === 429) { await response.body?.cancel(); rateLimited(response); }
@@ -78,7 +84,7 @@ export async function musicTags(client: NeteaseClient, song: Record<string, unkn
   const released = date(album.publishTime) ?? date(song.publishTime);
   const track = positive(song.no); const total = positive(album.size); const disc = positive(song.cd);
   const coverUrl = text(originalAlbum.picUrl) ?? text(album.picUrl);
-  const picture = coverUrl ? await cover(client, String(albumId ?? songId), coverUrl) : undefined;
+  const picture = coverUrl ? await cover(client, coverUrl) : undefined;
   return { expiresAt: Math.min(albumAsset.expiresAt, lyricAsset.expiresAt, picture?.expiresAt ?? Infinity),
     tags: { ...(title ? { title } : {}), ...(artists.length ? { artists } : {}), ...(albumName ? { album: albumName } : {}),
     ...(albumArtists.length ? { albumArtists } : {}), ...(released ? { date: released } : {}),

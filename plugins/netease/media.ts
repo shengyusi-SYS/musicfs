@@ -1,10 +1,11 @@
-import type { FileInfo, ReadRequest, ReadResult } from '@musicfs/plugin-api';
+import type { ByteRange, FileInfo, ReadRequest, ReadResult } from '@musicfs/plugin-api';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, rateLimited, object, type NeteaseClient } from './client';
 import { audioPolicy, lowerQualities, qualities, type Quality } from './configuration';
 import { decodeTagged, taggedOpen, taggedStat } from './tagged';
 import type { ReadRange } from '@musicfs/audio-tags';
 import { decodeFile, info, reference, type MediaReference } from './reference';
+import { multiRange } from './multi-range';
 export { decodeFile, info, type MediaReference } from './reference';
 
 type Location = { reference: MediaReference; url: string; expiresAt?: number };
@@ -91,11 +92,12 @@ export async function resolveVariants(client: NeteaseClient, input: string[]): P
   return resolved;
 }
 
-async function request(client: NeteaseClient, ref: MediaReference, range?: { start: number; end: number }, location?: Location, signal = client.ctx.signal): Promise<Response> {
+async function request(client: NeteaseClient, ref: MediaReference, range?: ByteRange | readonly ByteRange[], location?: Location, signal = client.ctx.signal): Promise<Response> {
   const current = location ?? (await resolveMedia(client, [ref.id], ref.level)).get(ref.id);
   if (!current) { await invalidateResolution(client, ref.id); fail('unavailable', '网易云当前未提供此完整音频版本。'); }
   if (info(current.reference).contentId !== info(ref).contentId) { await invalidateResolution(client, ref.id); fail('content_changed', '网易云音频版本已变化，请刷新目录。'); }
-  const response = await client.ctx.fetch(current.url, { signal: signal === client.ctx.signal ? signal : AbortSignal.any([client.ctx.signal, signal]), headers: { 'Accept-Encoding': 'identity', ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}) } });
+  const ranges = range && ('start' in range ? [range] : range);
+  const response = await client.ctx.fetch(current.url, { signal: signal === client.ctx.signal ? signal : AbortSignal.any([client.ctx.signal, signal]), headers: { 'Accept-Encoding': 'identity', ...(ranges ? { Range: `bytes=${ranges.map(range => `${range.start}-${range.end}`).join(',')}` } : {}) } });
   if (response.status === 429) { await response.body?.cancel(); rateLimited(response); }
   if (!response.body || !response.ok) { await response.body?.cancel(); await invalidateResolution(client, ref.id); fail(response.status === 416 ? 'content_changed' : 'temporary', '网易云音频读取暂未成功。'); }
   return response;
@@ -127,12 +129,34 @@ export async function rawOpen(client: NeteaseClient, file: string, input: ReadRe
   catch (error) { await response.body?.cancel(); throw error; }
 }
 
+const unsupportedMultiRange = new WeakMap<NeteaseClient, Set<string>>();
 export function sourceReader(client: NeteaseClient, ref: MediaReference, location?: Location): ReadRange {
   let located: Promise<Location | undefined> | undefined = location && (location.expiresAt === undefined || location.expiresAt > Date.now()) ? Promise.resolve(location) : undefined;
-  return async (range, signal) => {
+  const locate = async (signal: AbortSignal) => {
     signal.throwIfAborted();
     const current = await (located ??= resolveMedia(client, [ref.id], ref.level).then(values => values.get(ref.id)));
     if (!current) { await invalidateResolution(client, ref.id); fail('unavailable', '网易云当前未提供此完整音频版本。'); }
-    return rawOpen(client, JSON.stringify(ref), { expectedContentId: info(ref).contentId, range }, current, signal);
+    signal.throwIfAborted(); return current;
   };
+  const read: ReadRange = async (range, signal) => rawOpen(client, JSON.stringify(ref), { expectedContentId: info(ref).contentId, range }, await locate(signal), signal);
+  read.readMany = async (ranges, signal) => {
+    if (!ranges.length) return [];
+    const current = await locate(signal); const host = new URL(current.url).host;
+    const singles = async () => {
+      const results: ReadResult[] = [];
+      try { for (const range of ranges) results.push(await read(range, signal)); return results; }
+      catch (error) { await Promise.all(results.map(result => result.body.cancel().catch(() => {}))); throw error; }
+    };
+    // Preparation only combines two small metadata windows, never whole files.
+    if (ranges.length !== 2 || ranges.reduce((sum, range) => sum + range.end - range.start + 1, 0) > 16_384
+      || unsupportedMultiRange.get(client)?.has(host)) return singles();
+    for (const range of ranges) if (!Number.isSafeInteger(range.start) || !Number.isSafeInteger(range.end) || range.start < 0 || range.end < range.start || range.end >= ref.size) fail('not_supported', '无效的网易云音频范围。');
+    const response = await request(client, ref, ranges, current, signal);
+    const results = await multiRange(response, ref, ranges, signal === client.ctx.signal ? signal : AbortSignal.any([client.ctx.signal, signal]));
+    if (results) return results;
+    let unsupported = unsupportedMultiRange.get(client);
+    if (!unsupported) { unsupported = new Set(); unsupportedMultiRange.set(client, unsupported); }
+    unsupported.add(host); return singles();
+  };
+  return read;
 }

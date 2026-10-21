@@ -13,13 +13,16 @@ export async function buildNetease() {
   const metadata = await Bun.file(join(dependency, 'package.json')).json() as { version: string };
   if (metadata.version !== '4.32.0') throw new Error('Revalidate the pinned NetEase private SDK adapter before upgrading');
   const modules = { qrKey: 'login_qr_key', qrCheck: 'login_qr_check', status: 'login_status', refresh: 'login_refresh', userPlaylists: 'user_playlist',
-    playlist: 'playlist_detail', songs: 'song_detail', daily: 'recommend_songs', recommended: 'recommend_resource', playback: 'song_url_v1', lyric: 'lyric_new', album: 'album' };
+    playlist: 'playlist_detail', songs: 'api', daily: 'recommend_songs', recommended: 'recommend_resource', playback: 'song_url_v1', lyric: 'lyric_new', album: 'album' };
   const imports = [];
   for (const [name, file] of Object.entries(modules)) {
     const path = join(dependency, 'module', file + '.js');
     if (!await Bun.file(path).exists()) throw new Error(`Pinned NetEase SDK module disappeared: ${file}`);
-    imports.push(`import ${name} from ${JSON.stringify(path)};`);
+    imports.push(`import ${name === 'songs' ? 'songApi' : name} from ${JSON.stringify(path)};`);
   }
+  // The rich detail route returns album artists/date that v3 omits. Keep the
+  // original SDK's generic endpoint, option handling and encryption adapter.
+  imports.push(`const songs = (query, request) => songApi({ ...query, uri: '/api/song/detail/', data: { ids: JSON.stringify(String(query.ids).split(/\\s*,\\s*/)) }, crypto: 'weapi' }, request);`);
   imports.push(`import encrypt from ${JSON.stringify(join(dependency, 'util/crypto.js'))};`, `export { encrypt };`, `export const endpoints = { ${Object.keys(modules).join(', ')} };`);
   await Bun.write(join(directory, 'generated-upstream.mjs'), imports.join('\n') + '\n');
   await Bun.write(join(directory, 'LICENSE.txt'), await Bun.file('plugins/sample/LICENSE.txt').text());
@@ -40,6 +43,12 @@ export async function buildNetease() {
     const root = dirname(Bun.resolveSync(name, lookup));
     const info = await Bun.file(join(root, 'package.json')).json() as { version: string };
     dependencies.push([`${name} ${info.version}`, join(root, 'license')]); lookup = root;
+  }
+  lookup = resolve(directory);
+  for (const name of ['@remix-run/multipart-parser', '@remix-run/headers']) {
+    const root = dirname(Bun.resolveSync(`${name}/package.json`, lookup));
+    const info = await Bun.file(join(root, 'package.json')).json() as { version: string };
+    dependencies.push([`${name} ${info.version}`, join(root, 'LICENSE')]); lookup = root;
   }
   dependencies.push(['Zod 4.6.7', 'node_modules/zod/LICENSE'], ['Ajv 8.20.0', 'node_modules/ajv/LICENSE']);
   const licenses = [];
