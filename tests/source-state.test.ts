@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import type { Json, Outcome, Page, Root, SourcePlugin } from '@musicfs/plugin-api';
 import { createExtensions, parseManifest, type PluginRegistry } from '../src/core/extensions';
 import { createSources } from '../src/core/sources';
+import { createLibrary } from '../src/core/library';
 import { openSqlite } from '../src/infrastructure/persistence/sqlite';
 import manifest from '../plugins/sample/manifest.json';
 
@@ -81,6 +82,55 @@ test('a configuration validator can deliberately clear private state with null',
   module.validateConfig = async (_ctx, config) => ({ ok: true, value: config, nextPrivateState: null as Json });
   expect((await sources.configure(id, { label: 'after' }, signal())).ok).toBe(true);
   expect(db.capture(id)?.privateState).toBeNull();
+});
+
+test('equivalent normalized configuration and state preserve authentication, caches and a queued refresh', async () => {
+  let rootCalls = 0;
+  const { db, sources, id, module } = await setup(async ctx => {
+    rootCalls++;
+    expect(ctx.privateState).toEqual({ session: { token: 'fixture-token', expires: 123 } });
+    if (rootCalls === 1) await ctx.cache!.put('prepared', { content: 'fixture' });
+    else expect(await ctx.cache!.get('prepared')).toEqual({ content: 'fixture' });
+    return { ok: true, value: { items: [] } };
+  });
+  module.validateConfig = async () => ({ ok: true, value: { label: 'before', options: { cover: true, lyric: true } } });
+  await sources.configure(id, { label: ' BEFORE ' }, signal());
+  module.authenticate = async () => ({ ok: true, value: { kind: 'complete', accountName: 'Fixture' },
+    nextPrivateState: { session: { token: 'fixture-token', expires: 123 } } });
+  expect((await sources.authenticate(id, { kind: 'start' }, signal())).ok).toBe(true);
+  await sources.roots(id, signal());
+  const library = createLibrary(sources, db);
+  const refresh = await library.refreshes.start(id, { kind: 'directory' });
+  const before = db.capture(id)!; const configure = db.configure; let writes = 0;
+  db.configure = (...args) => { writes++; return configure(...args); };
+  module.validateConfig = async () => ({ ok: true, value: { options: { lyric: true, cover: true }, label: 'before' },
+    nextPrivateState: { session: { expires: 123, token: 'fixture-token' } } });
+  expect((await sources.configure(id, { label: 'before', options: { lyric: true, cover: true } }, signal())).ok).toBe(true);
+  expect(writes).toBe(0); expect(db.capture(id)).toEqual(before);
+  expect(await sources.authentication(id)).toMatchObject({ step: { kind: 'complete', accountName: 'Fixture' } });
+  expect((await library.refreshes.step(refresh.operationId, signal())).status).toBe('completed');
+  expect(rootCalls).toBe(2);
+});
+
+test('unchanged configuration with changed private state still commits and invalidates the source', async () => {
+  const { db, sources, id, module } = await setup(async () => ({ ok: true, value: { items: [] } }));
+  const before = db.capture(id)!;
+  module.validateConfig = async (_ctx, config) => ({ ok: true, value: config, nextPrivateState: { token: 'updated-test-token' } });
+  expect((await sources.configure(id, { label: 'before' }, signal())).ok).toBe(true);
+  expect(db.capture(id)).toMatchObject({ epoch: before.epoch + 1, stateRevision: before.stateRevision + 1,
+    config: before.config, privateState: { token: 'updated-test-token' } });
+});
+
+test('no-op save does not overwrite a credential renewed concurrently during validation', async () => {
+  const started = gate<void>(); const pending = gate<Outcome<Json>>(); let token = 'original';
+  const { db, sources, id, module } = await setup(async () => ({ ok: true, value: { items: [] }, nextPrivateState: { token } }));
+  await sources.roots(id, signal()); const before = db.capture(id)!;
+  module.validateConfig = async () => { started.resolve(); return pending.promise; };
+  const save = sources.configure(id, { label: 'before' }, signal()); await started.promise;
+  token = 'renewed'; await sources.roots(id, signal());
+  pending.resolve({ ok: true, value: { label: 'before' } });
+  expect((await save).ok).toBe(true);
+  expect(db.capture(id)).toMatchObject({ epoch: before.epoch, stateRevision: before.stateRevision + 1, privateState: { token: 'renewed' } });
 });
 
 test('an aborted call cannot publish state even if a plugin ignores cancellation', async () => {

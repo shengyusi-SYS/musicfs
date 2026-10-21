@@ -10,6 +10,7 @@
 
 - **发布目录视图**：`library/published-views`按来源戳、目录键、已发布snapshot.id复用规范化名称与Map索引，每次先核对持久header；使用固定[lru-cache 11.5.3](https://github.com/isaacs/node-lru-cache)管理最多32视图、8MiB估算权重与冷构建合并。超大目录仍能读取，只不留缓存；估算权重不是实际heap硬上限。
 - **实际路径效果**：4,000文件的正式Fetch DAV离线夹具，5次独立HEAD从10份完整快照/20,005条目降为冷起2份/4,001条目；随后的GET/Range不再追加整目录装载。换发布id重建，失败保留旧视图，来源戳变化仍检查；新controller可从持久数据恢复。
+- **等价配置保存**：sources比较插件规范化配置与最终私态，使用固定fast-deep-equal 3.1.3忽略对象键顺序；均等价则不写库、不推进epoch、不清认证/缓存或运行刷新。真实变化和logout保持原CAS失效机制，无额外store接口。41项相关状态/认证回归通过；实际本地workerd等价保存0次配置写入、变化保存1次。
 - **宿主生命周期复核**：桌面长存library已受益；生产Worker每次fetch原本新建library，跨HTTP复用还需单独接线，不能仅用同controller夹具宣称真Worker暖请求改善。正确性始终由D1与来源戳承担，进行中IO、waitUntil与请求signal的归属分别核对。
 
 ## 当前结果

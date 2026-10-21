@@ -1,4 +1,5 @@
 import type { AuthAction, AuthStep, Context, Json, Outcome, Page, Root, Entry, FileInfo, ReadRequest, ReadResult, SourcePlugin } from '@musicfs/plugin-api';
+import equal from 'fast-deep-equal';
 import { z } from 'zod';
 import type { PluginRegistry } from '../extensions';
 
@@ -194,7 +195,10 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
     },
     configure: (id: string, config: Json, signal: AbortSignal) =>
       execute(id, signal, (plugin, ctx) => plugin.validateConfig(ctx, config), {
-        commit: (snapshot, value, state) => store.configure(snapshot, value, state)
+        // Validation may normalize the submitted JSON. A true no-op neither writes old state back
+        // nor invalidates the current login, directory snapshots, cache, or running refresh.
+        commit: (snapshot, value, state) => equal(snapshot.config, value) && equal(snapshot.privateState, state)
+          ? true : store.configure(snapshot, value, state)
       }),
     async logout(id: string, signal: AbortSignal): Promise<void> {
       signal.throwIfAborted();
