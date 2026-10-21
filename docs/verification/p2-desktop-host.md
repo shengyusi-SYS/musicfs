@@ -113,3 +113,5 @@ bun scripts/probe-desktop-product.ts --directory dist/desktop/linux-x64 --mount 
 这证明短TTL导致重复目录工作，不等于复现Windows十多秒的全部成本。已有Windows VM的一次SSH连接超时，没有操作Windows宿主，也没有重复网络排障或平台请求。代码在Bun.spawn增加原生windowsHide；尚无新Windows窗口显示回执。
 
 本轮相称验证：挂载缓存配置/忙时保留/限定fs失效与旧记录兼容回归通过；SQLite/D1周期建队、旧快照直到完整发布、429复用、关闭/删除及schema10迁移通过；稳定音乐资料长期/有限期限与缺失结果短期重试通过。桌面真实服务在无管理页面状态下重启后执行到期更新，并在真正发布后通知挂载；三组TypeScript、依赖方向与Web构建通过。没有运行全量账号、格式、云端或崩溃矩阵。
+
+本轮dev.8完整交付已生成，五个归档/三个插件/版本清单的九项SHA256校验均通过；Windows/Linux均只在本轮交叉/本机编译，未为缓存参数重跑正式二进制冒烟或Windows全矩阵。构建基线`9c1a31b`，摘要`ef0cd654b6be72c653edc5420c5879ea61b765fc95d1b43a636d89b6d530ee63`，包内schema10/API0.1.9与双alpha.15一致。
