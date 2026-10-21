@@ -1,0 +1,114 @@
+{
+  "date": "2026-10-21",
+  "sourceRevision": "c542d6cf5b6122eb8f1771852dc9c0fde70bf3c0",
+  "environment": "WSL, Bun 1.4.3, production createDesktopService + real HTTP, app dev.5 / NetEase alpha.10 / schema9",
+  "scope": "one real NetEase liked playlist cold scan; no fixed playlist input, no warm full scan, no Cloudflare or Windows host",
+  "configuration": {
+    "mode": "single",
+    "quality": "standard",
+    "missingQuality": "hide"
+  },
+  "coldStart": {
+    "removed": {
+      "source_plugin_cache": 0,
+      "directory_snapshots": 6,
+      "library_snapshot_entries": 4697,
+      "library_refresh_cursors": 0,
+      "library_refresh_jobs": 13
+    },
+    "authenticationPreserved": true
+  },
+  "refresh": {
+    "status": "completed",
+    "wallSeconds": 778.202,
+    "observedWallMs": 778853,
+    "pages": 310,
+    "statistics": {
+      "tracks": 4159,
+      "files": 1915,
+      "hiddenTracks": 2244,
+      "missingVersions": 2244,
+      "fallbackVersions": 0,
+      "deduplicatedVersions": 0
+    },
+    "failureCount": 0
+  },
+  "source": {
+    "requests": 9266,
+    "byCategory": {
+      "user-playlists": 1,
+      "playlist": 2,
+      "playback": 43,
+      "album": 1675,
+      "lyrics": 1915,
+      "cover": 1762,
+      "audio-range": 3836,
+      "song-detail": 32
+    },
+    "http429": 0,
+    "transportFailures": {},
+    "temporaryWaitObservations": 29,
+    "headerAwaitSumMs": 669537
+  },
+  "managementResponseMs": {
+    "samples": 259,
+    "p50": 1.62,
+    "p95": 7.18,
+    "max": 25.65
+  },
+  "consumer": {
+    "realPlatform": true,
+    "rootMs": 265,
+    "publishedFiles": 1915,
+    "directoryStatistics": {
+      "tracks": 4159,
+      "files": 1915,
+      "hiddenTracks": 2244,
+      "missingVersions": 2244,
+      "fallbackVersions": 0,
+      "deduplicatedVersions": 0
+    },
+    "listingMs": 22.84,
+    "propfind": {
+      "status": 207,
+      "ms": 53.14,
+      "bytes": 1382985,
+      "resources": 1916,
+      "allPropertiesOk": true
+    },
+    "heads": [
+      {
+        "ms": 2.67,
+        "status": 200
+      },
+      {
+        "ms": 1.8,
+        "status": 200
+      }
+    ],
+    "tail": {
+      "status": 206,
+      "bytes": 1024,
+      "ms": 164.91,
+      "matchingEtag": true
+    },
+    "scope": "one real cold full scan, one directory allprop, two local HEAD and one 1KiB audio tail; no warm full scan"
+  },
+  "oneUnavailableSample": {
+    "scope": "one previously hidden real item, one native playback request, no audio download",
+    "responseCode": 200,
+    "itemReturned": true,
+    "nativeCode": 200,
+    "hasUrl": true,
+    "level": "standard",
+    "isTrial": true,
+    "hasSize": true
+  },
+  "limits": [
+    "One real journey, not a controlled old/new comparison or platform stress test.",
+    "Header waits overlap and omit response-body time; do not subtract their sum from wall time to estimate local CPU.",
+    "Zero HTTP429 does not exclude platform business-level throttling; temporary business failures were observed and bounded retries continued.",
+    "A stale offline QQ test occupied one CPU core during the first portion; it was identified and stopped without restarting this refresh.",
+    "1KiB tail validates Range and content identity, not full audio decode or Windows mounting."
+  ]
+}
