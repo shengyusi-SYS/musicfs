@@ -8,7 +8,7 @@
 
 正常退出旧后台，解压完整新版后启动。默认登录自启、自动挂载开启，手动启动打开页面，自启静默；均可在设置调整。首次桌面无需设密码，按需创建账号。公开 API0.1.9、音乐库 schema10、网易云 alpha.17 与 QQ alpha.16 不变，无需重装插件或刷新整库。桌面认证单独存储 auth.sqlite；部署 Worker 时应用新增 D1 迁移0011，现有云端本轮未升级。
 
-本地会话、自动恢复、监听切换和浏览器旅程已定向核对。Windows helper 为 WSL 交叉构建，VM 暂不可达；macOS 适配代码完成编译检查，但缺 Apple SDK，尚无新版可运行包；免费 Worker 密码 CPU 尚未实测。证据见[桌面访问核对](verification/desktop-access.md)。
+本地会话、自动恢复、监听切换和浏览器旅程已定向核对。正式 Windows 包已在现有 VM 通过托盘、当前用户自启注册及命令执行、自动挂载和管理登录的必要验收，测试后恢复原自启值并清理；macOS 适配代码完成编译检查，但缺 Apple SDK，尚无新版可运行包；免费 Worker 密码 CPU 尚未实测。证据见[桌面访问核对](verification/desktop-access.md)。
 
 ## dev.13 界面与目录整理
 

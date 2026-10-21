@@ -4,11 +4,11 @@
 
 ## 当前事实
 
-当前交付为 dev.14：桌面常驻、启动与自动挂载、账号密码及手机访问；Windows/Linux、离线 Worker、源码与作者包集中交付。API0.1.9、音乐库 schema10 和平台插件版本不变，Worker 新增认证迁移0011。证据来自隔离本地服务、workerd、浏览器及明确目标的构建；Windows 新增实机行为、macOS 原生产物与免费 CPU 仍未验。产物身份统一见[发行页](release.md)。
+当前交付为 dev.14：桌面常驻、启动与自动挂载、账号密码及手机访问；Windows/Linux、离线 Worker、源码与作者包集中交付。API0.1.9、音乐库 schema10 和平台插件版本不变，Worker 新增认证迁移0011。证据来自隔离本地服务、workerd、浏览器及明确目标的构建；Windows 已补齐托盘、自启注册命令、自动挂载和登录的必要实机证据；macOS 原生产物与免费 CPU 仍未验。产物身份统一见[发行页](release.md)。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
-| 桌面常驻与管理访问 | [本轮核对](verification/desktop-access.md) | 会话、自动恢复与监听的本地证据；新增系统集成的目标环境边界单列 |
+| 桌面常驻与管理访问 | [本轮核对](verification/desktop-access.md) | 本地会话、恢复与监听；Windows 正式包与用户协助菜单点击通过，其他目标环境边界单列 |
 | 界面与使用流程重构 | [真实页面走查](verification/ui-redesign.md)、[目录整理工作区](verification/directory-workspace.md) | 独立本地服务走查；源码与界面已进入 dev.13 发行归档 |
 | 局部性能优化 | [O2/O1/O3与应用场景核对](verification/performance-local-2026-10-22.md) | 正式模块、有界样本和Linux发行冒烟；未重测Windows或真实整库 |
 | 冷刷新与 SDK 请求减法 | [真实冷基线](verification/real-netease-cold-dev5.md)、[请求减法](verification/netease-cold-request-reduction.md)、[两阶段清单](verification/deferred-catalogue.md) | 完整清单、全库标签和全库入库是不同工作范围 |
@@ -51,8 +51,8 @@
 | FR07 | 音频读取 | 已实现 | 通过 | 双宿主已知字节的流式/HEAD/206/416/取消/忽略Range及真实来源MP3/M4A/FLAC证据齐全；真云两路代表HEAD/Range、QQ全文/挂载偏移和OpenList/mpv定位通过。其他OS启动/挂载归FR10—12/16，不重复字节合同 |
 | FR08 | 示例音质模式 | 已实现 | 通过 | 单/多模式、Schema表单与实例隔离已有本地/workerd真实证据；真云单M4A/单标准已验，现多目标QQ导出128k/M4A两个文件，网易云33个曲序各极高/标准两个文件，实际标签/扩展名及代表HEAD/Range通过 |
 | FR09 | WebDAV 与 OpenList | 已实现 | 通过 | 双宿主共用DAV、rclone真实完整/范围、Linux双来源MP3/M4A/FLAC的OpenList/mpv播放与双向seek已验；真云HTTPS挂载及代表OpenList/mpv定位通过。WSL Pulse限制和实际延迟保留；其他OS原生挂载仅归FR10—12/16 |
-| FR10 | 一键挂载 | 已实现 | 部分通过 | 正式启动器/页面/随包rclone已接线，Linux发行物真实FUSE全文/偏移读取通过；Windows VM正式程序/sample与实际WinFsp盘符读取已有[证据](verification/p2-windows-mount.md)，默认图形启动、macOS及原生Linux图形启动仍未验证 |
-| FR11 | 挂载管理 | 已实现 | 部分通过 | 并发合并/端口恢复回归通过；Linux实际就绪/忙时保留/关闭句柄后退出及两种活动恢复通过；Windows VM本机挂载、真实读取和正常卸载已验，忙路径/恢复与其他OS仍未验证 |
+| FR10 | 一键挂载 | 已实现 | 部分通过 | 正式启动器/页面/随包rclone已接线，Linux发行物真实FUSE全文/偏移读取通过；Windows VM正式程序/sample与实际WinFsp盘符读取已有[证据](verification/p2-windows-mount.md)，Windows默认图形启动和托盘另见[dev.14续验](verification/desktop-access.md#windows-vm-续验)，macOS及原生Linux图形启动仍未验证 |
+| FR11 | 挂载管理 | 已实现 | 部分通过 | 并发合并/端口恢复回归通过；Linux实际就绪/忙时保留/关闭句柄后退出及两种活动恢复通过；Windows VM本机挂载、真实读取、正常卸载与dev.14启动自动恢复已验；Windows忙路径/异常恢复与其他OS仍未验证 |
 | FR12 | 远程挂载 | 已实现 | 部分通过 | Linux页面连接独立HTTP服务并FUSE读取真实网易云MP3全文/前后偏移通过；WSL现成发行物经正式API/随包rclone挂载真实云端HTTPS DAV，QQ M4A头/尾/中定位与全文一致、正常卸载退出；其他系统本次跳过／未验证 |
 | FR13 | 刷新与失败 | 已实现 | 通过 | [实例/单目录刷新](verification/p1-instance-refresh.md)、失败保留/过期状态、取消/代际和实例隔离通过；workerd/D1、浏览器真实刷新、[42页恢复](verification/p2-durable-refresh.md)及真云每日/分类发布已验；目录独立失败持久展示、重建后保留、成功才清除通过。云CPU/免费预算仅归FR25，不重做交错全排列 |
 | FR14 | 基本访问控制 | 已实现 | 通过 | 独立读取/管理凭据、配置/认证私有状态过滤及越权拒绝通过；正式桌面生成/恢复凭据已有证据；真实Worker读取凭据被管理入口拒绝，Secrets在插件发布后保留 |

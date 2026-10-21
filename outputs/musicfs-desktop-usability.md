@@ -43,6 +43,6 @@ flowchart LR
 
 ## 交付边界
 
-Windows、Linux、macOS 共用行为及平台适配代码。当前 WSL 已构建 Linux/Windows 原生辅助程序；Linux 协议启动退出、Bun 及本地 workerd 登录接线和浏览器流程已有证据。macOS ARM64 仅完成编译检查，缺 Apple SDK，未生成新可运行包；Windows VM 暂不可达，托盘和登录自启实机证据未补齐。Linux 显示托盘依赖桌面提供 SNI 宿主。
+Windows、Linux、macOS 共用行为及平台适配代码。当前 WSL 已构建 Linux/Windows 原生辅助程序；Linux 协议启动退出、Bun 及本地 workerd 登录接线和浏览器流程已有证据。macOS ARM64 仅完成编译检查，缺 Apple SDK，未生成新可运行包；Windows 正式包已在现有 VM 完成[必要续验](../docs/verification/desktop-access.md#windows-vm-续验)，包括托盘、自启注册命令、自动挂载和管理登录。Linux 显示托盘依赖桌面提供 SNI 宿主。
 
 监听切换采用显式生命周期：释放旧监听、保留正在传输的响应，再绑定新范围；不依赖无法修改地址端口的 Bun server.reload。免费 Worker 的真实密码 CPU 仍未测量，不将本地原生 scrypt 通过等同于免费额度通过。
