@@ -2,7 +2,7 @@
 
 通过可安装的数据源插件，把音乐服务或音频来源呈现为只读音乐目录，以 WebDAV 接入播放器和 OpenList，并由桌面内置 rclone 挂载。Windows、Linux、macOS 桌面与 Cloudflare Worker 共用核心和 WebUI，独立部署。
 
-当前交付为`0.1.0-dev.8`开发预览，包含 API 0.1.9、schema 10、分层缓存配置和可选目录定时更新，以及网易云 MP3/FLAC/M4A 的按需补标签读取：刷新清单后即可挂载，读取时只准备所选歌曲。发行文件按版本放在`dist/releases/<版本号>/`；使用方式与已接受的格式、填充空间限制见[交付说明](docs/release.md)。来源认证、分类和音质归插件，核心管理插件、实例、布局和文件访问。
+Windows 最新更新为 `0.1.0-dev.11` 开发预览，增加直接 DAV 的共享片段缓存，并保留 App 挂载自身缓存；其他目标按各自已生成版本交付。现行代码包含分层缓存、可选目录定时更新，以及网易云 MP3/FLAC/M4A 的按需补标签：刷新清单后即可挂载，读取时只准备所选歌曲。实际版本、升级方式和限制见[交付说明](docs/release.md)，文件按 `dist/releases/<版本号>/` 保存。来源认证、分类和音质归插件，核心管理插件、实例、布局和文件访问。
 
 | 阅读目的 | 入口 |
 |---|---|
@@ -14,6 +14,7 @@
 | 理解插件公开 Interface | [插件合同草案](docs/architecture/plugin-interface.md) |
 | 查看架构与流程图 | [图表](docs/architecture/diagrams.md) |
 | 了解当前和后续工作 | [实施计划](outputs/musicfs-implementation-plan.md) |
+| 复用近期工程经验与教训 | [MusicFS 工程经验](docs/engineering-lessons.md) |
 | 查找决策、调研与历史资料 | [文档索引](docs/README.md) |
 | 连接 OpenList 与播放器 | [客户端说明](docs/clients.md) |
 | 运行开发检查与 P0 探针 | [开发说明](docs/development.md) |

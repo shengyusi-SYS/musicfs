@@ -1,6 +1,6 @@
 # MusicFS 开发与验证
 
-当前已有开发 alpha：插件、实例、目录、DAV、共用页面、QQ 与网易云实际来源，正式桌面启动/挂载及 Worker 后台发布也已接线；完整双宿主验收仍在推进。主线和验收见[目标](codex-goal.md)与[台账](verification.md)；下面的命令用于开发验证，不是普通用户必须操作的 CLI。
+工程包含共用核心、页面、两种宿主和独立来源插件。执行标准见[目标](codex-goal.md)，进展与已有证据见[台账](verification.md)，长期结论见[工程经验](engineering-lessons.md)。下面列出可选开发入口，不要求每次变更执行全部探针；纯文档整理不重跑产品或真实来源验证。
 
 ## 环境与入口
 
@@ -43,6 +43,8 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun run probe:worker:authentication` | 同一正式管理路由在本地 workerd/D1 验证认证恢复、实例隔离、输入失败和真实延迟上游在取消后的旧结果拒绝 |
 | `bun run fetch:rclone:linux` | 从官方地址取得固定 Linux 探针版本并核对已固定 SHA-256，仅写入 dist/tools，需要网络 |
 | `bun scripts/probe-mount-cache.ts` | WSL/Linux原生FUSE的4k离线目录首次/立即/跨旧5秒边界重进；也验证手动保留/刷新后看到新条目，不读真实平台 |
+| `bun scripts/probe-playback-cost.ts` | 有效生成音频、实际网易云打包SDK及本机挂载，比较预读策略的来源请求和读取等待；不是平台限流或真实音质测试 |
+| `bun scripts/probe-shared-dav-cache.ts` | 正式桌面共享读取Module、生成音频及FFprobe，验证同范围/重叠复用、更新身份、取消、重建与清理；需回环监听 |
 | `bun run probe:rclone` | 已核验 rclone 经临时真实 HTTP 服务列目录、完整/随机读取；可用 MUSICFS_RCLONE 指定其他已验证二进制 |
 
 `dev:service` 需要开发者显式设置 `MUSICFS_ADMIN_TOKEN` 和 `MUSICFS_DAV_PASSWORD`，开发 DAV 用户名为 `musicfs`；不能把测试凭据当作发行默认值。构建前端后可直接打开 8787 服务，或用 Vite 开发；页面手动输入管理令牌，也可由启动入口经 fragment 传入并立即移除。[正式桌面启动器](desktop.md)另行生成私有凭据、持有后台并管理挂载；开发服务不装配本机挂载或退出接口。
@@ -125,11 +127,12 @@ bun scripts/probe-player.ts --url-file /tmp/selected-audio-url.txt --output /tmp
 | SQLite / D1 Adapter | [SQLite](../src/infrastructure/persistence/sqlite.ts)、[D1](../src/infrastructure/persistence/d1.ts) |
 | 桌面不可变外置模块 / Worker 注册集合 | [desktop](../src/hosts/desktop/plugins.ts)、[worker](../src/hosts/worker/plugins.ts) |
 | 正式桌面启动 / rclone 挂载 | [launcher](../src/hosts/desktop/launcher.ts)、[mounts](../src/hosts/desktop/mounts.ts)、[说明](desktop.md) |
+| 桌面直接DAV共享片段 | [read-cache](../src/hosts/desktop/read-cache.ts)、[合同](../src/contracts/read-cache.ts)、[设计](architecture/shared-read-cache.md) |
 | Worker 正式入口 / 持久发布 | [service](../src/hosts/worker/service.ts)、[changes](../src/hosts/worker/changes.ts)、[publisher](../src/hosts/worker/publisher.ts)、[说明](worker.md) |
 | QQ 来源认证、目录和音频 | [QQ 插件说明](../plugins/qq/README.md) |
 | 网易云来源认证、目录和音频 | [网易云插件说明](../plugins/netease/README.md) |
 | 无账号、歌单或音质设置的来源 | [sample](../plugins/sample/index.ts) |
 
-安装器已实现配置/私有状态schema候选转换和全部实例整体激活，失败保留当前安装；QQ私有状态v1→v2复用同一机制。桌面仍保留不可变修订文件，后续补齐必要回收。按需续期协调已本地验证，真实来源自然到期/重登、云端和目标系统仍按[台账](verification.md)收口。SQLite 使用七份顺序迁移，D1 正式模板和探针按文件名应用相同 SQL；不要修改已应用的历史迁移来补新字段。
+安装器支持配置/私有状态候选转换和全部实例整体激活，失败保留当前安装；QQ状态转换复用同一机制。SQLite与D1按文件名应用相同的顺序迁移，具体集合以仓库迁移目录为准；不要修改已应用的历史迁移来补新字段。真实会话、云端和目标系统的覆盖只按[台账](verification.md)判断，不把构建或机制测试当作实际环境通过。
 
 变更后的检查以实际职责为准；本地 Worker、真实 Cloudflare、桌面二进制和目标系统挂载分别记录证据，不相互替代。结果见[插件基础](verification/p0-plugin-foundation.md)及[目录/DAV/管理链路](verification/p0-library-dav.md)。

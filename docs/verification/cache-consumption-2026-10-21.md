@@ -1,6 +1,6 @@
 # 缓存消费路径与播放成本
 
-日期：2026-10-21。当前实现dev.10，API0.1.9/schema10，示例插件alpha.15。仅使用生成的有效MP3、回环HTTP及现有工具；不访问音乐平台，不操作Windows宿主。对应[缓存规划A—F](../../outputs/musicfs-cache-optimization-plan.md)。
+日期：2026-10-21。历史检查点dev.9—dev.10，API0.1.9/schema10，示例插件alpha.15。仅使用生成的有效MP3、回环HTTP及现有工具；不访问音乐平台，不操作Windows宿主。A—F为当时任务代号；当前选择见[缓存决定](../../outputs/musicfs-cache-optimization-plan.md)，后续直接DAV共享缓存见[dev.11证据](shared-read-cache.md)。下文不改写为新版本运行结果。
 
 ## B：扫描预读与播放成本的取舍
 

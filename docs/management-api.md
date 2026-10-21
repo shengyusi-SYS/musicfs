@@ -20,12 +20,15 @@
 | `POST /api/instances` | `{pluginId,name,config}`，由插件校验后创建 |
 | `PUT /api/instances/:id/config` | `{config}`，校验并条件更新，旧调用失效 |
 | `DELETE /api/instances/:id` | 删除实例配置/私有状态及快照，保留其他实例 |
+| `DELETE /api/instances/:id/session` | 退出该实例授权，保留配置/布局并使旧调用失效；返回204 |
 | `GET /api/instances/:id/authentication` | 当前公开认证 `{operationId,step,error?}`，没有操作时为 null；不返回私有状态或内部来源戳 |
 | `POST /api/instances/:id/authentication` | start；poll/submit 带 operationId 与 challengeId，submit 另带 input；cancel 只带 operationId。成功返回公开结果，过期操作/挑战返回 409 |
 | `GET /api/instances/:id/roots` | 完整分页后的内容源；使用当前有效快照 |
 | `GET /api/instances/:id/directory-status?directoryRef=...` | 当前有效目录最近成功的 `{completedAt,statistics,error}`；error为最近失败代码或null，未读取或代际已失效时为null；只读快照，不请求来源 |
 | `GET /api/library/directory?path=...` | 已发布路径的 `{entries,status}`，status为同一目录的DirectoryStatus，虚拟分组/实例容器为null；供目录浏览器显示保留的旧内容，不暴露来源引用 |
-| `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例内容；`{directoryRef}` 刷新指定目录；兼容 `{}` 仅刷新内容入口。返回 202 + RefreshView，替换旧活动操作 |
+| `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例；`{directoryRef}` 刷新指定目录；`{scope:"file-info",directoryRef}` 准备准确文件属性；兼容 `{}` 仅刷新内容入口。返回202 + RefreshView，替换旧活动操作 |
+| `GET /api/instances/:id/refresh-policy?directoryRef=...` | 指定目录的周期策略；省略directoryRef为实例内容入口 |
+| `PUT /api/instances/:id/refresh-policy?directoryRef=...` | `{intervalMinutes}`：0为手动，否则至少15分钟；只安排到期任务，复用原刷新/旧快照 |
 | `GET /api/instances/:id/refresh` | 当前/最近一次 RefreshView，无记录时为 null；只查询，不推进 |
 | `GET /api/refreshes/:operationId` | 查询同一操作的公开进度，不存在返回 404；不推进 |
 | `POST /api/refreshes/:operationId/step` | 至多执行一页插件读取并保存检查点，返回 200 + RefreshView；其他请求持租约时只返回已有进度 |
@@ -34,9 +37,28 @@
 | `PUT /api/layout` | `{expectedRevision,nodes}`；冲突返回 409，节点合同见 library 类型 |
 | `GET /api/library?path=...` | 导出视图中的有序浅目录；文件元数据在实际 stat/读取时准备 |
 | `GET /api/mounts` | 正式桌面启动器装配的本机挂载状态；开发服务和 Worker 不提供 |
-| `POST /api/mounts` | `{name?,mountPoint,source}`；source 为 `{kind:"local"}` 或 `{kind:"remote",url,username,password}`。结果必须查看 state，错误状态不表示挂载成功 |
-| `DELETE /api/mounts/:id` | 正常卸载指定挂载；占用失败保留可操作状态 |
-| `POST /api/desktop/quit` | 仅正式桌面后台，正常卸载后返回 202 `{stopping:true}`，随后结束在途读取并退出；挂载占用返回 409 并继续运行 |
+| `POST /api/mounts` | `{name?,mountPoint,source,directoryCacheSeconds?,fileCacheMaxMiB?,fileCacheMaxAgeHours?}`；source 为本机或带url/username/password的远程输入。须查看结果state，错误状态不表示挂载成功 |
+| `POST /api/mounts/:id/mount` | 按保存的私有输入重新挂载，返回MountView |
+| `POST /api/mounts/:id/unmount` | 正常卸载，保留定义与已读片段，返回MountView |
+| `DELETE /api/mounts/:id` | 正常卸载后移除定义及其缓存命名空间；占用失败保留可操作状态，成功204 |
+| `GET /api/mounts/:id/cache` | 实际VFS模式、原生路径、文件数/占用及采样时间；统计可滞后，未运行不启动原生进程 |
+| `PUT /api/mounts/:id/cache` | `{directoryCacheSeconds,fileCacheMaxMiB?,fileCacheMaxAgeHours?}`，保存并正常重挂；占用失败保留旧设置 |
+| `POST /api/mounts/:id/cache/refresh` | 仅失效该挂载的目录清单，204；不刷新平台或删除音频片段 |
+| `DELETE /api/mounts/:id/cache` | 正常卸载、清除所选挂载片段及索引、按原设置重挂；失败不清理 |
+| `GET /api/desktop/read-cache` | 直接DAV共享缓存的settings、actualMode、state、路径、原生采样与说明 |
+| `PUT /api/desktop/read-cache` | `{maxMiB,maxAgeHours}`，共享读取空闲时保存；容量0关闭新缓存，期限0关闭时间淘汰，保留旧片段 |
+| `DELETE /api/desktop/read-cache` | 空闲时停止所属共享VFS并清理其片段/索引，返回状态；下次读取懒启动，不影响标签计划或挂载缓存 |
+| `GET /api/desktop/network`、`PUT /api/desktop/network` | 查询当前/待应用监听配置；保存`{access,port}`后正常重启生效，access为local或lan |
+| `GET /api/desktop/mount-prerequisites` | 检测本机挂载组件及安装状态 |
+| `POST /api/desktop/mount-prerequisites/install` | Windows运行随包WinFsp安装器并核对结果，必要时请求系统权限 |
+| `GET /api/desktop/https` | 本机HTTPS与Windows连接设置状态 |
+| `POST /api/desktop/https/enable` | 启用专用回环HTTPS DAV，保留证书和端口供重启复用 |
+| `POST /api/desktop/https/trust` | 按需应用Windows信任、WebClient及原生文件上限；保存原值，必要时提权/重连 |
+| `DELETE /api/desktop/https/file-size-limit` | 显式恢复本App改动前的文件上限；保留HTTPS与来源授权 |
+| `DELETE /api/desktop/https` | 停用本机HTTPS，不自动恢复全局文件上限 |
+| `POST /api/desktop/quit` | 退出准备拒绝新增直接读取，正常卸载后返回202 `{stopping:true}`，随后关服务与后台；占用返回409并恢复可操作状态 |
+
+挂载与桌面路由仅在相应正式桌面能力装配后提供，Worker不提供。缓存查询只取原生状态，不启动未用服务；配置容量不等于实际占用。0的含义随字段而异：目录期限0为手动失效、文件容量0为关闭新缓存、文件期限0为不按时间淘汰。默认值与所有权见[缓存策略](architecture/cache-policy.md)，JSON类型以[mounts](../src/contracts/mounts.ts)、[read-cache](../src/contracts/read-cache.ts)及[desktop](../src/contracts/desktop.ts)为准。
 
 `PluginInspection`包含manifest、revision和compatibility（host、apiVersion、apiCompatible、hostCompatible）。结构有效但API或宿主不兼容也返回200，以便安装前说明；坏包仍返回422。检查只读、不执行插件代码，不代表运行已通过；安装继续使用同一规则重新校验。发布地址安装会重新下载，不持有检查缓存或临时上传任务。
 

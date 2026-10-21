@@ -44,29 +44,8 @@ Windows 的 `*` 表示由 rclone 分配盘符，后台保存其返回的实际�
 
 ## 模块与生命周期
 
-```mermaid
-sequenceDiagram
-    participant Click as 桌面启动器
-    participant Background as 独占后台
-    participant Browser as 共用 WebUI
-    participant RC as 随包 rclone RC
-    Click->>Background: 已有凭据 + 实例身份校验
-    alt 已有后台
-        Click->>Browser: 打开已有入口
-    else 尚未运行
-        Click->>Background: 启动独立进程
-        Background->>Background: proper-lockfile 独占与随机凭据
-        Click->>Browser: 就绪后打开入口
-    end
-    Browser->>Background: 挂载本地或远程 DAV
-    Background->>RC: 私有认证的 RC 配置与挂载
-    RC-->>Background: 实际挂载点
-    Background->>Background: 核对 RC 状态与根目录可读
-    Background-->>Browser: 挂载状态
-    Browser->>Background: 正常卸载 / 退出
-    Background->>RC: 正常卸载并确认
-    Background->>Background: 全部成功后关闭服务和释放锁
-```
+启动、后台复用及退出顺序统一见[桌面生命周期图](architecture/diagrams.md#当前桌面生命周期)。挂载和直接DAV共享缓存复用同一受管理RC进程，进程关闭由装配层协调；正常卸载后再停共享服务，未使用的缓存功能不会为退出而启动原生进程。
+
 
 `src/contracts/mounts.ts` 是管理边界的 JSON 合同；返回状态不含连接密码。`mounts.ts` 保存私有定义、串行协调同一路径操作和正常卸载；`rclone-control.ts` 复用真实 RC 进程、校验控制端身份与私有运行记录。进程中断后只依据认证成功且 PID 相符的 RC 握手复用实例，不依据磁盘里的 PID 杀进程。挂载定义保留，未运行的挂载不在启动时自动恢复。
 
@@ -106,7 +85,7 @@ bun scripts/probe-desktop-product.ts --mount --crash-recovery
 bun src/desktop.ts --resources dist/desktop/linux-x64/resources
 ```
 
-`--data /tmp/musicfs-desktop-test` 可选择独立测试数据，`--no-open` 避免自动打开浏览器，`--background` 是启动器内部的后台模式。诊断时保留数据目录；不要将含凭据的文件贴入问题记录。后台的 `POST /api/desktop/quit` 需要管理凭据，忙挂载返回409并继续运行；正常卸载后返回202，随后结束在途请求并退出。
+`--data /tmp/musicfs-desktop-test` 可选择独立测试数据，`--no-open` 避免自动打开浏览器，`--background` 是启动器内部的后台模式。诊断时保留数据目录；不要将含凭据的文件贴入问题记录。后台的 `POST /api/desktop/quit` 需要管理凭据，忙挂载返回409并继续运行；退出准备先停止新增直接读取，正常卸载后返回202，随后关闭共享服务、RC和后台。
 
 ## 证据边界
 
@@ -116,4 +95,4 @@ bun src/desktop.ts --resources dist/desktop/linux-x64/resources
 
 实际浏览器验证了远程表单、两种挂载状态、失败保留表单，以及退出流程：真实打开文件时拒绝正常卸载并保持后台，关闭句柄后可正常退出。真实忙卸载还发现rclone错误含fusermount名称，原映射误报缺依赖；已优先识别busy，并让页面按具体错误显示而非把所有409都提示重新载入。最终原生探针对此作实际回归。
 
-此前“缺少/dev/fuse”的判断来自受限环境视图；允许本地进程的宿主实际具备FUSE，已补做上述挂载。2026-10-21补做Windows VM的正式程序/sample旅程，修复盘符被改写及Bun根目录读取路径，实际WinFsp挂载、16,044字节读取与正常卸载通过。另以已有HTTPS Worker的sample完成Windows原生目录映射和正常断开；本机HTTP原生映射仍未通过，保持默认认证策略。默认图形打开、平台弹窗和Windows异常退出恢复未验，macOS仍只有交叉编译产物。限定证据见[Windows记录](verification/p2-windows-mount.md)、[桌面记录](verification/p2-desktop-host.md)和[总台账](verification.md)。
+此前“缺少/dev/fuse”的判断来自受限环境视图；允许本地进程的宿主实际具备FUSE，已补做上述挂载。2026-10-21补做Windows VM的正式程序/sample旅程，修复盘符被改写及Bun根目录读取路径，实际WinFsp挂载、16,044字节读取与正常卸载通过。初轮以已有HTTPS Worker的sample完成原生映射；后续本机自签名HTTPS、跨原生文件上限读取和原值恢复另有正式版本记录。本机HTTP原生映射未通过，保持默认认证策略。默认图形打开、平台弹窗和Windows异常退出恢复未验，macOS仍只有交叉编译产物。限定证据见[Windows记录](verification/p2-windows-mount.md)、[桌面记录](verification/p2-desktop-host.md)和[总台账](verification.md)。
