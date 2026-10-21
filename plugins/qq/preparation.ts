@@ -75,7 +75,8 @@ export async function preparePage(client: QqClient, songs: Song[], offset: numbe
                 if (!pending) {
                   cold++;
                   pending = (async () => {
-                    const material = await musicTags(client, item.song);
+                    const material = await musicTags(client, item.song,
+                      chunk.length === 1 && !client.ctx.workBudget && policy.concurrency >= 2 ? 2 : 1);
                     const variant = candidate.variant;
                     return tagFile(client, decodeFile(variant.fileRef), variant.info,
                       MUSIC_FILE_TYPES[variant.quality].extension.slice(1) as AudioFormat, material.tags,

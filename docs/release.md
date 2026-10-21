@@ -1,5 +1,11 @@
 # MusicFS 当前交付物
 
+## 源码与独立插件更新
+
+2026-10-22：源码完成无变化挂载状态写盘减法、桌面32MiB目录索引预算与紧凑保留、单曲资料等待优化；API0.1.9/schema10不变。独立开发插件已构建：[网易云 alpha.16](../dist/netease/org.musicfs.netease.zip)、[QQ alpha.16](../dist/plugins/org.musicfs.qq.zip)。[离线核对及边界](verification/performance-local-2026-10-22.md)
+
+本轮未重打桌面发行包或部署云端。以下dev.11及更早归档保持原构建身份；仅更新插件不会让旧桌面程序获得本轮核心和挂载页面改动。
+
 ## dev.11 直接WebDAV共享读取缓存
 
 应用`0.1.0-dev.11`，API0.1.9/schema10及插件alpha.15保持。桌面直接DAV新增rclone服务端VFS稀疏缓存，默认16GiB软上限/7天，可查询实际状态、配置或清理；App本机挂载走内部直读，避免同次读取重复落盘，批量元数据路径保留。已有挂载的8GiB设置不自动更改，正常重新挂载即可采用内部路径，无需重装插件或刷新整库。

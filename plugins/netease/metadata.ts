@@ -66,7 +66,7 @@ async function cover(client: NeteaseClient, url: string): Promise<{ picture: Aud
 }
 
 /** Source album positions describe the recording; catalogue occurrence indices never enter tags. */
-export async function musicTags(client: NeteaseClient, song: Record<string, unknown>): Promise<{ tags: AudioTags; expiresAt: number | null }> {
+export async function musicTags(client: NeteaseClient, song: Record<string, unknown>, concurrency: 1 | 2 = 1): Promise<{ tags: AudioTags; expiresAt: number | null }> {
   const songId = String(song.id); const originalAlbum = object(song.al ?? song.album);
   const albumId = positive(originalAlbum.id);
   const albumAsset = albumId === undefined ? { value: originalAlbum as Json, expiresAt: metadataCacheExpiry(client.ctx.config) } : await cached(client, `album:${albumId}`, async () => {
@@ -76,20 +76,31 @@ export async function musicTags(client: NeteaseClient, song: Record<string, unkn
     catch (error) { if (error instanceof NeteaseFailure && error.fault.kind === 'not_found') return null; throw error; }
   });
   const album = { ...originalAlbum, ...object(albumAsset.value) };
-  const lyricAsset = await cached(client, `lyrics:${songId}`, async () => {
+  const readLyrics = () => cached(client, `lyrics:${songId}`, async () => {
     let result: Record<string, unknown>;
     try { result = await client.call(endpoints.lyric, { id: songId }); }
     catch (error) { if (error instanceof NeteaseFailure && error.fault.kind === 'not_found') return {}; throw error; }
     const original = text(object(result.lrc).lyric); const translation = text(object(result.tlyric).lyric); const romanization = text(object(result.romalrc).lyric);
     return { ...(original ? { original } : {}), ...(translation ? { translation } : {}), ...(romanization ? { romanization } : {}) };
   });
+  const coverUrl = text(originalAlbum.picUrl) ?? text(album.picUrl);
+  const readPicture = () => coverUrl ? cover(client, coverUrl) : Promise.resolve(undefined);
+  let lyricAsset: Asset; let picture: Awaited<ReturnType<typeof cover>> | undefined;
+  if (concurrency === 1) { lyricAsset = await readLyrics(); picture = await readPicture(); }
+  else {
+    // The caller reserves two slots only for a single-file operation, never on top of a file batch.
+    // Drain both assets before returning, including failures, so no work outlives this invocation.
+    const [lyrics, image] = await Promise.allSettled([readLyrics(), readPicture()]);
+    if (image.status === 'rejected' && image.reason instanceof NeteaseFailure && image.reason.fault.kind === 'rate_limited') throw image.reason;
+    if (lyrics.status === 'rejected') throw lyrics.reason;
+    if (image.status === 'rejected') throw image.reason;
+    lyricAsset = lyrics.value; picture = image.value;
+  }
   const lyric = object(lyricAsset.value);
   const title = text(song.name); const artists = names(song.ar ?? song.artists); const albumName = text(originalAlbum.name) ?? text(album.name);
   const albumArtists = names(album.artists ?? (album.artist ? [album.artist] : undefined));
   const released = date(album.publishTime) ?? date(song.publishTime);
   const track = positive(song.no); const total = positive(album.size); const disc = positive(song.cd);
-  const coverUrl = text(originalAlbum.picUrl) ?? text(album.picUrl);
-  const picture = coverUrl ? await cover(client, coverUrl) : undefined;
   return { expiresAt: earliestExpiry(albumAsset.expiresAt, lyricAsset.expiresAt, picture?.expiresAt),
     tags: { ...(title ? { title } : {}), ...(artists.length ? { artists } : {}), ...(albumName ? { album: albumName } : {}),
     ...(albumArtists.length ? { albumArtists } : {}), ...(released ? { date: released } : {}),

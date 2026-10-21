@@ -4,10 +4,11 @@
 
 ## 当前事实
 
-Windows 最新更新为 dev.11，直接 DAV 共享读取已完成正式模块和目标包的限定验证；API0.1.9/schema10 与示例 alpha.15 不变。其他目标、历史云端部署和旧格式样本按各自记录判断，不因新 Windows 包生成就视为已同步升级。实际产物只查[发行页](release.md)。
+Windows 最新发行包仍为 dev.11，直接 DAV 共享读取已完成正式模块和目标包的限定验证。本轮源码完成挂载状态、大目录索引和单曲资料调度优化，独立示例插件为 alpha.16；API0.1.9/schema10不变。未重打桌面包或部署云端，历史证据按各自版本判断。实际产物只查[发行页](release.md)。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
+| 局部性能优化 | [O2/O1/O3离线核对](verification/performance-local-2026-10-22.md) | 正式模块、有限合成样本；未重新验证Windows或真实整库 |
 | 冷刷新与 SDK 请求减法 | [真实冷基线](verification/real-netease-cold-dev5.md)、[请求减法](verification/netease-cold-request-reduction.md)、[两阶段清单](verification/deferred-catalogue.md) | 完整清单、全库标签和全库入库是不同工作范围 |
 | 真正按需挂载与格式 | [Windows / WSL 可行性及生产接线](verification/lazy-mount-feasibility.md) | MP3/FLAC/M4A 的具体预留方案；APE 与容器/播放器限制分别记录 |
 | 挂载缓存与播放成本 | [dev.9—dev.10 消费记录](verification/cache-consumption-2026-10-21.md) | WSL/FUSE、有效生成音频、Windows Shell/FileStream；非真实整库 GUI 计时 |

@@ -68,7 +68,7 @@ async function cover(client: QqClient, albumId: string, url: string): Promise<{ 
   const saved = object(asset.value); return { picture: { mimeType: String(saved.mimeType), data: decode(String(saved.base64)) }, expiresAt: asset.expiresAt };
 }
 
-export async function musicTags(client: QqClient, source: Record<string, unknown>): Promise<{ tags: AudioTags; expiresAt: number | null }> {
+export async function musicTags(client: QqClient, source: Record<string, unknown>, concurrency: 1 | 2 = 1): Promise<{ tags: AudioTags; expiresAt: number | null }> {
   const mid = String(source.mid);
   const sourceAlbum = object(source.album);
   const complete = source.index_album !== undefined && source.index_cd !== undefined && sourceAlbum.mid && sourceAlbum.name;
@@ -88,7 +88,7 @@ export async function musicTags(client: QqClient, source: Record<string, unknown
     const result = await legacy(client, '/v8/fcg-bin/fcg_v8_album_info_cp.fcg', { albummid: albumMid }); return object(result.data) as Json;
   }) : { value: originalAlbum as Json, expiresAt: detailAsset.expiresAt };
   const album = object(albumAsset.value);
-  const lyricAsset = await cached(client, `lyrics:${mid}`, async () => {
+  const readLyrics = () => cached(client, `lyrics:${mid}`, async () => {
     const result = await legacy(client, '/lyric/fcgi-bin/fcg_query_lyric_new.fcg', { songmid: mid, nobase64: '1' });
     const original = text(result.lyric); let translation = text(result.trans); const romanization = text(result.roma);
     if (!translation || !romanization) {
@@ -100,12 +100,22 @@ export async function musicTags(client: QqClient, source: Record<string, unknown
     }
     return { ...(original ? { original } : {}), ...(translation ? { translation } : {}), ...(romanization ? { romanization } : {}) };
   });
+  const coverUrl = text(originalAlbum.picUrl) ?? text(album.picUrl) ?? (albumMid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumMid}.jpg?max_age=2592000` : undefined);
+  const readPicture = () => coverUrl ? cover(client, albumMid ?? mid, coverUrl) : Promise.resolve(undefined);
+  let lyricAsset: Asset; let picture: Awaited<ReturnType<typeof cover>> | undefined;
+  if (concurrency === 1) { lyricAsset = await readLyrics(); picture = await readPicture(); }
+  else {
+    // A single occurrence may use the existing two slots; multi-occurrence batches remain serial here.
+    const [lyrics, image] = await Promise.allSettled([readLyrics(), readPicture()]);
+    if (image.status === 'rejected' && image.reason instanceof QqFailure && image.reason.fault.kind === 'rate_limited') throw image.reason;
+    if (lyrics.status === 'rejected') throw lyrics.reason;
+    if (image.status === 'rejected') throw image.reason;
+    lyricAsset = lyrics.value; picture = image.value;
+  }
   const lyrics = object(lyricAsset.value);
   const title = text(detail.title ?? detail.name); const artists = names(detail.singer); const albumName = text(originalAlbum.name) ?? text(album.name);
   const albumArtists = names(album.singer ?? album.singers ?? (text(album.singername) ? [{ name: album.singername }] : undefined)); const released = text(album.aDate ?? album.date ?? originalAlbum.time_public ?? detail.time_public);
   const track = positive(detail.index_album); const disc = positive(detail.index_cd); const total = positive(album.total);
-  const coverUrl = text(originalAlbum.picUrl) ?? text(album.picUrl) ?? (albumMid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumMid}.jpg?max_age=2592000` : undefined);
-  const picture = coverUrl ? await cover(client, albumMid ?? mid, coverUrl) : undefined;
   return { expiresAt: earliestExpiry(detailAsset.expiresAt, albumAsset.expiresAt, lyricAsset.expiresAt, picture?.expiresAt),
     tags: { ...(title ? { title } : {}), ...(artists.length ? { artists } : {}), ...(albumName ? { album: albumName } : {}),
     ...(albumArtists.length ? { albumArtists } : {}), ...(released ? { date: released } : {}), ...(track ? { track: { number: track, ...(total ? { total } : {}) } } : {}),

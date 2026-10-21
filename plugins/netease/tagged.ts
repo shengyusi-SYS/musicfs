@@ -83,8 +83,9 @@ export function reservedFile(source: MediaReference, key: string, generation: { 
   return { fileRef: JSON.stringify(ref), info: reservedInfo(ref) };
 }
 /** Small index is written after the permanent plan; hits never load/parse embedded artwork. */
-export async function prepareSongFile(client: NeteaseClient, key: string, source: MediaReference, sourceInfo: FileInfo, song: Record<string, unknown>, readRange: ReadRange): Promise<PreparedFile> {
-  const material = await musicTags(client, song);
+export async function prepareSongFile(client: NeteaseClient, key: string, source: MediaReference, sourceInfo: FileInfo, song: Record<string, unknown>, readRange: ReadRange,
+  metadataConcurrency: 1 | 2 = 1): Promise<PreparedFile> {
+  const material = await musicTags(client, song, metadataConcurrency);
   return tagFile(client, source, sourceInfo, source.type as AudioFormat, material.tags, readRange, { key, expiresAt: material.expiresAt });
 }
 
@@ -97,7 +98,7 @@ async function ensurePrepared(client: NeteaseClient, ref: Extract<Reference, { v
   if (ready) return ready as unknown as PreparedFile;
   const song = await cache.get(ref.descriptorKey);
   if (!song) fail('temporary', '网易云补标签歌曲资料已丢失，请重新刷新目录。');
-  return prepareSongFile(client, key, ref.source, info(ref.source), song as Record<string, unknown>, readRange);
+  return prepareSongFile(client, key, ref.source, info(ref.source), song as Record<string, unknown>, readRange, client.ctx.workBudget ? 1 : 2);
 }
 
 type ReservedPlan = { plan: StoredPlan; expiresAt: number | null };
@@ -113,7 +114,7 @@ async function reservedPlan(client: NeteaseClient, ref: ReservedReference, readR
   if (ready && JSON.parse(ready.fileRef).version === 2) fail('content_changed', '此歌曲已单独准备，请刷新目录后重新打开。');
   const song = await cache.get(ref.descriptorKey);
   if (!song) fail('temporary', '网易云歌曲资料已丢失，请重新刷新目录。');
-  const material = await musicTags(client, song as Record<string, unknown>);
+  const material = await musicTags(client, song as Record<string, unknown>, client.ctx.workBudget ? 1 : 2);
   let prepared: TaggedPlan;
   try {
     prepared = await prepare({ format: ref.source.type as AudioFormat, sourceInfo: info(ref.source), readRange,
