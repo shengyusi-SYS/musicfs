@@ -72,6 +72,12 @@ export async function buildQq() {
   for (const [name, location] of [['@yakult-green-tea/qq-music-api 3.3.3', join(dependency, 'LICENSE')], ['Axios 1.20.0', join(axiosDirectory, 'LICENSE')], ['Zod 4.6.7', 'node_modules/zod/LICENSE'], ['Ajv 8.20.0', 'node_modules/ajv/LICENSE']]) {
     licenses.push(`${name}\n\n${await Bun.file(location!).text()}`);
   }
+  let lookup = resolve('plugins/qq');
+  for (const name of ['p-limit', 'yocto-queue']) {
+    const root = dirname(Bun.resolveSync(name, lookup));
+    const info = await Bun.file(join(root, 'package.json')).json() as { version: string };
+    licenses.push(`${name} ${info.version}\n\n${await Bun.file(join(root, 'license')).text()}`); lookup = root;
+  }
   licenses.push(...await audioTagLicenses());
   await Bun.write('plugins/qq/THIRD_PARTY_LICENSE.txt', licenses.join('\n\n---\n\n'));
   await Bun.write('plugins/qq/THIRD_PARTY_ATTRIBUTION.md', await Bun.file(join(dependency, 'ATTRIBUTION.md')).text());

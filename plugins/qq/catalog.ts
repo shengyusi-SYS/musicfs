@@ -1,16 +1,11 @@
 import type { Entry, Json, Page, Root } from '@musicfs/plugin-api';
-import type { AudioFormat } from '@musicfs/audio-tags';
 import { z } from 'zod';
 import { fail, object, QqFailure, type QqClient } from './client';
-import { decodeFile, resolveVariants, trackKey } from './playback';
-import { musicTags } from './metadata';
-import { tagFile } from './tagged';
-import { sourceReader } from './media';
-import { formats } from './file-info';
-import { DAILY_SONGS, MUSIC_FILE_TYPES } from './generated-upstream.mjs';
+import { DAILY_SONGS } from './generated-upstream.mjs';
 import { audioPolicy } from './configuration';
 import { readCollection, type CollectionKind } from './collections';
 import { parsePlaylistRef, playlistRef, positiveId, type PlaylistReference } from './playlist-reference';
+import { preparation, preparePage } from './preparation';
 
 const song = z.object({ mid: z.string().regex(/^[A-Za-z0-9]+$/), title: z.string(),
   singer: z.array(z.object({ name: z.string() }).passthrough()), file: z.object({ media_mid: z.string().regex(/^[A-Za-z0-9]+$/) }).passthrough() }).passthrough();
@@ -103,7 +98,8 @@ export async function list(client: QqClient, directory: string, cursor?: string)
   if (directory === 'recommended') return recommendations(client, cursor);
   const playlist = directory === 'liked' || directory === 'daily' ? null : parsePlaylistRef(directory);
   const offset = position?.offset ?? 0;
-  const count = Math.max(1, Math.floor(4 / audioPolicy(client.ctx.config).qualities.length));
+  const policy = client.ctx.cache?.getMany ? preparation : { ...preparation, warmFiles: 4, concurrency: 1 };
+  const count = Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length));
   const previousDaily = directory === 'daily' && position?.revision ? await client.ctx.cache?.get(`daily:${position.revision}`) : undefined;
   if (directory === 'daily' && position && previousDaily === undefined) fail('content_changed', 'QQ 每日推荐分页资料已失效，请重新刷新。');
   const result = directory === 'daily' ? previousDaily === undefined ? await client.rpc(() => DAILY_SONGS) : { songs: previousDaily }
@@ -124,28 +120,8 @@ export async function list(client: QqClient, directory: string, cursor?: string)
   }
   if (offset > total || directory !== 'daily' && (offset + received.length > total || typeof result.more !== 'boolean')) fail('temporary', 'QQ 返回了不一致的歌曲分页。');
   const songs = (directory === 'daily' ? received.slice(offset) : received).slice(0, count);
-  const more = offset + songs.length < total;
-  if (more && !songs.length) fail('temporary', 'QQ 分页提前结束，尚未取得完整集合。');
-  const resolved = await resolveVariants(client, songs);
-  const statistics = { tracks: songs.length, files: 0, hiddenTracks: 0, missingVersions: 0, fallbackVersions: 0, deduplicatedVersions: 0 };
-  const items: Entry[] = [];
-  for (let index = 0; index < songs.length; index++) {
-    const item = songs[index]!;
-    const resolution = resolved.get(trackKey(item))!;
-    if (!resolution.variants.length) statistics.hiddenTracks++;
-    statistics.missingVersions += resolution.missingVersions; statistics.fallbackVersions += resolution.fallbackVersions;
-    statistics.deduplicatedVersions += resolution.deduplicatedVersions;
-    const occurrence = offset + index;
-    if (!resolution.variants.length) continue;
-    const tags = await musicTags(client, item);
-    for (const variant of resolution.variants) {
-      const prepared = await tagFile(client, decodeFile(variant.fileRef), variant.info, MUSIC_FILE_TYPES[variant.quality].extension.slice(1) as AudioFormat, tags,
-        sourceReader(client, variant.fileRef, variant.info, variant.location));
-      items.push({ kind: 'file', entryId: `${occurrence}:${item.mid}:${variant.quality}`,
-        name: `${String(occurrence + 1).padStart(4, '0')} - ${item.title} - ${item.singer.map(artist => artist.name).join('、')} [${formats[variant.quality].label}]${MUSIC_FILE_TYPES[variant.quality].extension}`, ...prepared });
-    }
-  }
-  statistics.files = items.length;
-  return { items, statistics,
-    ...(more ? { nextCursor: JSON.stringify({ directory, instanceId: client.ctx.instanceId, offset: offset + songs.length, total, ...(revision ? { revision } : {}) }) } : {}) };
+  if (offset < total && !songs.length) fail('temporary', 'QQ 分页提前结束，尚未取得完整集合。');
+  const content = await preparePage(client, songs, offset, policy);
+  return { ...content.page, progress: { completed: offset + content.consumed, total, unit: '曲目' },
+    ...(offset + content.consumed < total ? { nextCursor: JSON.stringify({ directory, instanceId: client.ctx.instanceId, offset: offset + content.consumed, total, ...(revision ? { revision } : {}) }) } : {}) };
 }

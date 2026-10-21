@@ -79,7 +79,8 @@ test('QQ uses the authenticated owner endpoint for private own playlists and the
   const favorite = directory(value(await f.plugin.list(f.ctx, 'favorites')).items[0]);
   const first = value(await f.plugin.list(f.ctx, own)); const last = value(await f.plugin.list(f.ctx, own, first.nextCursor));
   expect([...first.items, ...last.items].map(item => item.name.slice(0, 4))).toEqual(['0001', '0002', '0003']); expect(last.nextCursor).toBeUndefined();
-  const ownCall = f.nativeCalls.find(call => call.method === 'CgiGetDiss'); expect(ownCall?.param).toMatchObject({ disstid: 7, dirid: 1, enc_host_uin: 'encrypted-123', song_begin: 0, song_num: 4 });
+  const ownCall = f.nativeCalls.find(call => call.method === 'CgiGetDiss'); expect(ownCall?.param).toMatchObject({ disstid: 7, dirid: 1, enc_host_uin: 'encrypted-123', song_begin: 0 });
+  expect(ownCall?.param.song_num).toBeGreaterThanOrEqual(3); expect(ownCall?.param.song_num).toBeLessThanOrEqual(100);
   await f.plugin.list(f.ctx, favorite); expect(f.nativeCalls.findLast(call => call.method === 'uniform_get_Dissinfo')).toMatchObject({ method: 'uniform_get_Dissinfo', param: { disstid: 7, enc_host_uin: '', song_begin: 0 } });
   expect(JSON.stringify(first)).not.toContain('vkey=');
 });

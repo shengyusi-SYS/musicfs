@@ -14,13 +14,25 @@ const encodedLyric = (value: unknown) => {
   catch { return; }
 };
 
-async function cached(client: QqClient, key: string, read: () => Promise<Json>): Promise<Json> {
+type Asset = { value: Json; expiresAt: number };
+const pending = new WeakMap<QqClient, Map<string, Promise<Asset>>>();
+async function cached(client: QqClient, key: string, read: () => Promise<Json>): Promise<Asset> {
   const cache = client.ctx.cache;
   if (!cache) fail('not_supported', 'QQ 补标签需要支持插件资料缓存的宿主。');
-  const previous = await cache.get(key);
-  if (previous !== undefined) return previous;
-  const value = await read(); client.ctx.signal.throwIfAborted();
-  await cache.put(key, value, { expiresAt: Date.now() + lifetime }); return value;
+  let reads = pending.get(client); if (!reads) { reads = new Map(); pending.set(client, reads); }
+  const earlier = reads.get(key);
+  if (earlier) { const saved = await earlier; if (saved.expiresAt > Date.now()) return saved; reads.delete(key); }
+  // This envelope owns its original expiry; a cache hit never renews dependent ready indexes.
+  const storageKey = `metadata:${key}`;
+  const result = (async () => {
+    const previous = await cache.get(storageKey);
+    if (previous !== undefined) return previous as unknown as Asset;
+    const value = await read(); client.ctx.signal.throwIfAborted();
+    const asset = { value, expiresAt: Date.now() + lifetime };
+    await cache.put(storageKey, asset, { expiresAt: asset.expiresAt }); return asset;
+  })();
+  reads.set(key, result);
+  try { return await result; } catch (error) { if (reads.get(key) === result) reads.delete(key); throw error; }
 }
 
 /** These SDK legacy reads otherwise require a global transport; keep the same endpoints request-scoped. */
@@ -36,8 +48,8 @@ async function legacy(client: QqClient, path: string, params: Record<string, str
   return result;
 }
 
-async function cover(client: QqClient, albumId: string, url: string): Promise<AudioTags['cover']> {
-  const value = await cached(client, `cover:${albumId}:${url}`, async () => {
+async function cover(client: QqClient, albumId: string, url: string): Promise<{ picture: AudioTags['cover']; expiresAt: number }> {
+  const asset = await cached(client, `cover:${albumId}:${url}`, async () => {
     const response = await client.ctx.fetch(url, { signal: client.ctx.signal });
     if (response.status === 404) { await response.body?.cancel(); return null; }
     if (response.status === 429) { await response.body?.cancel(); fail('rate_limited', 'QQ 封面读取过于频繁，请稍后重试。'); }
@@ -46,26 +58,30 @@ async function cover(client: QqClient, albumId: string, url: string): Promise<Au
     if (mimeType !== 'image/jpeg' && mimeType !== 'image/png') { await response.body?.cancel(); fail('not_supported', 'QQ 封面不是支持的 JPEG 或 PNG。'); }
     return { mimeType, base64: encode(new Uint8Array(await response.arrayBuffer())) };
   });
-  if (value === null) return;
-  const saved = object(value); return { mimeType: String(saved.mimeType), data: decode(String(saved.base64)) };
+  if (asset.value === null) return { picture: undefined, expiresAt: asset.expiresAt };
+  const saved = object(asset.value); return { picture: { mimeType: String(saved.mimeType), data: decode(String(saved.base64)) }, expiresAt: asset.expiresAt };
 }
 
-export async function musicTags(client: QqClient, source: Record<string, unknown>): Promise<AudioTags> {
+export async function musicTags(client: QqClient, source: Record<string, unknown>): Promise<{ tags: AudioTags; expiresAt: number }> {
   const mid = String(source.mid);
-  const detail = object(await cached(client, `song:${mid}`, async () => {
-    const album = object(source.album);
-    if (source.index_album !== undefined && source.index_cd !== undefined && album.mid && album.name) return source as Json;
+  const sourceAlbum = object(source.album);
+  const complete = source.index_album !== undefined && source.index_cd !== undefined && sourceAlbum.mid && sourceAlbum.name;
+  const detailAsset = complete ? { value: source as Json, expiresAt: Date.now() + lifetime } : await cached(client, `song:${mid}`, async () => {
     try {
       const result = await client.rpc(() => ({ module: 'music.pf_song_detail_svr', method: 'get_song_detail_yqq', param: { song_type: 0, song_mid: mid }, readOnly: true, operation: 'session.authenticated-read' }));
       return { ...source, ...object(result.track_info) } as Json;
     } catch (error) { if (error instanceof QqFailure && error.fault.kind === 'not_found') return source as Json; throw error; }
-  }));
+  });
+  // The fresh catalogue's fields win over an older auxiliary detail response.
+  const detail: Record<string, unknown> = { ...object(detailAsset.value), ...source,
+    album: { ...object(object(detailAsset.value).album), ...object(source.album) } };
   const originalAlbum = object(detail.album); const albumMid = text(originalAlbum.mid);
-  const album = albumMid ? object(await cached(client, `album:${albumMid}`, async () => {
+  const albumAsset = albumMid ? await cached(client, `album:${albumMid}`, async () => {
     if (names(originalAlbum.singer ?? originalAlbum.singers).length && text(originalAlbum.aDate ?? originalAlbum.time_public)) return originalAlbum as Json;
     const result = await legacy(client, '/v8/fcg-bin/fcg_v8_album_info_cp.fcg', { albummid: albumMid }); return object(result.data) as Json;
-  })) : originalAlbum;
-  const lyrics = object(await cached(client, `lyrics:${mid}`, async () => {
+  }) : { value: originalAlbum as Json, expiresAt: detailAsset.expiresAt };
+  const album = object(albumAsset.value);
+  const lyricAsset = await cached(client, `lyrics:${mid}`, async () => {
     const result = await legacy(client, '/lyric/fcgi-bin/fcg_query_lyric_new.fcg', { songmid: mid, nobase64: '1' });
     const original = text(result.lyric); let translation = text(result.trans); const romanization = text(result.roma);
     if (!translation || !romanization) {
@@ -76,13 +92,15 @@ export async function musicTags(client: QqClient, source: Record<string, unknown
       return { ...(original ? { original } : {}), ...(translation ? { translation } : {}), ...(actualRomanization ? { romanization: actualRomanization } : {}) };
     }
     return { ...(original ? { original } : {}), ...(translation ? { translation } : {}), ...(romanization ? { romanization } : {}) };
-  }));
+  });
+  const lyrics = object(lyricAsset.value);
   const title = text(detail.title ?? detail.name); const artists = names(detail.singer); const albumName = text(originalAlbum.name) ?? text(album.name);
   const albumArtists = names(album.singer ?? album.singers ?? (text(album.singername) ? [{ name: album.singername }] : undefined)); const released = text(album.aDate ?? album.date ?? originalAlbum.time_public ?? detail.time_public);
   const track = positive(detail.index_album); const disc = positive(detail.index_cd); const total = positive(album.total);
   const coverUrl = text(originalAlbum.picUrl) ?? text(album.picUrl) ?? (albumMid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumMid}.jpg?max_age=2592000` : undefined);
   const picture = coverUrl ? await cover(client, albumMid ?? mid, coverUrl) : undefined;
-  return { ...(title ? { title } : {}), ...(artists.length ? { artists } : {}), ...(albumName ? { album: albumName } : {}),
+  return { expiresAt: Math.min(detailAsset.expiresAt, albumAsset.expiresAt, lyricAsset.expiresAt, picture?.expiresAt ?? Infinity),
+    tags: { ...(title ? { title } : {}), ...(artists.length ? { artists } : {}), ...(albumName ? { album: albumName } : {}),
     ...(albumArtists.length ? { albumArtists } : {}), ...(released ? { date: released } : {}), ...(track ? { track: { number: track, ...(total ? { total } : {}) } } : {}),
-    ...(disc ? { disc: { number: disc } } : {}), ...(picture ? { cover: picture } : {}), ...(Object.keys(lyrics).length ? { lyrics: lyrics as NonNullable<AudioTags['lyrics']> } : {}) };
+    ...(disc ? { disc: { number: disc } } : {}), ...(picture?.picture ? { cover: picture.picture } : {}), ...(Object.keys(lyrics).length ? { lyrics: lyrics as NonNullable<AudioTags['lyrics']> } : {}) } };
 }

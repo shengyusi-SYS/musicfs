@@ -56,8 +56,9 @@ test('QQ small pages carry real info, preserve the complete daily sequence and a
   expect([...first.items, ...last.items].every(item => (file(item).info?.size ?? 0) > 123)).toBe(true);
   expect(file(first.items[0]).info).toMatchObject({ mediaType: 'audio/mpeg' }); expect(file(first.items[0]).info?.contentId).toStartWith('audio-tags-v1:');
   expect(f.requests.filter(request => request.kind === 'uniform_get_Dissinfo')).toHaveLength(1);
-  expect(f.requests.filter(request => request.kind === 'UrlGetVkey').map(request => request.filenames.length)).toEqual([4, 4]);
-  expect(f.requests.filter(request => request.kind === 'UrlGetVkey')).toHaveLength(2); // Tag metadata ranges reuse each list-resolved locator.
+  const playbackBatches = f.requests.filter(request => request.kind === 'UrlGetVkey').map(request => request.filenames);
+  expect(playbackBatches.flat()).toHaveLength(8); // Tag ranges reuse each list-resolved locator.
+  expect(playbackBatches.every(batch => batch.length > 0 && batch.length <= 4)).toBe(true);
   expect(JSON.stringify([first, last])).not.toContain('private');
   expect(JSON.parse(first.nextCursor!)).toMatchObject({ instanceId: f.ctx.instanceId, directory: 'daily', offset: 4, total: 8 });
 });
@@ -86,16 +87,22 @@ test('QQ five target qualities fit one occurrence per page, retain every positio
   expect(f.requests.slice(before)).toEqual([]);
 });
 
-test('QQ keeps CDN fallback bounded and a request-budget failure can retry a smaller page', async () => {
+test('QQ keeps CDN fallback bounded and checkpoints before exhausting a larger cold page', async () => {
   const f = await fixture(); f.useFallbackCdn(); f.setSongs([song('s0')]);
   const smaller = value(await f.plugin.list(f.ctx, 'daily'));
   expect(smaller.items).toHaveLength(1);
   expect(f.requests.filter(request => request.kind === 'CDN').length).toBeGreaterThanOrEqual(9); // Keep the existing fallback candidate strategy.
   f.setSongs(Array.from({ length: 6 }, (_, index) => song(`s${index}`)));
   const before = f.requests.length;
-  expect(await f.plugin.list(f.ctx, 'daily')).toMatchObject({ ok: false, error: { kind: 'temporary' } });
+  let page = value(await f.plugin.list(f.ctx, 'daily')); const entries = [...page.items];
+  expect(page.nextCursor).toBeDefined();
   expect(f.requests.length - before).toBeLessThanOrEqual(45);
-  // The next invocation owns a fresh counter; a transient budget failure is not a hidden track.
+  while (page.nextCursor) {
+    const start = f.requests.length; page = value(await f.plugin.list(f.ctx, 'daily', page.nextCursor)); entries.push(...page.items);
+    expect(f.requests.length - start).toBeLessThanOrEqual(45);
+  }
+  expect(entries).toHaveLength(6); expect(new Set(entries.map(item => item.entryId)).size).toBe(6);
+  // Each continuation owns its request counter; a small independent directory still works.
   f.setSongs([song('small')]); expect(value(await f.plugin.list(f.ctx, 'daily')).statistics).toMatchObject({ tracks: 1, files: 1, hiddenTracks: 0 });
 });
 
