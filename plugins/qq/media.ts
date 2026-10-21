@@ -1,16 +1,23 @@
 import type { FileInfo, ReadRequest, ReadResult } from '@musicfs/plugin-api';
-import { fail, type QqClient } from './client';
-import { decodeFile, locateFile, type MediaReference } from './playback';
+import { fail, QqFailure, type QqClient } from './client';
+import { decodeFile, locateFile, readFileLocation } from './playback';
 import { describe } from './file-info';
 import { decodeTagged, taggedOpen, taggedStat } from './tagged';
 import type { ReadRange } from '@musicfs/audio-tags';
 
-async function request(client: QqClient, ref: MediaReference, range?: { start: number; end: number }, location?: URL, signal = client.ctx.signal): Promise<Response> {
+async function request(client: QqClient, range: { start: number; end: number } | undefined, location: URL, signal: AbortSignal): Promise<Response> {
   client.requireSession();
-  const url = location ?? (await locateFile(client, ref)).url;
-  const response = await client.ctx.fetch(url, { redirect: 'manual', signal: signal === client.ctx.signal ? signal : AbortSignal.any([client.ctx.signal, signal]), headers: { 'Accept-Encoding': 'identity',
+  const response = await client.ctx.fetch(location, { redirect: 'manual', signal: signal === client.ctx.signal ? signal : AbortSignal.any([client.ctx.signal, signal]), headers: { 'Accept-Encoding': 'identity',
     ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}) } });
-  if (!response.body || !response.ok) { await response.body?.cancel(); fail(response.status === 416 ? 'content_changed' : 'temporary', 'QQ 音频请求暂未成功。'); }
+  if (!response.body || !response.ok) {
+    await response.body?.cancel();
+    if (response.status === 429) {
+      const seconds = Number(response.headers.get('retry-after'));
+      throw new QqFailure({ kind: 'rate_limited', message: 'QQ 音频请求过于频繁，请稍后重试。',
+        ...(Number.isFinite(seconds) && seconds > 0 ? { retryAfterSeconds: Math.ceil(seconds) } : {}) });
+    }
+    fail(response.status === 416 ? 'content_changed' : 'temporary', 'QQ 音频请求暂未成功。');
+  }
   return response;
 }
 
@@ -30,7 +37,9 @@ export async function open(client: QqClient, file: string, input: ReadRequest): 
 export async function rawOpen(client: QqClient, file: string, input: ReadRequest, location?: URL, signal = client.ctx.signal): Promise<ReadResult> {
   const ref = decodeFile(file);
   if (input.range && (!Number.isSafeInteger(input.range.start) || !Number.isSafeInteger(input.range.end) || input.range.start < 0 || input.range.end < input.range.start)) fail('not_supported', '无效的音频范围。');
-  const response = await request(client, ref, input.range, location, signal);
+  signal.throwIfAborted();
+  if (!location) return (await readFileLocation(client, ref, (url, readSignal) => rawOpen(client, file, input, url, readSignal), signal)).result;
+  const response = await request(client, input.range, location, signal);
   try {
     const partial = input.range !== undefined;
     if (partial ? response.status !== 206 : response.status !== 200) fail('not_supported', 'QQ 音频响应与请求范围不符。');
@@ -44,13 +53,20 @@ export async function rawOpen(client: QqClient, file: string, input: ReadRequest
   } catch (error) { await response.body?.cancel(); throw error; }
 }
 
-/** All tag ranges in this call share one resolved locator; no locator survives in the plan. */
+/** All tag ranges in this call share one resolved locator; no signed URL survives in the plan. */
 export function sourceReader(client: QqClient, file: string, info: FileInfo, location?: URL): ReadRange {
   const ref = decodeFile(file);
   let located: ReturnType<typeof locateFile> | undefined = location ? Promise.resolve({ url: location, info }) : undefined;
   return async (range, signal) => {
     signal.throwIfAborted();
-    const current = await (located ??= locateFile(client, ref));
+    if (!located) {
+      const pending = readFileLocation(client, ref, (url, readSignal) => rawOpen(client, file, { expectedContentId: info.contentId, range }, url, readSignal), signal);
+      located = pending.then(value => ({ url: value.url, info: value.info }));
+      // A failed location is shared by all pending reads in this invocation.
+      await located;
+      return (await pending).result;
+    }
+    const current = await located;
     if (current.info.contentId !== info.contentId) fail('content_changed', 'QQ 音频版本已变化，请重新刷新目录。');
     return rawOpen(client, file, { expectedContentId: info.contentId, range }, current.url, signal);
   };

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { FileInfo } from '@musicfs/plugin-api';
-import { fail, object, QqRequestBudgetFailure, type QqClient } from './client';
+import type { FileInfo, ReadResult } from '@musicfs/plugin-api';
+import { fail, object, QqFailure, QqRequestBudgetFailure, type QqClient } from './client';
 import { audioPolicy, lowerQualities, qualities, type Quality } from './configuration';
 import { apeFileFailureOf, credentialMusicId, MUSIC_FILE_TYPES, StreamCdnSelector } from './generated-upstream.mjs';
 import { describe } from './file-info';
@@ -130,16 +130,62 @@ export async function resolveVariants(client: QqClient, tracks: Track[]): Promis
 }
 
 /** Resolve only the referenced actual version. Reads must never fall back to different bytes. */
-export async function locateFile(client: QqClient, ref: MediaReference): Promise<{ url: URL; info: FileInfo }> {
+async function fileLocation(client: QqClient, ref: MediaReference): Promise<Location> {
   const input: Candidate = { track: { mid: ref.mid, file: { media_mid: ref.mediaId } }, quality: ref.quality };
   const found = (await locations(client, [input])).get(candidateKey(input));
   if (!found) fail('unavailable', '此 QQ 音频当前不可读取。');
   if (found.filename !== ref.filename || found.quality !== ref.quality) fail('content_changed', 'QQ 音频文件已变化，请刷新目录。');
-  return selectLocation(client, found);
+  return found;
+}
+export async function locateFile(client: QqClient, ref: MediaReference): Promise<{ url: URL; info: FileInfo }> {
+  return selectLocation(client, await fileLocation(client, ref));
+}
+
+/** A routing preference is reusable; signed URLs, entitlement and file identity are not. */
+export async function readFileLocation(client: QqClient, ref: MediaReference,
+  read: (url: URL, signal: AbortSignal) => Promise<ReadResult>, signal: AbortSignal) {
+  signal.throwIfAborted();
+  const found = await fileLocation(client, ref);
+  const cache = client.ctx.cache;
+  const key = 'stream-base';
+  let saved = cache ? await cache.get(key) : undefined;
+  const preferred = typeof saved === 'string' && found.sip.includes(saved) ? saved : undefined;
+  signal.throwIfAborted();
+  if (preferred) {
+    // Let the SDK validate the base. The actual response replaces the probe;
+    // its caller validates the exact saved representation before exposing bytes.
+    let result: ReadResult | undefined;
+    const headers = new AbortController();
+    const timer = setTimeout(() => headers.abort(new DOMException('CDN headers timed out', 'TimeoutError')), 5000);
+    try {
+      const selector = new StreamCdnSelector(async url => {
+        result = await read(new URL(url), AbortSignal.any([signal, headers.signal]));
+        return { bytes: 1, elapsedMs: 1 };
+      });
+      const base = await selector.select([preferred], found.purl);
+      if (base && result) return { url: new URL(found.purl, base), info: result.content, result };
+    } catch (error) {
+      signal.throwIfAborted(); client.ctx.signal.throwIfAborted();
+      // One stale route may return to the existing bounded selector, before a
+      // response body escapes. Never retry a different representation or rate limit.
+      if (!(error instanceof QqFailure && error.fault.kind === 'temporary')
+        && !(error instanceof TypeError) && !headers.signal.aborted) throw error;
+      await cache!.put(key, null, { expiresAt: Date.now() });
+      saved = undefined;
+    } finally { clearTimeout(timer); }
+  }
+  signal.throwIfAborted();
+  const located = await selectLocation(client, found);
+  signal.throwIfAborted();
+  const result = await read(located.url, signal);
+  try {
+    if (cache && saved !== located.base) await cache.put(key, located.base, { expiresAt: Date.now() + 30 * 60_000 });
+    return { ...located, result };
+  } catch (error) { await result.body.cancel(); throw error; }
 }
 
 /** Reuse the list's native location and the winning SDK probe's exact metadata. */
-async function selectLocation(client: QqClient, found: Location): Promise<{ url: URL; info: FileInfo }> {
+async function selectLocation(client: QqClient, found: Location): Promise<{ url: URL; info: FileInfo; base: string }> {
   // A selector belongs to this invocation; its cached promise never crosses instances or requests.
   let ignoredRange = false;
   let invalidMetadata = false;
@@ -176,5 +222,5 @@ async function selectLocation(client: QqClient, found: Location): Promise<{ url:
     : invalidMetadata ? 'QQ 音频未提供可核对的完整文件信息。' : 'QQ 音频地址暂时无法连接，请稍后重试。');
   const url = new URL(found.purl, base); const info = descriptions.get(url.href);
   if (!info) fail(invalidMetadata ? 'not_supported' : 'temporary', 'QQ 音频的完整文件信息暂时无法确认。');
-  return { url, info };
+  return { url, info, base };
 }
