@@ -5,8 +5,8 @@ import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
 import { info, sourceReader, resolveVariants, type Resolution } from './media';
 import { audioPolicy, labels } from './configuration';
-import { songKey, prepareSongFile, type PreparedFile } from './tagged';
-import { compactSong, playlistScan, scanSongs, scanVersions, verifyScan } from './scan';
+import { songKey, descriptorKey, deferredFileRef, prepareSongFile, type PreparedFile } from './tagged';
+import { batchSize, compactSong, playlistScan, scanSongs, scanVersions, verifyScan } from './scan';
 
 const rootsList = [ ['liked', '喜欢的歌曲'], ['daily', '每日推荐歌曲'], ['created', '自建歌单'], ['favorites', '收藏歌单'], ['recommended', '每日推荐歌单'] ] as const;
 const playlistRef = z.object({ kind: z.literal('playlist'), id: z.string().regex(/^[1-9]\d*$/) }).strict();
@@ -60,6 +60,37 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
   const keys = candidates.flatMap(item => item.files.map(file => file.key));
   const saved = client.ctx.cache!.getMany ? await client.ctx.cache!.getMany(keys) : await Promise.all(keys.map(key => client.ctx.cache!.get(key)));
   const ready = new Map(keys.map((key, index) => [key, saved[index] as unknown as PreparedFile | undefined]));
+  const saveSeeds = async (items: typeof candidates) => {
+    // File references outlive scan/song caches, so retain only published compact seeds without an expiry.
+    const seeds = new Map(items.flatMap(item => item.files.map(file => [descriptorKey(file.key), item.song as Json] as const)));
+    const writes = [...seeds].map(([key, value]) => ({ key, value }));
+    if (client.ctx.cache!.putMany) await client.ctx.cache!.putMany(writes);
+    else for (const item of writes) await client.ctx.cache!.put(item.key, item.value);
+  };
+  const entry = (item: typeof candidates[number], candidate: typeof item.files[number], file?: PreparedFile): Entry => {
+    const media = candidate.variant.reference;
+    const artists = item.song.ar ?? item.song.artists;
+    if (!Array.isArray(artists)) fail('temporary', '网易云未返回完整歌曲名称信息。');
+    const artist = artists.map(value => label(object(value).name)).join('、');
+    return { kind: 'file', entryId: `${item.position}:${item.songId}:${media.level}`,
+      name: `${String(item.position).padStart(4, '0')}. ${label(item.song.name)} - ${artist} [${labels[media.level]}].${media.type}`,
+      fileRef: deferredFileRef(media, candidate.key), ...(file ? { info: file.info } : { deferredInfo: true }) };
+  };
+  const count = (item: typeof candidates[number]) => {
+    statistics.tracks++;
+    statistics.missingVersions += item.resolution.missingVersions; statistics.fallbackVersions += item.resolution.fallbackVersions;
+    statistics.deduplicatedVersions += item.resolution.deduplicatedVersions;
+    if (!item.files.length) statistics.hiddenTracks++;
+  };
+  if (client.ctx.fileInfo !== 'required') {
+    const items = candidates.flatMap(item => {
+      count(item);
+      return item.files.map(candidate => entry(item, candidate, ready.get(candidate.key)));
+    });
+    await saveSeeds(candidates);
+    statistics.files = items.length;
+    return { page: { items, statistics }, consumed: candidates.length };
+  }
   const items: Entry[] = []; let consumed = 0; let cold = 0; let failure: unknown;
   let largestCost = 0;
   const limit = pLimit(policy.concurrency);
@@ -89,11 +120,7 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
             }
             file = await pending;
           }
-          const artists = item.song.ar ?? item.song.artists;
-          if (!Array.isArray(artists)) fail('temporary', '网易云未返回完整歌曲名称信息。');
-          const artist = artists.map(value => label(object(value).name)).join('、');
-          files.push({ kind: 'file' as const, entryId: `${item.position}:${item.songId}:${media.level}`,
-            name: `${String(item.position).padStart(4, '0')}. ${label(item.song.name)} - ${artist} [${labels[media.level]}].${media.type}`, ...file });
+          files.push(entry(item, candidate, file));
         }
         return files;
       } catch (error) { failure ??= error; throw error; }
@@ -103,14 +130,12 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
     largestCost = Math.max(largestCost, before === Infinity ? 0 : before - (client.ctx.workBudget?.remaining ?? before));
     for (let i = 0; i < chunk.length; i++) {
       const result = outcome[i]!; if (result.status === 'rejected') throw result.reason;
-      const item = chunk[i]!; items.push(...result.value); consumed++; statistics.tracks++;
-      statistics.missingVersions += item.resolution.missingVersions; statistics.fallbackVersions += item.resolution.fallbackVersions;
-      statistics.deduplicatedVersions += item.resolution.deduplicatedVersions;
-      if (!item.files.length) statistics.hiddenTracks++;
+      const item = chunk[i]!; items.push(...result.value); consumed++; count(item);
     }
     start += chunk.length;
     if (cold >= (policy.coldFiles ?? 32) || cold > 0 && performance.now() - started >= (policy.milliseconds ?? 2000)) break;
   }
+  await saveSeeds(candidates.slice(0, consumed));
   statistics.files = items.length;
   return { page: { items, statistics }, consumed };
 }
@@ -144,7 +169,7 @@ export async function list(client: NeteaseClient, directory: string, value?: str
       await client.ctx.cache.put(`daily:${revision}`, tracks as Json, { expiresAt: Date.now() + 30 * 60_000 });
     }
     if (!Array.isArray(tracks)) fail('content_changed', '网易云每日推荐分页资料已失效，请重新刷新。');
-    const count = Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length));
+    const count = client.ctx.fileInfo === 'required' ? Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length)) : batchSize;
     const content = await songPage(client, tracks.slice(page.offset, page.offset + count), page.offset, policy);
     return { ...content.page, progress: { completed: page.offset + content.consumed, total: tracks.length, unit: '曲目' },
       ...(page.offset + content.consumed < tracks.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + content.consumed, revision }) } : {}) };
@@ -172,7 +197,7 @@ export async function list(client: NeteaseClient, directory: string, value?: str
   const scan = await playlistScan(client, playlistId, page.scanId, page.revision);
   const batch = await scanSongs(client, scan, page.offset);
   const versions = await scanVersions(client, scan, batch.start, batch.songs.map(song => id(song.id)));
-  const count = Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length));
+  const count = client.ctx.fileInfo === 'required' ? Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length)) : batchSize;
   const content = await songPage(client, batch.songs.slice(page.offset - batch.start, page.offset - batch.start + count), page.offset, policy, versions);
   const next = page.offset + content.consumed;
   if (next >= scan.ids.length) await verifyScan(client, scan);

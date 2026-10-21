@@ -2,27 +2,31 @@ import type { FileInfo, Json, ReadRequest, ReadResult } from '@musicfs/plugin-ap
 import { open, prepare, type AudioFormat, type AudioTags, type ReadRange, type TaggedPlan } from '@musicfs/audio-tags';
 import { z } from 'zod';
 import { fail, type NeteaseClient } from './client';
-import { decodeFile, type MediaReference } from './reference';
+import { decodeFile, info, type MediaReference } from './reference';
 import { musicTags } from './metadata';
 import { packPlan, unpackPlan, type StoredPlan } from './plan-storage';
 
-const reference = z.object({ version: z.literal(2), source: z.unknown(), planKey: z.string().min(1) }).strict();
-type Reference = { source: MediaReference; planKey: string };
+const reference = z.discriminatedUnion('version', [
+  z.object({ version: z.literal(2), source: z.unknown(), planKey: z.string().min(1) }).strict(),
+  z.object({ version: z.literal(3), source: z.unknown(), descriptorKey: z.string().regex(/^tag-seed:[a-f0-9]{64}$/) }).strict(),
+]);
+type Reference = { version: 2; source: MediaReference; planKey: string } | { version: 3; source: MediaReference; descriptorKey: string };
 const hash = async (value: unknown) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)))), byte => byte.toString(16).padStart(2, '0')).join('');
 const byteHash = async (value: Uint8Array) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(value))), byte => byte.toString(16).padStart(2, '0')).join('');
 
 export function decodeTagged(file: string): Reference | undefined {
   let raw: unknown; try { raw = JSON.parse(file); } catch { return; }
-  if ((raw as { version?: unknown } | null)?.version !== 2) return;
+  const version = (raw as { version?: unknown } | null)?.version;
+  if (version !== 2 && version !== 3) return;
   const parsed = reference.safeParse(raw);
   if (!parsed.success) fail('not_found', '网易云补标签文件引用无效。');
-  return { source: decodeFile(JSON.stringify(parsed.data.source)), planKey: parsed.data.planKey };
+  return { ...parsed.data, source: decodeFile(JSON.stringify(parsed.data.source)) };
 }
 
-async function plan(client: NeteaseClient, ref: Reference): Promise<StoredPlan> {
+async function plan(client: NeteaseClient, planKey: string): Promise<StoredPlan> {
   client.requireSession();
   if (!client.ctx.cache) fail('not_supported', '网易云补标签需要支持插件资料缓存的宿主。');
-  const saved = await client.ctx.cache.get(ref.planKey);
+  const saved = await client.ctx.cache.get(planKey);
   if (saved === undefined || saved === null) fail('temporary', '网易云补标签文件资料已丢失，请重新刷新目录。');
   return saved as unknown as StoredPlan;
 }
@@ -65,15 +69,32 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
 
 export type PreparedFile = { fileRef: string; info: FileInfo };
 export const songKey = (source: MediaReference, sourceInfo: FileInfo, song: Record<string, unknown>) => hash([source, sourceInfo, song]).then(value => `ready:${value}`);
+export const descriptorKey = (key: string) => key.replace(/^ready:/, 'tag-seed:');
+export const deferredFileRef = (source: MediaReference, key: string) => JSON.stringify({ version: 3, source, descriptorKey: descriptorKey(key) });
 /** Small index is written after the permanent plan; hits never load/parse embedded artwork. */
 export async function prepareSongFile(client: NeteaseClient, key: string, source: MediaReference, sourceInfo: FileInfo, song: Record<string, unknown>, readRange: ReadRange): Promise<PreparedFile> {
   const material = await musicTags(client, song);
   return tagFile(client, source, sourceInfo, source.type as AudioFormat, material.tags, readRange, { key, expiresAt: material.expiresAt });
 }
 
-export async function taggedStat(client: NeteaseClient, ref: Reference) { return (await plan(client, ref)).content; }
+async function ensurePrepared(client: NeteaseClient, ref: Extract<Reference, { version: 3 }>, readRange: ReadRange): Promise<PreparedFile> {
+  client.requireSession();
+  const cache = client.ctx.cache;
+  if (!cache) fail('not_supported', '网易云补标签需要支持插件资料缓存的宿主。');
+  const key = ref.descriptorKey.replace(/^tag-seed:/, 'ready:');
+  const ready = await cache.get(key);
+  if (ready) return ready as unknown as PreparedFile;
+  const song = await cache.get(ref.descriptorKey);
+  if (!song) fail('temporary', '网易云补标签歌曲资料已丢失，请重新刷新目录。');
+  return prepareSongFile(client, key, ref.source, info(ref.source), song as Record<string, unknown>, readRange);
+}
+
+export async function taggedStat(client: NeteaseClient, ref: Reference, readRange: ReadRange) {
+  return ref.version === 3 ? (await ensurePrepared(client, ref, readRange)).info : (await plan(client, ref.planKey)).content;
+}
 export async function taggedOpen(client: NeteaseClient, ref: Reference, input: ReadRequest, readRange: ReadRange): Promise<ReadResult> {
-  const saved = await plan(client, ref);
-  if (saved.content.contentId !== input.expectedContentId) fail('content_changed', '网易云补标签文件版本已变化，请刷新目录。');
+  // A HEAD-selected permanent plan stays readable after refreshed metadata replaces the ready index.
+  const saved = await plan(client, ref.version === 3 ? `tag-plan:${input.expectedContentId}` : ref.planKey);
+  if (saved.content.contentId !== input.expectedContentId || saved.source.contentId !== info(ref.source).contentId) fail('content_changed', '网易云补标签文件版本已变化，请刷新目录。');
   return open(await unpackPlan(client.ctx.cache!, saved), readRange, input.range, client.ctx.signal);
 }

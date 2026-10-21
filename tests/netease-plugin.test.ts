@@ -214,7 +214,8 @@ test('NetEase uses native collection roles and occurrence order, hides previews 
 });
 
 test('NetEase legacy references retain raw stat and ranges while tagged entries describe their final bytes', async () => {
-  const f = fixture(); await authorize(f); const listed = value(await plugin.list(f.ctx, 'daily')); const file = listed.items[0]!;
+  const f = fixture(); await authorize(f); f.ctx.fileInfo = 'required';
+  const listed = value(await plugin.list(f.ctx, 'daily')); const file = listed.items[0]!;
   if (file.kind !== 'file') throw new Error('Expected a file');
   const description = value(await plugin.stat(f.ctx, file.fileRef)); expect(description.size).toBeGreaterThan(bytes.length); expect(file.info).toEqual(description);
   const legacy = JSON.stringify(JSON.parse(file.fileRef).source);
@@ -229,7 +230,7 @@ test('NetEase legacy references retain raw stat and ranges while tagged entries 
 });
 
 test('NetEase liked pages locate once per instance while retaining order, repeated positions, old cursors and sequence checks', async () => {
-  const f = fixture(); await authorize(f); f.setPreview(false); f.setPlaylistIds([...Array.from({ length: 8 }, (_, i) => i + 1), 1]);
+  const f = fixture(); await authorize(f); f.ctx.fileInfo = 'required'; f.setPreview(false); f.setPlaylistIds([...Array.from({ length: 8 }, (_, i) => i + 1), 1]);
   delete f.ctx.cache!.getMany; // Older hosts use the small compatibility checkpoint policy.
   const initialCalls = f.calls.length;
   const first = value(await plugin.list(f.ctx, 'liked')); expect(first.items).toHaveLength(8); expect(first.nextCursor).toBeDefined();
@@ -247,7 +248,7 @@ test('NetEase liked pages locate once per instance while retaining order, repeat
   expect(await plugin.list(f.ctx, 'liked', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'content_changed' } });
   expect(f.calls.filter(call => call.path.endsWith('/user/playlist'))).toHaveLength(2);
 
-  const other = fixture(); delete other.ctx.cache!.getMany; other.ctx.instanceId = 'netease-b'; other.setLikedPlaylistId(18); await authorize(other); other.setPreview(false);
+  const other = fixture(); delete other.ctx.cache!.getMany; other.ctx.fileInfo = 'required'; other.ctx.instanceId = 'netease-b'; other.setLikedPlaylistId(18); await authorize(other); other.setPreview(false);
   other.setPlaylistIds(Array.from({ length: 9 }, (_, i) => i + 201));
   const beforeForeign = other.calls.length;
   expect(await plugin.list(other.ctx, 'liked', first.nextCursor)).toMatchObject({ ok: false, error: { kind: 'invalid_config' } }); expect(other.calls).toHaveLength(beforeForeign);
@@ -368,7 +369,7 @@ test('NetEase excludes every preview in a fallback chain and does not treat temp
 });
 
 test('NetEase prepares album positions, cover and three lyric forms once, and cache-only stat matches final streamed bytes', async () => {
-  const f = fixture(); await authorize(f); f.setPlaylistIds([1, 1]); f.setPreview(false);
+  const f = fixture(); await authorize(f); f.ctx.fileInfo = 'required'; f.setPlaylistIds([1, 1]); f.setPreview(false);
   const jpeg = new Uint8Array(await Bun.file(new URL('./fixtures/source-metadata/cover.jpg', import.meta.url)).arrayBuffer());
   const native = f.ctx.fetch; const counts = { album: 0, lyrics: 0, cover: 0 };
   f.ctx.fetch = (async (input, init) => {
@@ -402,8 +403,10 @@ test('NetEase prepares album positions, cover and three lyric forms once, and ca
   const upstreamSignal = f.calls.at(-1)!.signal!;
   expect(upstreamSignal.aborted).toBe(false); await cancellable.body.cancel();
   expect(upstreamSignal.aborted).toBe(true); expect(f.ctx.signal.aborted).toBe(false);
-  const cache = f.ctx.cache as ReturnType<typeof memoryCache>; cache.values.delete(JSON.parse(entry.fileRef).planKey);
-  expect(await plugin.stat(f.ctx, entry.fileRef)).toMatchObject({ ok: false, error: { kind: 'temporary' } });
+  const legacy = JSON.stringify({ version: 2, source: JSON.parse(entry.fileRef).source, planKey: `tag-plan:${info.contentId}` });
+  expect(value(await plugin.stat(f.ctx, legacy))).toEqual(info);
+  const cache = f.ctx.cache as ReturnType<typeof memoryCache>; cache.values.delete(`tag-plan:${info.contentId}`);
+  expect(await plugin.stat(f.ctx, legacy)).toMatchObject({ ok: false, error: { kind: 'temporary' } });
 });
 
 test('NetEase new listings require the optional host cache instead of silently publishing untagged audio', async () => {
@@ -413,7 +416,7 @@ test('NetEase new listings require the optional host cache instead of silently p
 
 test('NetEase stable auxiliary metadata lasts one week while missing lyrics are retried after one day', async () => {
   for (const missing of [false, true]) {
-    const f = fixture(); await authorize(f); const request = f.ctx.fetch;
+    const f = fixture(); await authorize(f); f.ctx.fileInfo = 'required'; const request = f.ctx.fetch;
     if (missing) f.ctx.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (new URL(String(input)).pathname.endsWith('/song/lyric/v1')) return Response.json({ code: 200 });
       return request(input, init);
@@ -437,7 +440,7 @@ test('NetEase preserves Retry-After for HTTP and business rate limits without in
 
 test('NetEase actual FLAC and M4A representations keep exact tagged sizes and final-file byte ranges', async () => {
   for (const [level, type, mediaType] of [['lossless', 'FLAC', 'audio/flac'], ['standard', 'M4A', 'audio/mp4']] as const) {
-    const f = await qualityFixture(); f.setPlaylistIds([1]); f.ctx.config = audio([level]); f.available.set(`1:${level}`, { level, type });
+    const f = await qualityFixture(); f.ctx.fileInfo = 'required'; f.setPlaylistIds([1]); f.ctx.config = audio([level]); f.available.set(`1:${level}`, { level, type });
     const entry = value(await plugin.list(f.ctx, 'liked')).items[0]!; if (entry.kind !== 'file' || !entry.info) throw new Error('Expected prepared audio');
     expect(entry.name.toLowerCase()).toEndWith('.' + type.toLowerCase()); expect(entry.info.mediaType).toBe(mediaType);
     const full = value(await plugin.open(f.ctx, entry.fileRef, { expectedContentId: entry.info.contentId }));

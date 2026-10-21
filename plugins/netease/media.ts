@@ -110,7 +110,7 @@ function verify(response: Response, ref: MediaReference, range?: { start: number
 }
 export async function stat(client: NeteaseClient, file: string): Promise<FileInfo> {
   const tagged = decodeTagged(file);
-  if (tagged) return taggedStat(client, tagged);
+  if (tagged) return taggedStat(client, tagged, sourceReader(client, tagged.source));
   const ref = decodeFile(file); const range = { start: 0, end: 0 }; const response = await request(client, ref, range);
   try { verify(response, ref, range); return info(ref); }
   finally { await response.body?.cancel(); }
