@@ -1,5 +1,23 @@
 # MusicFS 架构与流程图
 
+## 已发布目录视图与单文件访问
+
+2026-10-21源码实现。目录视图属于library，共用命名与路径查找；LRU只加速，SQLite/D1的已发布身份仍是事实源。Worker跨HTTP的runtime生命周期在宿主层单独接线，不能复用旧请求context。细节与受控计数见[性能设计](refresh-performance.md)。
+
+```mermaid
+flowchart LR
+  Client[HEAD GET Range或目录浏览] --> Resolve[library路径解析]
+  Resolve --> Header[SQLite或D1读取发布header及来源戳]
+  Header --> Match{发布身份命中有界LRU?}
+  Match -->|是| Index[复用可移植名称与路径Map]
+  Match -->|否| Rows[读取一次完整已发布快照]
+  Rows --> Build[命名与建立索引]
+  Build --> Index
+  Index --> File[定位所需单项]
+  File --> Source[来源stat或open]
+  Publish[完整刷新发布新snapshot.id] --> Header
+```
+
 ## 核心与共用页面升级
 
 核心/WebUI升级保留云端实际代码集合；插件安装仍沿既有后台发布流程。具体操作见[Worker升级说明](../worker.md#升级核心与-webui保留云端插件)。

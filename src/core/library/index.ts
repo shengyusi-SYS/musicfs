@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ByteRange, FileInfo, Outcome, ReadResult } from '@musicfs/plugin-api';
 import type { Sources, SourceStamp } from '../sources';
-import { nameEntries } from './names';
+import { createPublishedViews, namedView, type NamedView } from './published-views';
 import { createRefreshes } from './refresh';
 import { assertInfo } from './file-info';
 import type { RefreshScope, RefreshStore, RefreshView } from './refresh-types';
@@ -145,6 +145,13 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       // Read this key again; never return that other directory as this result.
     }
   }
+  const publishedViews = createPublishedViews<Child>(store, snapshot, value => value.kind === 'roots'
+    ? value.items.map(root => ({ id: root.sourceId, name: root.name, modifiedAt: value.completedAt,
+      target: { kind: 'directory', stamp: value.stamp, ref: root.directoryRef } }))
+    : value.items.map(entry => ({ id: entry.entryId, name: entry.name,
+      modifiedAt: entry.kind === 'file' ? entry.info?.modifiedAt ?? value.completedAt : value.completedAt,
+      target: entry.kind === 'directory' ? { kind: 'directory', stamp: value.stamp, ref: entry.directoryRef }
+        : { kind: 'file', stamp: value.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }) } })));
   async function refreshInstance(instanceId: string, signal: AbortSignal): Promise<InstanceRefresh> {
     signal.throwIfAborted();
     const result = await drain(await refreshes.start(instanceId, { kind: 'instance' }), signal);
@@ -152,7 +159,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   }
   async function rootsSnapshot(instanceId: string, signal: AbortSignal) {
     const stamp = await sources.view(instanceId);
-    const value = await snapshot(stamp, { kind: 'roots', ref: '' }, signal);
+    const { snapshot: value } = await publishedViews.get(stamp, { kind: 'roots', ref: '' }, signal);
     if (value.kind !== 'roots') throw new LibraryError('invalid_source', 'Invalid root snapshot');
     return { stamp, value };
   }
@@ -162,26 +169,21 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     if (!root) throw new LibraryError('not_found', 'Content source no longer exists');
     return { kind: 'directory', stamp, ref: root.directoryRef };
   }
-  async function children(target: Target, signal: AbortSignal): Promise<Child[]> {
-    if (target.kind === 'instances') return (await sources.instances()).map(instance => ({
+  async function children(target: Target, signal: AbortSignal): Promise<NamedView<Child>> {
+    if (target.kind === 'instances') return namedView((await sources.instances()).map(instance => ({
       id: instance.id, name: instance.name, target: { kind: 'instance', instanceId: instance.id }, modifiedAt: epochDate
-    }));
-    if (target.kind === 'layout') return target.nodes.map(node => ({ id: node.id, name: node.name, modifiedAt: epochDate,
+    })) satisfies Child[]);
+    if (target.kind === 'layout') return namedView(target.nodes.map(node => ({ id: node.id, name: node.name, modifiedAt: epochDate,
       target: node.kind === 'group' ? { kind: 'layout', nodes: node.children, revision: target.revision }
-        : { kind: 'source', instanceId: node.instanceId, sourceId: node.sourceId } }));
+        : { kind: 'source', instanceId: node.instanceId, sourceId: node.sourceId } })) satisfies Child[]);
     if (target.kind === 'source') return children(await sourceDirectory(target, signal), signal);
     if (target.kind === 'instance') {
-      const { stamp, value } = await rootsSnapshot(target.instanceId, signal);
-      return value.items.map(root => ({ id: root.sourceId, name: root.name, modifiedAt: value.completedAt,
-        target: { kind: 'directory', stamp, ref: root.directoryRef } }));
+      const stamp = await sources.view(target.instanceId);
+      return publishedViews.get(stamp, { kind: 'roots', ref: '' }, signal);
     }
     if (target.kind !== 'directory') throw new LibraryError('not_directory', 'Path is not a directory');
     if (!await sources.current(target.stamp)) throw new LibraryError('stale_call', 'Source changed');
-    const value = await snapshot(target.stamp, { kind: 'directory', ref: target.ref }, signal);
-    if (value.kind !== 'directory') throw new LibraryError('invalid_source', 'Invalid directory snapshot');
-    return value.items.map(entry => ({ id: entry.entryId, name: entry.name, modifiedAt: entry.kind === 'file' ? entry.info?.modifiedAt ?? value.completedAt : value.completedAt,
-      target: entry.kind === 'directory' ? { kind: 'directory', stamp: target.stamp, ref: entry.directoryRef }
-        : { kind: 'file', stamp: target.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }) } }));
+    return publishedViews.get(target.stamp, { kind: 'directory', ref: target.ref }, signal);
   }
   async function root(): Promise<Target> {
     const layout = await store.layout();
@@ -192,8 +194,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     if (segments.some(part => part === '.' || part === '..' || /[\\\x00]/.test(part))) throw new LibraryError('not_found', 'Invalid export path');
     let target = await root(); let name = ''; let canonical = ''; let modifiedAt = epochDate;
     for (const segment of segments) {
-      const entries = await nameEntries(await children(target, signal));
-      const next = entries.find(entry => entry.pathName === segment);
+      const next = (await children(target, signal)).byName.get(segment);
       if (!next) throw new LibraryError('not_found', 'Export path not found');
       target = next.target; name = next.pathName; canonical += `/${name}`; modifiedAt = next.modifiedAt;
     }
@@ -203,7 +204,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   // Serialized or externally created entries still resolve through the ordinary path boundary.
   const listedEntries = new WeakMap<ViewEntry, Resolved>();
   async function listResolved(resolved: Resolved, signal: AbortSignal): Promise<ViewEntry[]> {
-    return (await nameEntries(await children(resolved.target, signal))).map(entry => {
+    return (await children(resolved.target, signal)).entries.map(entry => {
       const view: ViewEntry = { kind: entry.target.kind === 'file' ? 'file' : 'directory', name: entry.pathName,
         path: `${resolved.path === '/' ? '' : resolved.path}/${entry.pathName}`, modifiedAt: entry.modifiedAt };
       listedEntries.set(view, { target: entry.target, name: view.name, path: view.path, modifiedAt: view.modifiedAt });

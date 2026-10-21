@@ -33,12 +33,13 @@ test('complete pagination preserves order and duplicate file occurrences', async
 test('listed entries retain resolved targets without rereading parent directories and still reject changed sources', async () => {
   const { library, store, sources, id } = await setup();
   const entries = await library.files.list('/实例 & #/来源', signal());
-  const entry = entries[0]!; const snapshot = store.snapshot; let reads = 0;
+  const entry = entries[0]!; const snapshot = store.snapshot; const header = store.snapshotHeader; let reads = 0; let headers = 0;
   store.snapshot = (...args) => { reads++; return snapshot(...args); };
+  store.snapshotHeader = (...args) => { headers++; return header(...args); };
   expect(await library.files.stat(entry, signal())).toMatchObject({ kind: 'file', path: filePath, handle: { content: { size: 8 } } });
   expect(reads).toBe(0);
   expect(await library.files.stat(JSON.parse(JSON.stringify(entry)), signal())).toMatchObject({ kind: 'file', path: filePath });
-  expect(reads).toBeGreaterThan(0);
+  expect(reads).toBe(0); expect(headers).toBeGreaterThan(0);
   await sources.configure(id, { changed: true }, signal());
   await expect(library.files.stat(entry, signal())).rejects.toMatchObject({ code: 'stale_call' });
 });
@@ -159,10 +160,10 @@ test('failed refresh retains the complete previous snapshot and leaves layout un
   const layout = await library.saveLayout(0, [{ kind: 'group', id: 'group', name: '音乐', children: [{ kind: 'source', id: 'source', name: '我的来源', instanceId: id, sourceId: 'root' }] }]);
   expect((await library.files.list('/音乐/我的来源', signal()))).toHaveLength(1);
   const previous = store.snapshot(id, { kind: 'directory', ref: 'root' });
-  source.list = async () => ({ ok: false, error: { kind: 'temporary', message: 'Fixture network failed' } });
-  await expect(library.refresh(id, 'root', signal())).rejects.toThrow('Fixture network failed');
+  source.list = async () => ({ ok: false, error: { kind: 'unavailable', message: 'Fixture source unavailable' } });
+  await expect(library.refresh(id, 'root', signal())).rejects.toThrow('Fixture source unavailable');
   expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.value).toEqual(previous?.value);
-  expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.error).toBe('temporary');
+  expect(store.snapshot(id, { kind: 'directory', ref: 'root' })?.error).toBe('unavailable');
   expect(await library.layout()).toEqual(layout);
   expect(await library.files.list('/音乐/我的来源', signal())).toHaveLength(1);
 });

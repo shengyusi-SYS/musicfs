@@ -22,7 +22,7 @@ async function setup() {
     roots: async () => ({ ok: true, value: { items: [{ sourceId: 'collection', name: '集合', directoryRef: 'collection' }] } }),
     list: async (_ctx, ref) => {
       calls.push(ref);
-      return failures.has(ref) ? { ok: false, error: { kind: 'temporary', message: 'Fixture upstream unavailable' } }
+      return failures.has(ref) ? { ok: false, error: { kind: 'unavailable', message: 'Fixture upstream unavailable' } }
         : { ok: true, value: { items: content.get(ref) ?? [] } };
     },
     stat: async () => ({ ok: false, error: { kind: 'not_supported', message: 'Unused' } }),
@@ -56,9 +56,9 @@ test('instance refresh reports partial failure, keeps last complete content and 
   const layout = await f.library.saveLayout(0, [{ kind: 'source', id: 'export', name: '我的导出', instanceId: f.id, sourceId: 'collection' }]);
   f.failures.add('cached'); f.content.set('collection', [directory('cached', '已浏览'), directory('new')]);
   const result = await f.finish(await f.api.startRefresh(f.id, { kind: 'instance' }));
-  expect(result).toMatchObject({ refreshedDirectories: 1, failures: [{ directoryRef: 'cached', error: { code: 'source_failed', sourceFault: { kind: 'temporary' } } }] });
+  expect(result).toMatchObject({ refreshedDirectories: 1, failures: [{ directoryRef: 'cached', error: { code: 'source_failed', sourceFault: { kind: 'unavailable' } } }] });
   expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' })?.value).toEqual(before?.value);
-  expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' })?.error).toBe('temporary');
+  expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' })?.error).toBe('unavailable');
   expect(await f.library.layout()).toEqual(layout);
   expect((await f.library.files.list('/我的导出/已浏览', signal())).map(item => item.name)).toEqual(['old.wav']);
   f.failures.clear(); f.content.set('cached', [file('recovered.wav')]);
@@ -80,7 +80,7 @@ test('directory failure remains visible through management after another directo
   f.failures.add('cached');
   const failed = await f.api.startRefresh(f.id, { kind: 'directory', directoryRef: 'cached' });
   expect(await f.api.stepRefresh(failed.operationId)).toMatchObject({ status: 'failed' });
-  expect(await f.api.directoryStatus(f.id, 'cached', signal())).toEqual({ ...previous, error: 'temporary' });
+  expect(await f.api.directoryStatus(f.id, 'cached', signal())).toEqual({ ...previous, error: 'unavailable' });
   const other = await f.finish(await f.api.startRefresh(f.id, { kind: 'directory', directoryRef: 'lazy' }));
   expect(other.status).toBe('completed');
   expect((await f.api.currentRefresh(f.id, signal()))?.operationId).toBe(other.operationId);
@@ -92,7 +92,7 @@ test('directory failure remains visible through management after another directo
   const get = (url: string) => reopened.request(url, { headers: { Authorization: 'Bearer fixture-admin' } });
   const statusPath = `/api/instances/${f.id}/directory-status?directoryRef=cached`;
   const status = await get(statusPath);
-  expect(status.status).toBe(200); expect(await status.json()).toEqual({ ...previous, error: 'temporary' });
+  expect(status.status).toBe(200); expect(await status.json()).toEqual({ ...previous, error: 'unavailable' });
   expect(await (await get(`/api/instances/${f.id}/directory-status?directoryRef=lazy`)).json()).toMatchObject({ error: null });
   const oldContent = await get(`/api/library?path=${encodeURIComponent(path)}`);
   expect(oldContent.status).toBe(200);
@@ -128,7 +128,7 @@ test('published nested directory browsing retains its own failed refresh status 
   const reads: string[] = []; const snapshot = f.store.snapshot;
   f.store.snapshot = (...args) => { reads.push(`${args[1].kind}:${args[1].ref}`); return snapshot(...args); };
   const result = await api.browseDirectory(path, signal());
-  expect(result.status).toEqual({ ...previous, error: 'temporary' });
+  expect(result.status).toEqual({ ...previous, error: 'unavailable' });
   expect(result.entries.map(item => item.name)).toEqual(['old.wav']);
   expect(Object.keys(result.entries[0]!).sort()).toEqual(['kind', 'modifiedAt', 'name', 'path']);
   expect(reads).toEqual(['roots:', 'directory:collection', 'directory:cached']);
@@ -137,7 +137,7 @@ test('published nested directory browsing retains its own failed refresh status 
   const source = await api.browseDirectory('/已发布/我的集合', signal());
   expect(source.status?.error).toBeNull();
   expect(source.entries.map(item => item.name)).toEqual(['已浏览', 'lazy']);
-  expect(reads).toEqual(['roots:', 'directory:collection']);
+  expect(reads).toEqual([]);
   expect((await api.browseDirectory('/已发布', signal())).status).toBeNull();
 });
 
