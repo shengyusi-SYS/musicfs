@@ -1,10 +1,14 @@
 # MusicFS 当前交付物
 
-## 源码与独立插件更新
+## dev.12 应用场景性能优化
 
-2026-10-22：源码完成无变化挂载状态写盘减法、桌面32MiB目录索引预算与紧凑保留、单曲资料等待优化；API0.1.9/schema10不变。独立开发插件已构建：[网易云 alpha.16](../dist/netease/org.musicfs.netease.zip)、[QQ alpha.16](../dist/plugins/org.musicfs.qq.zip)。[离线核对及边界](verification/performance-local-2026-10-22.md)
+2026-10-22：应用`0.1.0-dev.12`，API0.1.9/schema10不变，网易云alpha.17、QQ alpha.16。包含无变化挂载状态写盘减法、桌面32MiB路径索引与紧凑保留、单曲资料等待优化，以及本轮应用场景修正：未读文件身份在资料期限内稳定、纯音频Range跳过无关共享封面、复用有效播放版本定位、关闭缓存时仍跟踪在途读取。顺序文件名和已接受的1MiB预留不变。
 
-本轮未重打桌面发行包或部署云端。以下dev.11及更早归档保持原构建身份；仅更新插件不会让旧桌面程序获得本轮核心和挂载页面改动。
+交付位于`dist/releases/0.1.0-dev.12/`：[Windows x64](../dist/releases/0.1.0-dev.12/musicfs-0.1.0-dev.12-windows-x64.zip)、[Linux x64](../dist/releases/0.1.0-dev.12/musicfs-0.1.0-dev.12-linux-x64.zip)、[离线Worker](../dist/releases/0.1.0-dev.12/musicfs-0.1.0-dev.12-worker.zip)、[源码](../dist/releases/0.1.0-dev.12/musicfs-0.1.0-dev.12-source.zip)、[作者包](../dist/releases/0.1.0-dev.12/musicfs-0.1.0-dev.12-plugin-author-kit.zip)、[版本清单](../dist/releases/0.1.0-dev.12/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.12/SHA256SUMS)。统一构建输入为干净提交`ecbc151`；独立插件在该版本目录的`plugins/`中，避免混用旧发行物。
+
+Linux正式程序以临时数据、示例插件完成一次页面/插件安装/目录与状态/HEAD/准确Range/重复启动复用/正常退出的离线冒烟；未启用系统挂载、崩溃恢复或音乐平台。Windows为WSL交叉构建，未重跑VM；Worker只构建、不部署或重测免费CPU。定向模块回归及限制见[局部核对](verification/performance-local-2026-10-22.md)，候选停止/重开条件见[ROI复评](../outputs/musicfs-performance-review.md#当前roi停止决定)。
+
+正常退出旧后台，解压完整新版并重新挂载；安装随包最新示例插件，再刷新相应歌曲目录以采用新的引用策略。插件升级沿现有修订隔离，不能承诺复用旧修订缓存。更新核心本身不要求为了轮询/索引改动重刷整库；不部署云端、不重建macOS，旧归档保持原身份。
 
 ## dev.11 直接WebDAV共享读取缓存
 

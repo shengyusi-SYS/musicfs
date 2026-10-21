@@ -4,11 +4,11 @@
 
 ## 当前事实
 
-Windows 最新发行包仍为 dev.11，直接 DAV 共享读取已完成正式模块和目标包的限定验证。本轮源码完成挂载状态、大目录索引和单曲资料调度优化，独立示例插件为 alpha.16；API0.1.9/schema10不变。未重打桌面包或部署云端，历史证据按各自版本判断。实际产物只查[发行页](release.md)。
+本轮交付为dev.12：Windows/Linux、离线Worker、源码与作者包，API0.1.9/schema10不变，网易云alpha.17/QQ alpha.16。应用场景优化有定向模块证据，Linux正式程序以临时数据和sample完成一次离线冒烟；Windows未重跑VM、Worker未部署或测免费CPU。历史证据按各自版本判断，产物身份只查[发行页](release.md)。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
-| 局部性能优化 | [O2/O1/O3离线核对](verification/performance-local-2026-10-22.md) | 正式模块、有限合成样本；未重新验证Windows或真实整库 |
+| 局部性能优化 | [O2/O1/O3与应用场景核对](verification/performance-local-2026-10-22.md) | 正式模块、有界样本和Linux发行冒烟；未重测Windows或真实整库 |
 | 冷刷新与 SDK 请求减法 | [真实冷基线](verification/real-netease-cold-dev5.md)、[请求减法](verification/netease-cold-request-reduction.md)、[两阶段清单](verification/deferred-catalogue.md) | 完整清单、全库标签和全库入库是不同工作范围 |
 | 真正按需挂载与格式 | [Windows / WSL 可行性及生产接线](verification/lazy-mount-feasibility.md) | MP3/FLAC/M4A 的具体预留方案；APE 与容器/播放器限制分别记录 |
 | 挂载缓存与播放成本 | [dev.9—dev.10 消费记录](verification/cache-consumption-2026-10-21.md) | WSL/FUSE、有效生成音频、Windows Shell/FileStream；非真实整库 GUI 计时 |
