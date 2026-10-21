@@ -1,55 +1,36 @@
-# 管理页面登录：依赖调查与取舍
+# 管理页面登录：选型结论
 
-日期：2026-10-22。范围仅为 MusicFS 管理 WebUI 登录；不涉及音乐平台授权、DAV Basic 凭据或启动器身份探测。本轮只研究与澄清，未安装依赖、修改产品代码或连接云端/VM。
+2026-10-22。已采用固定版本 Better Auth 1.7.12，为 MusicFS 单管理员提供密码校验、数据库会话、Cookie、记住登录和撤销。桌面与 Worker 共用认证模块；现行合同、入口图和存储见[管理访问架构](../docs/architecture/management-access.md)，实际证据见[定向核对](../docs/verification/desktop-access.md)。
 
-## 已确认的用户效果
+## 为什么采用
 
-- 单管理员，无第三方登录、多用户或邮件功能需求。
-- 提供账号密码、记住登录；桌面启动自动进入；手机扫码进入。
-- 首次桌面直接进入，账号密码按需在设置创建；手机扫码不要求先设密码。
-- 云端首次使用现有部署凭据进入，再设置账号。
-- 手机访问需用户先在设置开启局域网；当前允许 HTTP/IP，不以新增 HTTPS、Passkey 或 OAuth 服务作为本轮前提。
+用户需要账号密码、记住登录和设备独立会话，同时保留桌面直接进入与手机扫码。完整认证依赖能减少自己组合密码存储、会话续期与撤销的维护成本。接受认证专用的 user/account/session/verification 表；它们留在认证边界，不要求音乐库迁移 ORM，也不向用户增加邮箱、注册或第三方身份服务。
 
-## 两条可行路线
+Better Auth 的 Web Request/Response 接线适配现有 Hono，固定版本支持 Bun SQLite 与 D1 binding。桌面独立 auth.sqlite；Worker 使用部署迁移 0011.sql。库内部数据库抽象不外泄到来源、目录或 DAV。
 
-| | Better Auth 完整认证 | Hono 会话组件 + 单管理员应用模块 |
-| --- | --- | --- |
-| 实际成熟能力 | 密码存储/校验、账号操作、记住登录、数据库会话、退出与撤销；官方 Hono/Bun SQLite 接入。 | `hono/cookie`、`@hono/session` 或 `hono-sessions` 处理 Cookie/会话格式与期限；它们**不提供**完整账号密码系统。 |
-| 数据/依赖成本 | 常规密码模式包含 user、account、session、verification 等模型；username 插件仍以 email/password 模型为底。可不提供注册/邮件界面，但内部模型仍存在。 | 可以只有单管理员凭据与必要会话记录，不强加 email/account 模型；密码校验、设置、登录、退出及扫码交换由 MusicFS 应用模块负责，不能当成“库已经包办”。 |
-| 双宿主适配 | 官方支持 `bun:sqlite`；固定版本源码识别 D1 binding，不必因为示例用了 Drizzle/Neon 就加整套 ORM/数据库。现有 `openSqlite` 只返回窄领域 store，仍要由桌面宿主组合独立认证 adapter；不能直接塞入现有 store。 | Hono Cookie helper 已在依赖内；会话库使用 WebCrypto。`hono-sessions` 作者明确测试 Bun/Workers，并提供 Bun SQLite store；D1 adapter 需核实/补薄实现。`@hono/session` 的当前 Storage 写/删接口未 await，不宜直接接异步 D1。 |
-| 桌面/手机免密码进入 | 普通密码登录不覆盖这两个入口，需要新增本机凭据→浏览器会话、二维码→手机会话的桥接。OTT 插件可复用一次性凭据，但不能据文档就说它会新建独立手机会话。 | 同样需要两种桥接；可以直接汇入同一个会话签发接口。应用自有逻辑更多，但与实际单管理员流程贴合。 |
-| 估算与 ROI | 约 3—5 人日完成双宿主认证与现有入口整合，再加最终 Worker 密码 CPU 验证。维护收益在于不用自行维护完整密码/会话行为；单管理员免密码入口仍需做。 | 约 2—4 人日，初始模型更少；长期须维护自己组合的账号与会话应用逻辑。节省几张表不能单独证明更划算。 |
+## 替代与取舍
 
-以上为基于仓库接缝的工程估算，不是运行测量。没有必要同时接两套认证体系。
+| 路线 | 实际能力与取舍 |
+|---|---|
+| Hono Cookie / 会话组件 | 能减少表模型，但不是完整账号密码系统，仍需 MusicFS 维护密码、账号、撤销及扫码桥接。部分组件异步存储写入没有 await，不直接包装成 D1 适配。 |
+| Auth.js Credentials | 不替应用保存账号密码；没有 SSO 需求，未比当前路线更贴合。 |
+| Better Auth OTT | 文档说明兑换关联会话，不能据此假定会新建手机独立会话。当前使用库的 verification 存储消费 ticket，再走正常会话签发。 |
+| Device Authorization | 发码、确认与轮询增加步骤，不符合从已登录电脑扫码直接进入的场景。 |
 
-## 第一方核查结果
+## 已解决的接缝
 
-**Better Auth 当前稳定版为 1.7.12，MIT。** 1.8 文档标记为 beta，不将 beta 能力算入本轮可用承诺。它的 Hono handler 可直接挂接 Web `Request/Response`；Bun SQLite 是官方示例；1.7.12 的 Kysely dialect 源码有 D1 识别和接入。库内部使用 Kysely，不等于 MusicFS 来源/目录核心需要迁移 ORM。[正式发布](https://github.com/better-auth/better-auth/releases)、[版本与许可](https://raw.githubusercontent.com/better-auth/better-auth/v1.7.12/packages/better-auth/package.json)、[Hono 接入](https://better-auth.com/docs/integrations/hono)、[Bun SQLite](https://better-auth.com/docs/adapters/sqlite)、[固定版本 dialect](https://raw.githubusercontent.com/better-auth/better-auth/v1.7.12/packages/kysely-adapter/src/dialect.ts)
+- 首次桌面无密码要求；启动器验证后台后签发一次使用、3 分钟有效的 ticket。网页兑换后删除 fragment。
+- 手机在自己的 LAN 主机地址兑换，获得独立 Cookie 会话；不是复制电脑 Cookie。局域网仍需用户手动开启。
+- HTTP/IP 与 HTTPS 分别配置 Cookie；浏览器和 API 同源。长期管理令牌继续作为部署/bootstrap 和脚本 Bearer 凭据。
+- 只暴露本产品端点；单管理员内置标识映射隐藏内部 email 模型，不安装 username 插件或增加邮箱表单。
+- Worker 构建选择 workerd 条件，使用依赖原生 scrypt；Bun、本地 workerd/D1 及正式多模块构建接线已通过定向验证。
 
-账号密码、`rememberMe`、退出、会话过期/更新和撤销属于现成功能。可以关闭公开注册，不要求接邮件发送服务；但 username 插件的标准创建接口仍要求 email/name，不能描述为原生“只有用户名/密码且完全无 email 模型”。若采用它，需要明确内部管理员标识映射，界面无需增加用户没有要求的邮箱字段。[密码认证](https://better-auth.com/docs/authentication/email-password)、[username 插件](https://better-auth.com/docs/plugins/username)、[核心表](https://better-auth.com/docs/concepts/database)、[会话](https://better-auth.com/docs/concepts/session-management)
+免费 Worker 的真实计费 CPU 尚未测量。本地原生 scrypt 通过只证明路径能运行，不证明免费请求额度；本轮没有为此新增云端部署、降低密码成本或引入外部服务。常规已登录会话不重新计算密码哈希。
 
-**免费 Worker 的密码成本是两条路线共同问题。** 当前 HTTP CPU 额度为每次 10ms；PBKDF2/node:crypto API 可调用并不证明指定参数的密码验证在这个额度内。Better Auth 的历史 issue #8860 针对 1.4.18 的 JS scrypt，已被 2026-04-01 合并的 #8685 关闭；1.7.12 源码已委托 `@better-auth/utils/password`，node 条件选择原生 scrypt，其他环境回退 JS。因此不能宣称当前版必然失败，也不能宣称已保证免费可用。最终 Wrangler 产物选择哪条路径、一次登录的实际 CPU 仍未测量；会话请求无需每次重新计算密码哈希。[Worker 限制](https://developers.cloudflare.com/workers/platform/limits/)、[WebCrypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)、[node:crypto 支持](https://developers.cloudflare.com/workers/runtime-apis/nodejs/crypto/)、[历史问题](https://github.com/better-auth/better-auth/issues/8860)、[合并修复](https://github.com/better-auth/better-auth/pull/8685)、[1.7.12 密码源码](https://raw.githubusercontent.com/better-auth/better-auth/v1.7.12/packages/better-auth/src/crypto/password.ts)
+## 第一方参考
 
-**HTTP/IP 不强制排除 Cookie 登录。** Better Auth 支持配置 Cookie 属性和多个允许来源；桌面本机地址、LAN IP 和随机端口需要由宿主提供真实可用来源，HTTP 设置不能误套生产 HTTPS 的 Secure Cookie 默认值。保持 WebUI/API 同源即可，无需引入跨域登录服务。手机浏览器访问 LAN IP 与电脑访问 127.0.0.1 是不同 Cookie 主机，所以扫码要在手机目标地址完成会话签发，不能期望桌面 Cookie 自动共享。[Cookie 配置](https://better-auth.com/docs/concepts/cookies)、[baseURL 配置](https://better-auth.com/docs/reference/options)、[Hono Cookie helper](https://hono.dev/docs/helpers/cookie)
+[Better Auth 固定版本](https://github.com/better-auth/better-auth/tree/v1.7.12)、[Hono 接线](https://better-auth.com/docs/integrations/hono)、[SQLite](https://better-auth.com/docs/adapters/sqlite)、[数据库模型](https://better-auth.com/docs/concepts/database)、[会话](https://better-auth.com/docs/concepts/session-management)、[Cookie](https://better-auth.com/docs/concepts/cookies)。
 
-**OTT 并非已核实的独立手机会话签发器。** 官方文档说从当前会话生成默认 3 分钟的一次性 token，verify 返回关联 session；文档不足以证明它给手机设置 Cookie、创建独立 session 或具备独立退出语义。本轮未成功取得其固定版本实现，暂只把它视为一次性凭据候选。二维码显示可继续用已有 Ant Design；“新手机会话”仍需清楚的宿主整合。Device Authorization 插件面向 CLI/电视等设备授权，有额外发码/确认/轮询流程，不符合当前手机扫码直接进入的简化目标。[OTT 文档](https://better-auth.com/docs/plugins/one-time-token)、[设备授权文档](https://better-auth.com/docs/plugins/device-authorization)
+[密码修复 PR](https://github.com/better-auth/better-auth/pull/8685)、[历史 Worker issue](https://github.com/better-auth/better-auth/issues/8860)、[Workers 限制](https://developers.cloudflare.com/workers/platform/limits/)、[node:crypto](https://developers.cloudflare.com/workers/runtime-apis/nodejs/crypto/)。历史 JS scrypt 问题不能直接套用到本轮已选择的原生路径。
 
-**轻量会话方案的真实边界：**
-
-- `@hono/session 0.2.1`，MIT，位于 honojs/middleware，依赖 jose 6，提供加密 JWE Cookie 与期限/刷新。它比较新；密码、账号、配对不在其功能内。当前 Storage.get 允许 Promise，但 set/delete 未 await，不能把 D1 存储包装成同步接口后就算完成适配。[README](https://raw.githubusercontent.com/honojs/middleware/main/packages/session/README.md)、[包信息](https://raw.githubusercontent.com/honojs/middleware/main/packages/session/package.json)、[Storage 接口](https://raw.githubusercontent.com/honojs/middleware/main/packages/session/src/index.ts)、[写入实现](https://raw.githubusercontent.com/honojs/middleware/main/packages/session/src/session.ts)
-- `hono-sessions 0.8.1`，MIT，作者说明测试 Bun/Workers，提供 CookieStore、MemoryStore、BunSqliteStore、失活期限与自定义存储。没有本次已核实的内置 D1 adapter；CookieStore 无服务端逐会话撤销能力，不能把删除当前 Cookie 当作撤销所有副本。[作者仓库](https://github.com/jcs224/hono_sessions)、[正式包元数据](https://www.npmjs.com/package/hono-sessions?activeTab=code)
-- Hono 自带 Cookie helper 已支持 HMAC 签名，无需自行实现 Cookie 编解码。若选择轻量路线，应复用这些现成部件，明确哪些账号/会话逻辑仍由 MusicFS 承担。[官方 helper](https://hono.dev/docs/helpers/cookie)
-
-Auth.js 没有成为第三条推荐：虽然有 Hono 接入和 D1 adapter，但 Credentials provider 明确不替应用保存账号密码，仍要自己实现验证/持久化，未比前两条更贴合本轮需求；其 D1 adapter 也有 users/accounts/sessions/verification_tokens 四表。没有 SSO 要求，不因它支持很多 OAuth provider 而新增这套体系。[Credentials](https://authjs.dev/getting-started/authentication/credentials)、[D1 adapter](https://authjs.dev/getting-started/adapters/d1)、[Hono 接入](https://hono.dev/examples/hono-authjs)
-
-## 推荐与有限未决
-
-**优先考虑 Better Auth 1.7.12 的最小配置**，理由是已经确定需要密码、记住登录和设备会话，现有完整实现的维护收益比自行组合更明确。接受其认证专用表，单独留在管理认证模块；不增加公开注册、邮箱设置、组织/角色或第三方服务。使用它不代表其它核心模块跟着更换数据库抽象。
-
-落定前只需解决三项实际接缝：
-
-1. Worker 最终构建的密码路径与免费 CPU 是否可用；本轮未运行验证，不先降低哈希成本或加外部服务。
-2. 桌面自动进入与二维码如何签发正确主机下的独立 Cookie 会话；OTT 的完整效果尚未证实，不把“返回 session”当实现完成。
-3. 现有部署凭据/桌面凭据作为首次进入与桥接凭据，和设置后账号密码如何共存；保持 DAV、插件授权与启动器身份探测独立。
-
-如果第一项或内部 email/account 模型确实带来不合比例的成本，再采用 Hono 成熟会话部件加单管理员模块；这是明确缩小功能后的替代，而非“会话库已经是完整认证系统”。
+[Hono Cookie helper](https://hono.dev/docs/helpers/cookie)、[Hono session 源码](https://github.com/honojs/middleware/tree/main/packages/session)、[hono-sessions](https://github.com/jcs224/hono_sessions)、[Auth.js Credentials](https://authjs.dev/getting-started/authentication/credentials)、[OTT](https://better-auth.com/docs/plugins/one-time-token)、[Device Authorization](https://better-auth.com/docs/plugins/device-authorization)。

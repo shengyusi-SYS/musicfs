@@ -2,6 +2,8 @@
 export type MountInput = {
   name?: string;
   mountPoint: string;
+  /** Restore this saved mount when the desktop starts; defaults to true. */
+  autoMount?: boolean;
   /** Directory listing lifetime; zero keeps listings until explicitly refreshed. */
   directoryCacheSeconds?: number;
   /** Per-mount soft disk limit for read fragments; zero disables new caching. */
@@ -15,6 +17,7 @@ export type MountView = {
   id: string;
   name: string;
   mountPoint: string;
+  autoMount: boolean;
   directoryCacheSeconds: number;
   fileCacheMaxMiB: number;
   fileCacheMaxAgeHours: number;
@@ -44,6 +47,7 @@ export interface MountManager {
   remount(id: string): Promise<MountView>;
   unmount(id: string): Promise<MountView>;
   remove(id: string): Promise<void>;
+  configureAutoMount(id: string, enabled: boolean): Promise<MountView>;
   configureCache(id: string, settings: MountCacheSettings): Promise<MountView>;
   cacheStatus(id: string): Promise<MountCacheStatus>;
   clearCache(id: string): Promise<MountView>;

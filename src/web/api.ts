@@ -3,11 +3,12 @@ import type { Status, SourceInstance, PluginInstallation, PluginInspection, Sour
 import type { PluginChange } from '../contracts/plugin-changes';
 import type { MountCacheSettings, MountCacheStatus, MountInput, MountView } from '../contracts/mounts';
 import type { RefreshScope, RefreshView } from '../contracts/refreshes';
-import type { DesktopNetworkSettings, DesktopNetworkView } from '../contracts/desktop';
+import type { DesktopNetworkSettings, DesktopNetworkView, DesktopPreferences, DesktopPreferencesView } from '../contracts/desktop';
 import type { MountPrerequisitesView } from '../contracts/mount-prerequisites';
 import type { DesktopHttpsView } from '../contracts/desktop-https';
 import type { RefreshPolicy } from '../contracts/refresh-policy';
 import type { ReadCacheSettings, ReadCacheStatus } from '../contracts/read-cache';
+import type { ManagementAccess, ManagementTicket } from '../contracts/management-auth';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -31,12 +32,16 @@ export class ApiError extends Error {
   }
 }
 
-export function createApi(token: string, fetcher: typeof fetch = fetch) {
+export type AccessView = ManagementAccess;
+export type AccessTicket = ManagementTicket;
+
+export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthorized?: () => void) {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
-    headers.set('Authorization', `Bearer ${token}`);
-    const response = await fetcher(`/api${path}`, { ...init, headers, cache: 'no-store' });
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const response = await fetcher(`/api${path}`, { ...init, headers, cache: 'no-store', credentials: 'same-origin' });
     if (!response.ok) {
+      if (response.status === 401 && !path.startsWith('/access')) onUnauthorized?.();
       const detail: unknown = await response.json().catch(() => null);
       throw new ApiError(response.status, detail);
     }
@@ -45,6 +50,13 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
   const json = (method: string, value: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
   return {
     request,
+    access: () => request<AccessView>('/access'),
+    login: (username: string, password: string, rememberMe: boolean) => request<unknown>('/access/login', json('POST', { username, password, rememberMe })),
+    bootstrap: (token: string) => request<unknown>('/access/bootstrap', json('POST', { token })),
+    exchangeTicket: (ticket: string) => request<unknown>('/access/exchange', json('POST', { ticket })),
+    logout: () => request<unknown>('/access/logout', { method: 'POST' }),
+    saveAccount: (username: string, password: string) => request<AccessView>('/access/account', json('PUT', { username, password })),
+    accessTicket: () => request<AccessTicket>('/access/ticket', { method: 'POST' }),
     status: (signal?: AbortSignal) => request<Status>('/status', signal ? { signal } : {}),
     instances: (signal?: AbortSignal) => request<SourceInstance[]>('/instances', signal ? { signal } : {}),
     plugins: (signal?: AbortSignal) => request<PluginInstallation[]>('/plugins', signal ? { signal } : {}),
@@ -63,6 +75,7 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     mountCacheStatus: (id: string, signal: AbortSignal) => request<MountCacheStatus>(`/mounts/${encodeURIComponent(id)}/cache`, { signal }),
     clearMountCache: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/cache`, { method: 'DELETE' }),
     refreshMount: (id: string) => request<void>(`/mounts/${encodeURIComponent(id)}/cache/refresh`, { method: 'POST' }),
+    configureMountAutoMount: (id: string, enabled: boolean) => request<MountView>(`/mounts/${encodeURIComponent(id)}/auto-mount`, json('PUT', { enabled })),
     desktopReadCache: (signal: AbortSignal) => request<ReadCacheStatus>('/desktop/read-cache', { signal }),
     configureDesktopReadCache: (settings: ReadCacheSettings) => request<ReadCacheStatus>('/desktop/read-cache', json('PUT', settings)),
     clearDesktopReadCache: () => request<ReadCacheStatus>('/desktop/read-cache', { method: 'DELETE' }),
@@ -76,6 +89,8 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     quitDesktop: () => request<{ stopping: true }>('/desktop/quit', { method: 'POST' }),
     desktopNetwork: (signal: AbortSignal) => request<DesktopNetworkView>('/desktop/network', { signal }),
     saveDesktopNetwork: (settings: DesktopNetworkSettings) => request<DesktopNetworkView>('/desktop/network', json('PUT', settings)),
+    desktopPreferences: (signal?: AbortSignal) => request<DesktopPreferencesView>('/desktop/preferences', signal ? { signal } : {}),
+    saveDesktopPreferences: (settings: DesktopPreferences) => request<DesktopPreferencesView>('/desktop/preferences', json('PUT', settings)),
     configuration: (id: string, signal: AbortSignal) => request<SourceConfiguration>(`/plugins/${encodeURIComponent(id)}/configuration`, { signal }),
     createInstance: (pluginId: string, name: string, config: Json) => request<Result<SourceInstance>>('/instances', json('POST', { pluginId, name, config })),
     configure: (id: string, config: Json) => request<Result<Json>>(`/instances/${encodeURIComponent(id)}/config`, json('PUT', { config })),

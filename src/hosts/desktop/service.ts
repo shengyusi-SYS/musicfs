@@ -16,10 +16,12 @@ import { createDesktopRunner } from './background';
 import { createDesktopChanges } from './changes';
 import { createDesktopReadCache } from './read-cache';
 import type { RcloneControl } from './rclone-control';
+import { createDesktopAccess } from './access';
 
-export async function createDesktopService(input: { directory: string; adminToken: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager; readCache?: { control: RcloneControl; controlDirectory: string } }) {
+export async function createDesktopService(input: { directory: string; adminToken: string; instanceId?: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager; mountAction?: (id: string) => void; readCache?: { control: RcloneControl; controlDirectory: string } }) {
   await mkdir(input.directory, { recursive: true, mode: 0o700 });
   const store = openSqlite(join(input.directory, 'state.sqlite'));
+  const access = createDesktopAccess(input.directory, input.adminToken, input.instanceId);
   const host = createDesktopPlugins(join(input.directory, 'plugins'), store);
   const extensions = createExtensions(store, host.prepare);
   const refreshMounts = () => { void input.mounts?.refreshLocal().catch(() => console.error('MusicFS: mount directory refresh failed; cached names remain until their configured expiry.')); };
@@ -66,9 +68,11 @@ export async function createDesktopService(input: { directory: string; adminToke
       || c.req.path.startsWith('/api/plugin-changes/') || c.req.path.endsWith('/refresh-policy')
       || c.req.method === 'POST' && c.req.path.startsWith('/api/plugins') && c.res.status === 202) background.wake();
   });
-  app.route('/', createManagementApi({ host: 'desktop', adminToken: input.adminToken, sources, library, extensions,
+  app.route('/', access.app);
+  app.route('/', createManagementApi({ host: 'desktop', adminToken: input.adminToken, managementAuth: access.middleware, sources, library, extensions,
     connection: { davPath: '/dav', ...input.dav },
     ...(input.mounts ? { mounts: input.mounts } : {}),
+    ...(input.mountAction ? { mountAction: input.mountAction } : {}),
     maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
     install: async (archive, signal) => {
       const installed = await changes.install(await readPackage(archive, 'desktop', signal), signal);
@@ -82,11 +86,11 @@ export async function createDesktopService(input: { directory: string; adminToke
     app.on(['GET', 'HEAD'], '/assets/*', serveStatic({ root: input.webRoot }));
   }
   background.wake();
-  return { app, store, readCache, close: async () => {
+  return { app, store, readCache, access, close: async () => {
     const resume = readCache?.prepareQuit();
     try {
       if (input.mounts) await input.mounts.close();
-      await readCache?.close(); await input.readCache?.control.close(); await background.close(); store.close();
+      await readCache?.close(); await input.readCache?.control.close(); await background.close(); store.close(); access.close();
     } catch (error) { resume?.(); throw error; }
   } };
 }

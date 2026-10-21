@@ -11,10 +11,11 @@ MusicFS 是插件式只读音乐文件服务，桌面与 Worker 独立部署、�
 | `library` | 内容源、完整快照、路径/命名、布局、刷新与周期策略 | `list/stat/statMany/open`、目录浏览、持久分页与发布 |
 | 数据源插件 | 来源协议、分类、音质/权益、音乐资料、最终文件表示与定位 | 独立公开插件合同；可透传或自行补标签 |
 | 桌面 `mounts` | 本地/远程挂载定义、就绪、卸载、移除、每挂载缓存 | 挂载管理接口；具体文件系统交给 rclone |
+| 管理认证 | 单管理员账号、浏览器会话和桌面/扫码入口 | 共用管理 API 中间件；独立于来源授权与 DAV 读取凭据 |
 | 桌面 `read-cache` | 直接 DAV 已读字节的共享缓存、设置与清理 | 包装 `FileView.open`，保持原文件描述与 DAV 合同 |
 | 桌面装配 / Worker 装配 | 原生进程/监听器或云端模块、后台续步、存储 Adapter | 组合真实能力并管理生命周期 |
 
-账号是部分来源的内部概念，不另建与实例竞争的核心账号系统。安装插件不自动创建账号，移除插件保留实例和布局；删除实例不移除其他实例共用的插件。曲目出现位置、实际媒体与导出表示分别存在，不跨实例合并凭据或私有状态。
+音乐平台账号是来源的内部概念，管理账号归管理认证边界。安装插件后由用户添加来源；移除插件保留实例和布局，删除实例保留其他实例共用的插件。曲目出现位置、实际媒体与导出表示分别存在，各实例拥有自己的凭据和私有状态。
 
 ## 模块组织
 
@@ -52,6 +53,8 @@ MusicFS 是插件式只读音乐文件服务，桌面与 Worker 独立部署、�
 
 ## 配置、认证与安装
 
+管理页采用 Better Auth 的单管理员会话：账号密码、桌面启动和手机 ticket 兑换汇入同一管理中间件，SQLite 与 D1 分别适配；DAV 读取和音乐平台授权各有独立凭据与生命周期。详见[管理访问](management-access.md)。
+
 插件实例配置通过 JSON Schema 和有限 UI 数据声明；前端 RJSF/Ant Design 生成表单，TanStack Query 管请求与失效。Zod 检查核心管理输入，官方插件工具在构建时用 Ajv standalone 生成结构校验；来源可达性与账号能力仍由插件判断。插件不传 React 组件、验证器对象或任意前端代码。
 
 `sources` 持久化交互操作、挑战与版本，取消先提交终态，再尝试来源清理。两个示例在凭据就绪时完成授权，补充账号资料按内容需要取得。按需续期由插件判断渠道和期限，核心只用短租约/CAS 协调同实例，不把普通读取都串行化。[会话证据](../verification/p2-session-lifecycle.md)
@@ -73,6 +76,8 @@ rclone RC 进程由桌面装配统一拥有，挂载和共享读取模块各管�
 | ZIP / 版本 | zip.js、npm semver；fflate 仅开发期独立编码互操作 | 包合同、兼容与安装切换 |
 | 标签与 MIME | node-taglib-sharp、multipart-parser，由选用的插件打包 | 最终表示计划、区段适配与来源请求 |
 | 发布 / 持久化 | Cloudflare 官方 SDK、bun:sqlite、D1 | 发布核对、领域 SQL 和条件提交 |
+| 管理登录 | Better Auth | 单管理员范围、一次访问 ticket、产品入口与凭据职责 |
+| 托盘 / 自启 | tray-icon、tao、auto-launch、系统 registry/plist 库 | 原生小辅助程序、后台事件与启动设置 |
 | 系统 / 缓存 | rclone、Bun.spawn、proper-lockfile、env-paths、open、selfsigned、lru-cache | 资源生命周期、缓存身份及必要宿主适配 |
 | DAV / 依赖方向 | Fetch 原生映射、xmldom、range-parser；dependency-cruiser | 只读协议接线、允许的依赖边界 |
 

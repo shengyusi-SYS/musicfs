@@ -6,6 +6,7 @@ import { readPackage } from '../src/infrastructure/archives';
 import { createReleaseIdentity } from './helpers/release-identity';
 import { writeBundleLicenses } from './helpers/bundle-licenses';
 import { copyWinFspPrerequisite } from './helpers/winfsp';
+import { buildDesktopNative, writeDesktopNativeLicenses } from './build-desktop-native';
 
 const targets = {
   'linux-x64': { compile: 'bun-linux-x64', rclone: 'linux-amd64', executable: 'musicfs' },
@@ -16,12 +17,13 @@ const targets = {
 type Target = keyof typeof targets;
 const rcloneVersion = 'v1.75.2';
 const { values } = parseArgs({ args: process.argv.slice(2), strict: true, options: {
-  target: { type: 'string' }, all: { type: 'boolean' }, 'skip-web': { type: 'boolean' }, runtime: { type: 'string' }
+  target: { type: 'string' }, targets: { type: 'string' }, all: { type: 'boolean' }, 'skip-web': { type: 'boolean' }, runtime: { type: 'string' }
 } });
 const native = `${process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : process.platform}-${process.arch}`;
-const selected = values.all ? Object.keys(targets) as Target[] : [values.target ?? native];
-if (selected.some(target => !(target in targets))) throw new Error(`Supported targets: ${Object.keys(targets).join(', ')}`);
-if (values.runtime !== undefined && (!values.runtime.trim() || values.all)) throw new Error('Supply --runtime with one target; build each target with its matching Bun executable.');
+if ([values.target !== undefined, values.targets !== undefined, !!values.all].filter(Boolean).length > 1) throw new Error('Choose --target, --targets or --all.');
+const selected = values.all ? Object.keys(targets) as Target[] : values.targets ? values.targets.split(',').map(value => value.trim()) : [values.target ?? native];
+if (!selected.length || new Set(selected).size !== selected.length || selected.some(target => !(target in targets))) throw new Error(`Supported targets: ${Object.keys(targets).join(', ')}`);
+if (values.runtime !== undefined && (!values.runtime.trim() || selected.length !== 1)) throw new Error('Supply --runtime with one target; build each target with its matching Bun executable.');
 const runtimeExecutable = values.runtime === undefined ? undefined : resolve(values.runtime);
 if (runtimeExecutable && !await Bun.file(runtimeExecutable).exists()) throw new Error('The selected Bun runtime executable does not exist.');
 const runtime = runtimeExecutable ? { kind: 'explicit' as const,
@@ -114,6 +116,8 @@ for (const selectedTarget of selected as Target[]) {
   await mkdir(dirname(executable), { recursive: true }); await mkdir(resources, { recursive: true });
   await cp('dist/web', join(resources, 'web'), { recursive: true });
   await rclone(target.rclone, resources);
+  const helper = join(resources, selectedTarget === 'windows-x64' ? 'desktop-helper.exe' : 'desktop-helper');
+  await buildDesktopNative({ target: selectedTarget, output: helper });
   if (selectedTarget === 'windows-x64') await copyWinFspPrerequisite(resources);
   const result = await Bun.build({ entrypoints: ['src/desktop.ts'], minify: true, metafile: true, define: { MUSICFS_COMPILED: 'true' },
     compile: { target: target.compile, outfile: executable, ...(runtimeExecutable ? { executablePath: runtimeExecutable } : {}),
@@ -128,6 +132,7 @@ for (const selectedTarget of selected as Target[]) {
   if (await Bun.file('LICENSE').exists()) await cp('LICENSE', join(releaseDirectory, 'LICENSE'));
   await cp('package.json', join(releaseDirectory, 'dependencies.json')); await cp('bun.lock', join(releaseDirectory, 'bun.lock'));
   const licenses = join(releaseDirectory, 'licenses');
+  await writeDesktopNativeLicenses({ target: selectedTarget, outputDirectory: join(licenses, 'desktop-helper') });
   await writeBundleLicenses(result.metafile, join(licenses, 'core'));
   await cp('dist/web/THIRD_PARTY_LICENSES.md', join(licenses, 'WebUI.md'));
   await cp(`third-party/bun-${Bun.version}-LICENSE.md`, join(licenses, `bun-${Bun.version}-LICENSE.md`));
@@ -135,6 +140,7 @@ for (const selectedTarget of selected as Target[]) {
   await cp('third-party/README.md', join(licenses, 'README.md'));
   await writeFile(join(releaseDirectory, 'release.json'), JSON.stringify({ target: selectedTarget, version: identity.version, rclone: rcloneVersion,
     identity, bunVersion: Bun.version, runtime, entrypoint: 'src/desktop.ts',
+    desktopHelper: { file: helper.slice(releaseDirectory.length + 1), sha256: new Bun.CryptoHasher('sha256').update(await Bun.file(helper).arrayBuffer()).digest('hex') },
     executable: executable.slice(releaseDirectory.length + 1), generatedAt: new Date().toISOString(), targetRuntimeVerified: false,
     executableSha256: new Bun.CryptoHasher('sha256').update(await Bun.file(executable).arrayBuffer()).digest('hex') }, null, 2) + '\n');
   console.log(`Desktop artifact: ${releaseDirectory} (target runtime and system mounting require separate verification)`);

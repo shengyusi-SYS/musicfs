@@ -10,6 +10,10 @@ export default function DesktopNetwork({ api }: { api: Api }) {
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2 });
   const save = useMutation({ mutationFn: (settings: DesktopNetworkSettings) => api.saveDesktopNetwork(settings), onSuccess: value => {
     client.setQueryData(['desktop-network'], value); message.success(value.restartRequired ? '设置已保存，重新启动后台后生效' : '网络设置已保存');
+    const url = new URL(location.href);
+    if (!value.restartRequired && Number(url.port || (url.protocol === 'https:' ? 443 : 80)) !== value.active.port && url.protocol === 'http:') {
+      url.port = String(value.active.port); location.assign(url.href);
+    }
   } });
   if (network.error instanceof ApiError && network.error.status === 404) return null;
   const value = network.data;

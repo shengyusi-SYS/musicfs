@@ -12,7 +12,7 @@ let directory = defaultDesktopDirectory();
 
 try {
   const { values } = parseArgs({ args, strict: true, options: {
-    background: { type: 'boolean' }, 'no-open': { type: 'boolean' }, data: { type: 'string' }, resources: { type: 'string' }
+    background: { type: 'boolean' }, 'no-open': { type: 'boolean' }, autostart: { type: 'boolean' }, 'no-integration': { type: 'boolean' }, data: { type: 'string' }, resources: { type: 'string' }
   } });
   background = !!values.background;
   if (values.data) directory = resolve(values.data);
@@ -20,15 +20,17 @@ try {
   const resourcesDirectory = resolve(values.resources ?? (compiled
     ? (process.platform === 'darwin' && executableDirectory.endsWith('/MacOS') ? resolve(executableDirectory, '../Resources') : resolve(executableDirectory, 'resources'))
     : resolve(import.meta.dir, '../dist/desktop-resources')));
+  const command = compiled ? [process.execPath] : [process.execPath, import.meta.path];
+  const systemIntegration = !!compiled && !values['no-integration'];
   if (values.background) {
-    const backend = await startDesktopBackground({ ...(values.data ? { directory: values.data } : {}), resourcesDirectory });
+    const backend = await startDesktopBackground({ ...(values.data ? { directory: values.data } : {}), resourcesDirectory, command, systemIntegration });
     if (backend) {
       const stop = () => { void backend.close().then(() => process.exit(0)).catch(() => console.error('MusicFS: close active files before quitting the background.')); };
       process.on('SIGINT', stop); process.on('SIGTERM', stop);
     }
   } else {
-    await launchDesktop({ command: compiled ? [process.execPath] : [process.execPath, import.meta.path], resourcesDirectory,
-      ...(values.data ? { directory: values.data } : {}), openBrowser: !values['no-open'] });
+    await launchDesktop({ command, resourcesDirectory, systemIntegration, loginStartup: !!values.autostart,
+      ...(values.data ? { directory: values.data } : {}), ...(values['no-open'] ? { openBrowser: false } : {}) });
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : 'MusicFS desktop startup failed.';

@@ -7,7 +7,7 @@
 | 目的 | 入口 |
 |---|---|
 | 选择实际版本、升级、启动和部署 | [交付物](release.md)、[用户指南](user-guide.md) |
-| 桌面挂载、WinFsp、本机 HTTPS | [桌面说明](desktop.md) |
+| 托盘、自启、手机扫码、桌面挂载与本机 HTTPS | [桌面说明](desktop.md) |
 | 部署或升级 Worker 并保留插件 | [Worker 指南](worker.md) |
 | 连接 OpenList、播放器和客户端缓存 | [客户端说明](clients.md) |
 | 理解配置、认证、刷新与桌面路由 | [管理 API](management-api.md) |
@@ -27,6 +27,7 @@
 | 各类缓存和目录周期更新 | [缓存策略](architecture/cache-policy.md) |
 | App 挂载和直接 DAV 的字节缓存 | [挂载设计](architecture/desktop-mounts.md)、[共享读取](architecture/shared-read-cache.md) |
 | 共用页面责任和视觉基线 | [WebUI 设计](architecture/web-ui.md) |
+| 管理登录、浏览器会话与手机扫码 | [管理访问](architecture/management-access.md) |
 | 使用流程、备选交互和取舍 | [UI / UX 决定](../outputs/musicfs-ui-ux-decisions.md) |
 | 性能主线执行与完成标准 | [Codex 目标](codex-goal.md) |
 | 当前进展、ROI 候选与重开条件 | [实施计划](../outputs/musicfs-implementation-plan.md)、[缓存决定](../outputs/musicfs-cache-optimization-plan.md) |

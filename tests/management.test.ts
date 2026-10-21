@@ -159,9 +159,9 @@ test('refresh HTTP accepts without reading, advances one page per request and re
 test('DAV credentials cannot manage plugins or settings; invalid JSON and settings are rejected', async () => {
   const { request } = await setup();
   const denied = await request('/api/plugins', { method: 'POST', headers: { Authorization: reader }, body: new Uint8Array(archive) });
-  expect(denied.status).toBe(400); expect(denied.headers.get('WWW-Authenticate')).toContain('Bearer'); await denied.body?.cancel();
+  expect(denied.status).toBe(401); expect(await denied.json()).toMatchObject({ error: 'unauthorized' });
   const wrong = await request('/api/layout', { method: 'PUT', ...body({ expectedRevision: 0, nodes: [] }), headers: { Authorization: reader, 'Content-Type': 'application/json' } });
-  expect(wrong.status).toBe(400); await wrong.body?.cancel();
+  expect(wrong.status).toBe(401); await wrong.body?.cancel();
   const malformed = await request('/api/instances', { method: 'POST', body: '{broken', headers: { 'Content-Type': 'application/json' } });
   expect(malformed.status).toBe(400); await malformed.body?.cancel();
   await request('/api/plugins', { method: 'POST', body: new Uint8Array(archive) });

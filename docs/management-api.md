@@ -2,10 +2,17 @@
 
 当前实现入口是[桌面服务装配](../src/hosts/desktop/service.ts)和[Worker 服务装配](../src/hosts/worker/service.ts)，共用 [Hono 管理路由](../src/transport/http/index.ts)、[Fetch DAV](../src/transport/dav/index.ts)与[管理页面](architecture/web-ui.md)。正式宿主、后台插件变更和桌面挂载已接线；真实云部署与目标系统挂载的状态见[台账](verification.md)。
 
-管理请求使用 `Authorization: Bearer <管理 token>`；DAV 使用独立 Basic 读取凭据。两者由装配传入，平台私有状态不通过管理列表或 DAV 暴露。错误的认证方案由 Hono 返回 challenge，DAV 凭据不能调用任何管理操作。
+浏览器管理请求使用 HttpOnly 会话 Cookie；脚本继续使用 `Authorization: Bearer <管理 token>`。通用与桌面管理路由复用同一认证中间件；DAV 使用独立 Basic 读取凭据。管理登录、播放器读取和来源插件授权各有职责，见[管理访问架构](architecture/management-access.md)。
 
 | 方法与路径 | 输入与结果 |
 |---|---|
+| `GET /api/access` | 当前 `authenticated/passwordConfigured/username?`；未登录也可查询可用入口 |
+| `POST /api/access/login` | `{username,password,rememberMe}`，账号密码换取管理会话 |
+| `POST /api/access/bootstrap` | `{token}`，部署/本机管理凭据换取浏览器会话 |
+| `PUT /api/access/account` | 已认证后设置 `{username,password}`；首次设置不影响已有设备，改密码撤销旧会话并重签当前 |
+| `POST /api/access/ticket` | 已认证后签发 `{ticket,expiresAt}`，一次使用、3 分钟有效 |
+| `POST /api/access/exchange` | `{ticket}` 换取新的独立浏览器会话 |
+| `POST /api/access/logout` | 删除当前服务端会话及 Cookie |
 | `GET /api/status` | 宿主和应用版本 |
 | `GET /api/connection` | 受管理认证保护的 DAV 地址路径、用户名及读取密码；宿主未提供时返回 404 |
 | `GET /api/plugins` | 安装清单、版本与 active/missing 状态 |
@@ -38,10 +45,11 @@
 | `PUT /api/layout` | `{expectedRevision,nodes}`；冲突返回 409，节点合同见 library 类型 |
 | `GET /api/library?path=...` | 导出视图中的有序浅目录；文件元数据在实际 stat/读取时准备 |
 | `GET /api/mounts` | 正式桌面启动器装配的本机挂载状态；开发服务和 Worker 不提供 |
-| `POST /api/mounts` | `{name?,mountPoint,source,directoryCacheSeconds?,fileCacheMaxMiB?,fileCacheMaxAgeHours?}`；source 为本机或带url/username/password的远程输入。须查看结果state，错误状态不表示挂载成功 |
+| `POST /api/mounts` | `{name?,mountPoint,source,autoMount?,directoryCacheSeconds?,fileCacheMaxMiB?,fileCacheMaxAgeHours?}`；source 为本机或带url/username/password的远程输入，autoMount默认true。须查看结果state，错误状态不表示挂载成功 |
 | `POST /api/mounts/:id/mount` | 按保存的私有输入重新挂载，返回MountView |
 | `POST /api/mounts/:id/unmount` | 正常卸载，保留定义与已读片段，返回MountView |
 | `DELETE /api/mounts/:id` | 正常卸载后移除定义及其缓存命名空间；占用失败保留可操作状态，成功204 |
+| `PUT /api/mounts/:id/auto-mount` | `{enabled}`，只修改下次启动的恢复设置，不立即重挂或卸载 |
 | `GET /api/mounts/:id/cache` | 实际VFS模式、原生路径、文件数/占用及采样时间；统计可滞后，未运行不启动原生进程 |
 | `PUT /api/mounts/:id/cache` | `{directoryCacheSeconds,fileCacheMaxMiB?,fileCacheMaxAgeHours?}`，保存并正常重挂；占用失败保留旧设置 |
 | `POST /api/mounts/:id/cache/refresh` | 仅失效该挂载的目录清单，204；不刷新平台或删除音频片段 |
@@ -49,7 +57,8 @@
 | `GET /api/desktop/read-cache` | 直接DAV共享缓存的settings、actualMode、state、路径、原生采样与说明 |
 | `PUT /api/desktop/read-cache` | `{maxMiB,maxAgeHours}`，共享读取空闲时保存；容量0关闭新缓存，期限0关闭时间淘汰，保留旧片段 |
 | `DELETE /api/desktop/read-cache` | 空闲时停止所属共享VFS并清理其片段/索引，返回状态；下次读取懒启动，不影响标签计划或挂载缓存 |
-| `GET /api/desktop/network`、`PUT /api/desktop/network` | 查询当前/待应用监听配置；保存`{access,port}`后正常重启生效，access为local或lan |
+| `GET /api/desktop/network`、`PUT /api/desktop/network` | 查询或保存`{access,port}`，access为local或lan；立即切换监听并保存在途响应，返回实际端口 |
+| `GET /api/desktop/preferences`、`PUT /api/desktop/preferences` | 查询或保存`launchAtLogin/openOnLaunch/openOnLogin/autoMount/retryAutoMount`，另返回系统集成状态 |
 | `GET /api/desktop/mount-prerequisites` | 检测本机挂载组件及安装状态 |
 | `POST /api/desktop/mount-prerequisites/install` | Windows运行随包WinFsp安装器并核对结果，必要时请求系统权限 |
 | `GET /api/desktop/https` | 本机HTTPS与Windows连接设置状态 |

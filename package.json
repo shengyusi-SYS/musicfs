@@ -1,6 +1,6 @@
 {
   "name": "musicfs",
-  "version": "0.1.0-dev.13",
+  "version": "0.1.0-dev.14",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.3",
@@ -46,6 +46,7 @@
     "@xmldom/xmldom": "0.9.12",
     "@zip.js/zip.js": "2.24.0",
     "antd": "6.6.6",
+    "better-auth": "1.7.12",
     "cloudflare": "7.3.0",
     "dayjs": "1.11.23",
     "env-paths": "4.0.0",

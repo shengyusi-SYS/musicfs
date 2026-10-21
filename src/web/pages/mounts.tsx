@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, App, Button, Collapse, Dropdown, Empty, Form, Input, Modal, Radio, Skeleton, Space, Tag, Typography } from 'antd';
+import { Alert, App, Button, Collapse, Dropdown, Empty, Form, Input, Modal, Radio, Skeleton, Space, Switch, Tag, Typography } from 'antd';
 import { MoreOutlined, PlusOutlined, FolderOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, type Api } from '../api';
@@ -8,7 +8,7 @@ import { Failure } from '../components/feedback';
 import { CacheSummary, MountCacheFields } from '../components/cache-settings';
 
 const labels: Record<MountView['state'], string> = { starting: '正在挂载', mounted: '已挂载', unmounting: '正在卸载', stopped: '已卸载', error: '挂载失败' };
-type Fields = { name?: string; mountPoint?: string; directoryCacheSeconds: number; fileCacheMaxMiB: number; fileCacheMaxAgeHours: number; url?: string; username?: string; password?: string };
+type Fields = { name?: string; mountPoint?: string; autoMount: boolean; directoryCacheSeconds: number; fileCacheMaxMiB: number; fileCacheMaxAgeHours: number; url?: string; username?: string; password?: string };
 
 export default function Mounts({ api }: { api: Api }) {
   const client = useQueryClient(); const { message } = App.useApp();
@@ -46,6 +46,8 @@ export default function Mounts({ api }: { api: Api }) {
   const remove = useMutation({ mutationFn: (id: string) => api.removeMount(id), onSuccess: async () => {
     await client.invalidateQueries({ queryKey: ['mounts'] }); message.success('挂载项已移除');
   }, onError: () => { void client.invalidateQueries({ queryKey: ['mounts'] }); } });
+  const autoMount = useMutation({ mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.configureMountAutoMount(id, enabled),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['mounts'] }) });
   const configureCache = useMutation({ mutationFn: ({ id, settings }: { id: string; settings: MountCacheSettings }) => api.configureMountCache(id, settings), onSuccess: async result => {
     await client.invalidateQueries({ queryKey: ['mounts'] });
     if (result.state === 'error') { setCacheError(result.error?.message ?? '设置已保存，重新挂载未完成，请检查后重试。'); return; }
@@ -65,7 +67,7 @@ export default function Mounts({ api }: { api: Api }) {
     setMountError('');
     const source: MountInput['source'] = kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: values.url!, username: values.username!, password: values.password! };
     await mount.mutateAsync({ mountPoint: values.mountPoint?.trim() || (prerequisites.data?.kind === 'winfsp' ? '*' : ''), source, directoryCacheSeconds: values.directoryCacheSeconds,
-      fileCacheMaxMiB: values.fileCacheMaxMiB, fileCacheMaxAgeHours: values.fileCacheMaxAgeHours,
+      fileCacheMaxMiB: values.fileCacheMaxMiB, fileCacheMaxAgeHours: values.fileCacheMaxAgeHours, autoMount: values.autoMount,
       ...(values.name?.trim() ? { name: values.name.trim() } : {}) });
   }
   if (mounts.error instanceof ApiError && mounts.error.status === 404) return <Empty description="请从桌面程序打开本机挂载" />;
@@ -79,11 +81,12 @@ export default function Mounts({ api }: { api: Api }) {
       ? <Button loading={install.isPending} disabled={changing && !install.isPending} onClick={() => install.mutate()}>安装挂载组件</Button>
       : <Button loading={prerequisites.isFetching} onClick={() => void prerequisites.refetch()}>重新检测</Button>} />}
     {prerequisites.error && !(prerequisites.error instanceof ApiError && prerequisites.error.status === 404) && <Failure error={prerequisites.error} retry={() => void prerequisites.refetch()} />}
-    <Failure error={install.error} /><Failure error={mounts.error} retry={() => void mounts.refetch()} /><Failure error={unmount.error} /><Failure error={remount.error} /><Failure error={remove.error} /><Failure error={refresh.error} />
+    <Failure error={install.error} /><Failure error={mounts.error} retry={() => void mounts.refetch()} /><Failure error={unmount.error} /><Failure error={remount.error} /><Failure error={remove.error} /><Failure error={refresh.error} /><Failure error={autoMount.error} />
     <section className="surface mount-list">{mounts.isPending ? <div className="loading-surface"><Skeleton active /></div> : !mounts.isError && !mounts.data?.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="给音乐一个盘符，或挂载到文件夹" /> : mounts.data?.map(item => <article className="mount-row" key={item.id}>
       <div className="source-avatar"><FolderOutlined aria-hidden="true" /></div><div className="instance-identity"><Typography.Text strong>{item.name}</Typography.Text><div className="mount-location">{item.mountPoint}</div><div className="secondary-id">{item.source.kind === 'local' ? '本机音乐目录' : item.source.url}</div>
         {item.error && <div role="alert" className="inline-error">{item.error.message}</div>}</div>
       <div className="instance-actions"><Tag color={item.state === 'mounted' ? 'success' : item.state === 'error' ? 'error' : 'default'}>{labels[item.state]}</Tag>
+        <label className="mount-auto"><Switch size="small" checked={item.autoMount} disabled={changing || autoMount.isPending} onChange={enabled => autoMount.mutate({ id: item.id, enabled })} /> 自动挂载</label>
         {item.state === 'mounted' ? <Button loading={unmount.isPending && unmount.variables === item.id} disabled={changing} onClick={() => unmount.mutate(item.id)}>卸载</Button>
           : <Button loading={remount.isPending && remount.variables === item.id} disabled={changing || ['starting', 'unmounting'].includes(item.state)} onClick={() => remount.mutate(item.id)}>挂载</Button>}
         <Dropdown trigger={['click']} menu={{ items: [
@@ -94,7 +97,7 @@ export default function Mounts({ api }: { api: Api }) {
         ] }}><Button type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label={item.name + '的更多操作'} /></Dropdown>
       </div></article>)}</section>
     <Modal title="添加挂载" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
-      <Form form={form} layout="vertical" onFinish={submit} preserve={false} initialValues={{ directoryCacheSeconds: 300, fileCacheMaxMiB: 8192, fileCacheMaxAgeHours: 168 }}>
+      <Form form={form} layout="vertical" onFinish={submit} preserve={false} initialValues={{ directoryCacheSeconds: 300, fileCacheMaxMiB: 8192, fileCacheMaxAgeHours: 168, autoMount: true }}>
         <Form.Item label="音乐目录"><Radio.Group value={kind} onChange={event => setKind(event.target.value)} options={[{ label: '本机 MusicFS', value: 'local' }, { label: '远程 WebDAV', value: 'remote' }]} disabled={mount.isPending} /></Form.Item>
         {kind === 'remote' && <><Form.Item label="WebDAV 地址" name="url" rules={[{ required: true, type: 'url', message: '请输入完整 WebDAV 地址' }]}><Input placeholder="https://music.example.com/dav" /></Form.Item>
           <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input autoComplete="off" /></Form.Item>
@@ -104,7 +107,7 @@ export default function Mounts({ api }: { api: Api }) {
           rules={prerequisites.data?.kind === 'winfsp' ? [] : [{ required: true, whitespace: true, message: '请输入挂载目录' }]}>
           <Input placeholder={prerequisites.data?.kind === 'winfsp' ? 'M:，或留空自动选择' : '/home/me/MusicFS'} />
         </Form.Item>
-        <Collapse ghost items={[{ key: 'options', label: '更多设置', forceRender: true, children: <><Form.Item label="名称" name="name"><Input maxLength={120} placeholder="可选" /></Form.Item><MountCacheFields /></> }]} />
+        <Collapse ghost items={[{ key: 'options', label: '更多设置', forceRender: true, children: <><Form.Item label="名称" name="name"><Input maxLength={120} placeholder="可选" /></Form.Item><Form.Item label="启动时自动挂载" name="autoMount" valuePropName="checked"><Switch /></Form.Item><MountCacheFields /></> }]} />
         <Failure error={mount.error} />{mountError && <Alert className="feedback" type="error" showIcon title={mountError} />}
         <Button type="primary" htmlType="submit" block loading={mount.isPending}>挂载</Button>
       </Form>

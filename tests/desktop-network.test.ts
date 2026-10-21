@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { startDesktopBackground } from '../src/hosts/desktop/launcher';
 import type { DesktopNetworkView } from '../src/contracts/desktop';
 
-test('desktop network settings persist, activate after restart, and serve authenticated DAV on a non-loopback address', async () => {
+test('desktop network settings apply immediately, persist, and serve authenticated DAV on a non-loopback address', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-network-'));
   const data = join(directory, 'data'); const resources = join(directory, 'resources');
   await mkdir(join(resources, 'web'), { recursive: true });
@@ -28,7 +28,7 @@ test('desktop network settings persist, activate after restart, and serve authen
     expect(invalid.status).toBe(422); await invalid.body?.cancel();
     const fixedPort = initial.active.port;
     const saved = await (await fetch(endpoint, { method: 'PUT', headers: auth, body: JSON.stringify({ access: 'lan', port: fixedPort }) })).json() as DesktopNetworkView;
-    expect(saved.settings).toEqual({ access: 'lan', port: fixedPort }); expect(saved.active.access).toBe('local'); expect(saved.restartRequired).toBe(true);
+    expect(saved.settings).toEqual({ access: 'lan', port: fixedPort }); expect(saved.active.access).toBe('lan'); expect(saved.restartRequired).toBe(false);
     expect((await stat(join(data, 'network.json'))).mode & 0o777).toBe(0o600);
     await backend!.close(); backend = undefined;
     backend = await startDesktopBackground({ directory: data, resourcesDirectory: resources });

@@ -15,6 +15,12 @@ import { readDesktopNetworkSettings } from './network';
 import { createMountPrerequisites } from './mount-prerequisites';
 import { createDesktopHttps } from './https';
 import { createDesktopHttp } from './http';
+import { createMountRestore, type MountRestore } from './mount-restore';
+import { readDesktopPreferences, saveDesktopPreferences } from './preferences';
+import { setDesktopAutostart, startDesktopIntegration } from './integration';
+import type { ManagementTicket } from '../../contracts/management-auth';
+import type { DesktopPreferencesView } from '../../contracts/desktop';
+import { createDesktopListener } from './listener';
 
 const credentialsSchema = z.object({ instanceId: z.uuid(), adminToken: z.string().min(32), username: z.literal('musicfs'), password: z.string().min(32) }).strict();
 const runtimeSchema = z.object({ pid: z.number().int().positive(), origin: z.string(), instanceId: z.uuid() }).strict();
@@ -63,6 +69,7 @@ async function acquireBackgroundLock(directory: string): Promise<(() => Promise<
 /** A click starts the detached backend or opens the verified existing one. */
 export async function launchDesktop(input: {
   command: string[]; directory?: string; resourcesDirectory: string;
+  loginStartup?: boolean; systemIntegration?: boolean;
   openBrowser?: boolean; browser?: (url: string) => Promise<unknown>; startupTimeoutMs?: number;
 }): Promise<{ origin: string; reused: boolean }> {
   const directory = resolve(input.directory ?? defaultDesktopDirectory());
@@ -74,7 +81,8 @@ export async function launchDesktop(input: {
     try {
       const [executable, ...args] = input.command;
       if (!executable) throw new Error('Desktop executable is required');
-      const child = spawn(executable, [...args, '--background', '--data', directory, '--resources', resolve(input.resourcesDirectory)], {
+      const child = spawn(executable, [...args, '--background', '--data', directory, '--resources', resolve(input.resourcesDirectory),
+        ...(input.systemIntegration === false ? ['--no-integration'] : [])], {
         detached: true, windowsHide: true, stdio: ['ignore', log, log], env: process.env
       });
       await new Promise<void>((accept, reject) => { child.once('spawn', accept); child.once('error', reject); });
@@ -88,9 +96,20 @@ export async function launchDesktop(input: {
     }
     if (!existing) throw new Error(`MusicFS 后台未能启动，请查看 ${join(directory, 'launcher.log')}。`);
   }
-  if (input.openBrowser !== false) {
+  const preferences = await readDesktopPreferences(directory);
+  if (input.systemIntegration) {
+    await writePrivateJson(join(directory, 'startup.json'), { command: input.command, resourcesDirectory: resolve(input.resourcesDirectory) });
+    try { await setDesktopAutostart({ resourcesDirectory: resolve(input.resourcesDirectory), enabled: preferences.launchAtLogin,
+      command: [...input.command, '--autostart', '--data', directory, '--resources', resolve(input.resourcesDirectory)] }); }
+    catch { console.error('MusicFS: login startup registration failed. Open Settings to retry.'); }
+  }
+  const openBrowser = input.openBrowser ?? (input.loginStartup ? preferences.openOnLogin : preferences.openOnLaunch);
+  if (openBrowser) {
     const url = new URL(existing.runtime.origin);
-    url.hash = new URLSearchParams({ token: existing.credentials.adminToken }).toString();
+    const response = await fetch(new URL('/api/access/ticket', url), { method: 'POST', headers: { Authorization: `Bearer ${existing.credentials.adminToken}` } });
+    if (response.ok) url.hash = new URLSearchParams({ ticket: (await response.json() as ManagementTicket).ticket }).toString();
+    else if (response.status === 404) { await response.body?.cancel(); url.hash = new URLSearchParams({ token: existing.credentials.adminToken }).toString(); }
+    else { await response.body?.cancel(); throw new Error('后台已运行，自动登录入口未能建立，请重试。'); }
     try { await (input.browser ?? open)(url.href); }
     catch { throw new Error(`后台已运行，系统浏览器未能打开。可重新点击启动器；诊断目录：${directory}。`); }
   }
@@ -98,7 +117,7 @@ export async function launchDesktop(input: {
 }
 
 /** Holds the cross-process lock for the entire backend lifetime. */
-export async function startDesktopBackground(input: { directory?: string; resourcesDirectory: string }): Promise<{ origin: string; close(): Promise<void> } | undefined> {
+export async function startDesktopBackground(input: { directory?: string; resourcesDirectory: string; command?: string[]; systemIntegration?: boolean }): Promise<{ origin: string; close(): Promise<void> } | undefined> {
   const directory = resolve(input.directory ?? defaultDesktopDirectory());
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if (process.platform !== 'win32') await chmod(directory, 0o700);
@@ -106,9 +125,12 @@ export async function startDesktopBackground(input: { directory?: string; resour
   if (!acquired) return;
   const release: () => Promise<void> = acquired;
   let service: Awaited<ReturnType<typeof createDesktopService>> | undefined;
-  let server: ReturnType<typeof Bun.serve> | undefined;
+  let listener: ReturnType<typeof createDesktopListener> | undefined;
   let https: Awaited<ReturnType<typeof createDesktopHttps>> | undefined;
   let closing: Promise<void> | undefined;
+  let restore: MountRestore | undefined;
+  let integration: Awaited<ReturnType<typeof startDesktopIntegration>> | undefined;
+  let integrationReady: Promise<void> | undefined;
   const runtimePath = join(directory, 'runtime.json');
   try {
     const credentialsPath = join(directory, 'credentials.json');
@@ -121,7 +143,9 @@ export async function startDesktopBackground(input: { directory?: string; resour
     }
     const resources = resolve(input.resourcesDirectory);
     if (!await Bun.file(join(resources, 'web', 'index.html')).exists()) throw new Error('发行包缺少共用管理页面，请重新解压完整发行包。');
-    const network = await readDesktopNetworkSettings(directory);
+    let network = await readDesktopNetworkSettings(directory);
+    let preferences = await readDesktopPreferences(directory);
+    const integrationState: DesktopPreferencesView['integration'] = { available: false };
     let preferredPort = network.port;
     try {
       const previous = runtimeSchema.parse(JSON.parse(await readFile(runtimePath, 'utf8')));
@@ -140,30 +164,88 @@ export async function startDesktopBackground(input: { directory?: string; resour
     const mounts = await createMountManager({ control, manageControl: false, directory: controlDirectory, binary,
       localConnection: () => service?.readCache?.mountConnection ?? ({ url: `${origin}/dav/`, username: credentials.username, password: credentials.password }),
       ...(process.platform === 'win32' ? { checkDependencies: () => prerequisites.check() } : {}) });
-    service = await createDesktopService({ directory, adminToken: credentials.adminToken,
+    restore = createMountRestore({ mounts, settings: { enabled: preferences.autoMount, retry: preferences.retryAutoMount },
+      onError: () => console.error('MusicFS: a saved mount could not be restored. See Connections for details.') });
+    service = await createDesktopService({ directory, adminToken: credentials.adminToken, instanceId: credentials.instanceId,
+      mountAction: id => restore!.cancel(id),
       dav: { username: credentials.username, password: credentials.password }, webRoot: join(resources, 'web'), mounts, readCache: { control, controlDirectory } });
-    https = await createDesktopHttps({ directory: join(directory, 'https'), fetch: service.app.fetch });
     const app = new Hono();
+    https = await createDesktopHttps({ directory: join(directory, 'https'), fetch: app.fetch });
     app.use('/__musicfs/*', bearerAuth({ token: credentials.adminToken }));
     app.get('/__musicfs/identity', c => c.json({ pid: process.pid, origin, instanceId: credentials.instanceId }));
-    app.route('/', createDesktopHttp({ directory, adminToken: credentials.adminToken, network, port: () => server!.port!, mounts, prerequisites, https, ...(service.readCache ? { readCache: service.readCache, prepareQuit: async () => service!.readCache!.prepareQuit() } : {}), close }));
+    const inspectPreferences = (): DesktopPreferencesView => ({ settings: { ...preferences }, integration: { ...integrationState } });
+    app.route('/', createDesktopHttp({ directory, adminToken: credentials.adminToken, managementAuth: service.access.middleware,
+      preferences: { inspect: inspectPreferences, async configure(next) {
+        if (input.systemIntegration && (next.launchAtLogin !== preferences.launchAtLogin || integrationState.error)) {
+          const target = await readFile(join(directory, 'startup.json'), 'utf8').then(value => JSON.parse(value) as { command: string[]; resourcesDirectory: string },
+            () => ({ command: input.command!, resourcesDirectory: resources }));
+          if (target.command?.length) {
+            await setDesktopAutostart({ resourcesDirectory: target.resourcesDirectory, enabled: next.launchAtLogin,
+              command: [...target.command, '--autostart', '--data', directory, '--resources', target.resourcesDirectory] });
+            delete integrationState.error;
+          }
+        }
+        await saveDesktopPreferences(directory, next); preferences = next;
+        restore!.configure({ enabled: next.autoMount, retry: next.retryAutoMount });
+        return inspectPreferences();
+      } },
+      network: () => network, port: () => listener!.current()!.port, mounts, prerequisites, https,
+      async configureNetwork(next) {
+        const previous = listener!.current()!;
+        listener!.reconfigure(next);
+        try { await writePrivateJson(join(directory, 'network.json'), next); }
+        catch (error) { listener!.reconfigure(previous); throw error; }
+        network = next; origin = listener!.current()!.origin;
+        await writePrivateJson(runtimePath, { pid: process.pid, origin, instanceId: credentials.instanceId });
+      },
+      prepareShutdown: () => restore!.pause(),
+      ...(service.readCache ? { readCache: service.readCache, prepareQuit: async () => service!.readCache!.prepareQuit() } : {}), close }));
     app.route('/', service.app);
-    const hostname = network.access === 'lan' ? '0.0.0.0' : '127.0.0.1';
-    try { server = Bun.serve({ hostname, port: preferredPort, fetch: app.fetch, idleTimeout: 0 }); }
+    listener = createDesktopListener({ fetch: app.fetch });
+    try { listener.listen({ access: network.access, port: preferredPort }); }
     catch (error) {
       if (!preferredPort || !(error instanceof Error && 'code' in error && error.code === 'EADDRINUSE')) throw error;
-      server = Bun.serve({ hostname, port: 0, fetch: app.fetch, idleTimeout: 0 });
+      listener.listen({ access: network.access, port: 0 });
     }
     // Launcher identity and local mounts always use a concrete loopback address,
     // including when the same listener also accepts LAN clients.
-    origin = `http://127.0.0.1:${server.port}`;
+    origin = listener.current()!.origin;
     await writePrivateJson(runtimePath, { pid: process.pid, origin, instanceId: credentials.instanceId });
+    restore.start();
+    if (input.systemIntegration) {
+      integrationReady = (async () => {
+        async function openManagement(phone = false, quitFailed = false) {
+          const url = new URL(origin);
+          if (phone) url.searchParams.set('phone', '1');
+          if (quitFailed) { url.searchParams.set('page', 'connection'); url.searchParams.set('quitFailed', '1'); }
+          url.hash = new URLSearchParams({ ticket: (await service!.access.issueTicket()).ticket }).toString();
+          await open(url.href);
+        }
+        integration = await startDesktopIntegration({ resourcesDirectory: resources,
+          onError: error => { integrationState.error = error.message; },
+          onAction: action => {
+            if (closing) return;
+            void (async () => {
+              if (action === 'open' || action === 'phone') return openManagement(action === 'phone');
+              const response = await fetch(new URL('/api/desktop/quit', origin), { method: 'POST', headers: { Authorization: `Bearer ${credentials.adminToken}` } });
+              await response.body?.cancel();
+              if (!response.ok) await openManagement(false, true);
+            })().catch(() => { integrationState.error = '桌面操作未完成，请重新打开管理页面。'; });
+          }
+        });
+        integrationState.available = !integrationState.error;
+      })().catch(() => { integrationState.error = '托盘未能启动，可再次运行 MusicFS 打开管理页面。'; });
+    }
     async function close() {
       if (closing) return closing;
       closing = (async () => {
-        await service!.close();
+        const resumeRestore = await restore!.pause();
+        try { await service!.close(); }
+        catch (error) { resumeRestore(); throw error; }
+        await restore!.close();
+        await integrationReady; await integration?.close();
         await https!.close();
-        await server!.stop(false);
+        await listener!.close();
         await rm(runtimePath, { force: true });
         await release();
       })();
@@ -171,8 +253,10 @@ export async function startDesktopBackground(input: { directory?: string; resour
     }
     return { origin, close };
   } catch (error) {
+    await restore?.close();
+    await integrationReady; await integration?.close();
     await https?.close();
-    await server?.stop(true);
+    await listener?.close();
     await service?.close();
     await rm(runtimePath, { force: true });
     await release();

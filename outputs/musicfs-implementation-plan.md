@@ -1,6 +1,6 @@
 # MusicFS 实施与交付计划
 
-当前集中交付dev.12的Windows/Linux、离线Worker、作者包与源码；未部署云端或重建macOS，不能把离线包当作现有部署已升级。产物身份与升级步骤只在[发行页](../docs/release.md)维护。
+当前交付主线为 dev.14 桌面常驻、启动与自动挂载、管理账号及手机访问，按[已确认方案](musicfs-desktop-usability.md)实施；性能主线维持原停止决定。Windows/Linux、离线 Worker、作者包与源码的当前身份及升级步骤只在[发行页](../docs/release.md)维护；macOS 原生包和免费云端 CPU 的未验边界见本轮证据。
 
 性能主线按[Codex 完成标准](../docs/codex-goal.md)执行。上一轮已识别的路径已交付；本轮六领域独立评估和主代理复核又发现局部优化候选，详见[场景复评与ROI](musicfs-performance-review.md)。用户已授权按 O2 → O1 → O3 实施，不自动恢复历史验证矩阵。工程经验见[可复用结论](../docs/engineering-lessons.md)，产品范围仍以[统一需求](musicfs-requirements-and-technical-design.md)为准。
 

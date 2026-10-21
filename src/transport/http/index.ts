@@ -58,8 +58,10 @@ async function download(url: string, signal: AbortSignal, maxSize: number): Prom
 
 export function createManagementApi(input: {
   host: HostKind; adminToken: string; sources: Sources; library: Library; extensions: Pick<Extensions, 'list'>;
+  managementAuth?: import('hono').MiddlewareHandler;
   connection?: Connection;
   mounts?: MountManager;
+  mountAction?: (id: string) => void;
   maxPackageBytes: number; install: (archive: Uint8Array, signal: AbortSignal) => Promise<Installation | PluginChange>;
   remove: (id: string, signal: AbortSignal) => Promise<PluginChange | void>;
   pluginChange?: (id: string) => Promise<PluginChange | null>;
@@ -68,7 +70,7 @@ export function createManagementApi(input: {
   if (!input.adminToken) throw new Error('Management token is required');
   const app = new Hono();
   app.use('/api/*', async (c, next) => { c.header('Cache-Control', 'no-store'); c.header('X-Content-Type-Options', 'nosniff'); await next(); });
-  app.use('/api/*', bearerAuth({ token: input.adminToken }), bodyLimit({ maxSize: input.maxPackageBytes }));
+  app.use('/api/*', input.managementAuth ?? bearerAuth({ token: input.adminToken }), bodyLimit({ maxSize: input.maxPackageBytes }));
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();
     if (error instanceof z.ZodError) return c.json({ error: 'invalid_input', message: 'Invalid management input' }, 400);
@@ -113,14 +115,17 @@ export function createManagementApi(input: {
   });
   app.post('/api/mounts/:id/mount', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    input.mountAction?.(c.req.param('id'));
     return c.json(await input.mounts.remount(c.req.param('id')));
   });
   app.post('/api/mounts/:id/unmount', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    input.mountAction?.(c.req.param('id'));
     return c.json(await input.mounts.unmount(c.req.param('id')));
   });
   app.delete('/api/mounts/:id', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    input.mountAction?.(c.req.param('id'));
     await input.mounts.remove(c.req.param('id'));
     return c.body(null, 204);
   });
@@ -130,6 +135,7 @@ export function createManagementApi(input: {
   });
   app.delete('/api/mounts/:id/cache', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    input.mountAction?.(c.req.param('id'));
     return c.json(await input.mounts.clearCache(c.req.param('id')));
   });
   app.put('/api/mounts/:id/cache', async c => {
@@ -137,9 +143,16 @@ export function createManagementApi(input: {
     const settings = z.object({ directoryCacheSeconds: z.number().int().min(0).max(2_147_483_647),
       fileCacheMaxMiB: z.number().int().min(0).max(1_048_576).optional(),
       fileCacheMaxAgeHours: z.number().int().min(0).max(2_147_483).optional() }).strict().parse(await json(c));
+    input.mountAction?.(c.req.param('id'));
     return c.json(await input.mounts.configureCache(c.req.param('id'), { directoryCacheSeconds: settings.directoryCacheSeconds,
       ...(settings.fileCacheMaxMiB === undefined ? {} : { fileCacheMaxMiB: settings.fileCacheMaxMiB }),
       ...(settings.fileCacheMaxAgeHours === undefined ? {} : { fileCacheMaxAgeHours: settings.fileCacheMaxAgeHours }) }));
+  });
+  app.put('/api/mounts/:id/auto-mount', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    const { enabled } = z.object({ enabled: z.boolean() }).strict().parse(await json(c));
+    if (!enabled) input.mountAction?.(c.req.param('id'));
+    return c.json(await input.mounts.configureAutoMount(c.req.param('id'), enabled));
   });
   app.post('/api/mounts/:id/cache/refresh', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);

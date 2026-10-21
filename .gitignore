@@ -1,5 +1,6 @@
 node_modules/
 dist/
+native/desktop/target/
 .musicfs/
 .wrangler/
 .advisor-state/

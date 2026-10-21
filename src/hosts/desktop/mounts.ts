@@ -15,10 +15,12 @@ const fileCacheMaxMiB = z.number().int().min(0).max(1_048_576);
 const fileCacheMaxAgeHours = z.number().int().min(0).max(2_147_483);
 const cacheSchema = z.object({ directoryCacheSeconds, fileCacheMaxMiB: fileCacheMaxMiB.optional(), fileCacheMaxAgeHours: fileCacheMaxAgeHours.optional() }).strict();
 const inputSchema = z.object({ name: z.string().trim().min(1).max(120).optional(), mountPoint: z.string().min(1).max(4096),
+  autoMount: z.boolean().default(true),
   directoryCacheSeconds: directoryCacheSeconds.default(300), fileCacheMaxMiB: fileCacheMaxMiB.default(8192),
   fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(168), source: sourceSchema }).strict();
 const viewSchema = z.object({
   id: z.uuid(), name: z.string(), mountPoint: z.string(), source: z.union([z.object({ kind: z.literal('local') }), z.object({ kind: z.literal('remote'), url: z.string() })]),
+  autoMount: z.boolean().default(true),
   directoryCacheSeconds: directoryCacheSeconds.default(300),
   fileCacheMaxMiB: fileCacheMaxMiB.default(8192), fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(168),
   state: z.enum(['starting', 'mounted', 'unmounting', 'stopped', 'error']), error: z.object({ code: z.string(), message: z.string() }).optional()
@@ -52,8 +54,11 @@ export async function createMountManager(options: {
   try { records = recordsSchema.parse(JSON.parse(await readFile(statePath, 'utf8'))) as RecordEntry[]; }
   catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new MountError('mount_failed', '挂载配置无法读取，请保留数据并检查本机数据目录。'); }
   let pending = Promise.resolve();
+  let pendingActions = 0;
   const serialize = <T>(action: () => Promise<T>): Promise<T> => {
-    const result = pending.then(action); pending = result.then(() => {}, () => {}); return result;
+    pendingActions++;
+    const result = pending.then(action).finally(() => { pendingActions--; });
+    pending = result.then(() => {}, () => {}); return result;
   };
   let savedRecords = JSON.stringify(records);
   const persist = async () => {
@@ -74,6 +79,7 @@ export async function createMountManager(options: {
     const parsed = inputSchema.safeParse(value);
     if (!parsed.success) throw new MountError('invalid_mount', '请填写有效的挂载位置与读取连接。');
     const input: MountInput = { mountPoint: parsed.data.mountPoint, source: parsed.data.source, directoryCacheSeconds: parsed.data.directoryCacheSeconds,
+      autoMount: parsed.data.autoMount,
       fileCacheMaxMiB: parsed.data.fileCacheMaxMiB, fileCacheMaxAgeHours: parsed.data.fileCacheMaxAgeHours,
       ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }) };
     if (/[\u0000\r\n]/.test(input.mountPoint) || input.mountPoint.startsWith('-')) throw new MountError('invalid_mount', '挂载路径包含无效字符。');
@@ -176,6 +182,7 @@ export async function createMountManager(options: {
   async function start(record: RecordEntry, input: MountInput) {
     record.input = input; record.view.state = 'starting'; delete record.view.error;
     record.view.name = input.name ?? record.view.name;
+    record.view.autoMount = input.autoMount ?? true;
     record.view.directoryCacheSeconds = input.directoryCacheSeconds ?? 300;
     record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? 8192;
     record.view.fileCacheMaxAgeHours = input.fileCacheMaxAgeHours ?? 168;
@@ -232,7 +239,10 @@ export async function createMountManager(options: {
   }
 
   return {
-    list: () => serialize(async () => { await reconcile(); return records.map(view); }),
+    // Native mount/remote checks can take seconds. UI polling reads the current state
+    // during that work instead of joining the mutation queue behind startup restores.
+    list: () => pendingActions ? Promise.resolve(records.map(view))
+      : serialize(async () => { await reconcile(); return records.map(view); }),
     mount: value => serialize(async () => {
       const input = normalizeInput(value);
       await reconcile();
@@ -248,6 +258,7 @@ export async function createMountManager(options: {
       if (previous?.mayBeMounted) throw new MountError('mount_busy', '此路径仍有待处理的挂载，请先卸载，再重新挂载。');
       const record: RecordEntry = previous ?? {
         input, mayBeMounted: false, view: { id: crypto.randomUUID(), name: input.name ?? (input.source.kind === 'local' ? '本地 MusicFS' : new URL(input.source.url).host), mountPoint: input.mountPoint,
+          autoMount: input.autoMount ?? true,
           directoryCacheSeconds: input.directoryCacheSeconds ?? 300,
           fileCacheMaxMiB: input.fileCacheMaxMiB ?? 8192, fileCacheMaxAgeHours: input.fileCacheMaxAgeHours ?? 168,
           source: input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url }, state: 'starting' }
@@ -271,6 +282,12 @@ export async function createMountManager(options: {
       await removeReadCache(record);
       records.splice(records.indexOf(record), 1);
       await persist();
+    }),
+    configureAutoMount: (id, enabled) => serialize(async () => {
+      if (typeof enabled !== 'boolean') throw new MountError('invalid_mount', '请选择是否在启动时自动挂载。');
+      const record = findRecord(id);
+      record.input.autoMount = enabled; record.view.autoMount = enabled;
+      await persist(); return view(record);
     }),
     configureCache: (id: string, settings: MountCacheSettings) => serialize(async () => {
       const parsed = cacheSchema.safeParse(settings);

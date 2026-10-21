@@ -31,8 +31,9 @@ flowchart LR
 |---|---|---|
 | 音乐来源 | 来源名称、浏览内容 | 来源设置、登录、退出登录、删除 |
 | 音乐目录 | 当前可用文件夹、目录导航 | 整理目录、更新、定时更新 |
-| 连接与挂载 | 桌面默认挂载，Worker 默认 WebDAV | 远程挂载、缓存、局域网、Windows 原生映射 |
+| 连接与挂载 | 桌面默认挂载，Worker 默认 WebDAV | 远程挂载、缓存、Windows 原生映射 |
 | 插件 | 名称、版本、添加来源 | 更新、移除、技术信息 |
+| 设置 | 登录账号；桌面另含启动、自动挂载与局域网 | 修改密码、两种启动的页面行为 |
 
 来源创建后直接进入插件登录或内容浏览。只有一个选项时自动选择；显示名称有默认值，插件表单仍由其 Schema 决定。配置返回失败时展示实际错误，不把 HTTP 成功误当成配置成功。
 
@@ -42,7 +43,7 @@ flowchart LR
 
 正常界面展示内容与必要状态；完成提示不反复占据目录页面。进行中的任务显示可理解的处理量和重试时间，失败保留可执行的恢复入口。插件仍拥有登录步骤的具体说明，界面不预设全部来源都采用二维码。
 
-Windows 挂载可留空位置，复用既有自动盘符能力；其他系统填写挂载目录。缓存参数采用已有默认值。低频操作放入更多菜单，缓存统计与设置使用独立弹窗。局域网和 Windows 原生映射位于 WebDAV 连接下，只有展开后才加载相应设置。
+Windows 挂载可留空位置，复用既有自动盘符能力；其他系统填写挂载目录。每个挂载项直接显示自动挂载开关，手动卸载只影响本次。低频操作放入更多菜单，缓存统计与设置使用独立弹窗。局域网集中在设置中，Windows 原生映射保留在 WebDAV 连接下。
 
 ## 目录整理
 
@@ -67,14 +68,15 @@ flowchart LR
 
 `src/web` 仅依赖浏览器库、公开插件 DTO 与管理合同，不导入核心或宿主。
 
-- `shell.tsx` 管理工作区、服务切换、退出，以及跨页面的浏览位置与布局草稿；`workspace-navigation.ts` 处理四个页面的 URL 和浏览器前进后退。
+- `shell.tsx` 管理浏览器会话、工作区、退出，以及跨页面的浏览位置与布局草稿；`workspace-navigation.ts` 处理五个页面的 URL 和浏览器前进后退。
 - `sources.tsx` 组织来源列表；`source-editor.tsx` 管理创建和配置；`source-content.tsx` 负责内容与刷新；`authentication.tsx` 负责通用登录状态机。
 - `library.tsx` 浏览当前目录并切换整理工作区；`layout-editor.tsx` 管理草稿、撤销/重做和保存；`layout-sources.tsx` 读取插件入口并批量选择；`layout-tree.tsx` 负责节点改名、拖动和显式移动；`layout-draft.ts` 保存纯树操作规则。
 - `plugins.tsx` 管理安装后的列表和后台变更；`plugin-installer.tsx` 管理包选择、检查和提交。
 - `connection.tsx` 区分挂载与 DAV；`mounts.tsx` 管理挂载；`cache-settings.tsx` 复用缓存表单和统计展示；网络与 HTTPS 保留各自模块。
+- `settings.tsx` 管理账号和桌面偏好；`phone-access.tsx` 展示已启用的局域网地址与一次性二维码。
 
 TanStack Query 管理服务器状态，普通查询保留 30 秒新鲜期，显式变更继续失效相关查询；活动任务维持原轮询和串行推进。布局节点 DTO、插件协议、后端刷新、认证与挂载机制不变。目录整理新增只读的默认布局接口，复用核心命名与快照逻辑。RJSF 继续承载插件 Schema，字段说明折叠展示，后端校验是权威。
 
-管理令牌继续经 URL fragment 导入并立即移除，当前标签使用 sessionStorage。切换服务清空查询与工作区草稿。真实来源、账号、音质与缓存内容由后台保存，前端不另建一套持久模型。
+桌面入口与手机二维码经 URL fragment 传入一次性 ticket，兑换 HttpOnly Cookie 后清除链接片段；旧令牌入口可换取同一会话。退出保留访问状态查询的观察者，清理其余工作区缓存，再重新查询登录入口。账号与会话均由后台保存，前端不另建长期凭据库。完整流程见[管理访问](management-access.md)。
 
 各环节的备选方案与取舍见[UI / UX 决定](../../outputs/musicfs-ui-ux-decisions.md)，实际走查范围和截图见[界面重构记录](../verification/ui-redesign.md)及[目录整理工作区](../verification/directory-workspace.md)。

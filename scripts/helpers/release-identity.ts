@@ -9,7 +9,7 @@ export type ReleaseIdentity = {
   plugins: { id: string; version: string; revision: string }[];
 };
 
-const inputs = ['src', 'packages/plugin-api', 'packages/audio-tags/src', 'packages/audio-tags/package.json', 'plugins', 'scripts/build*.ts', 'scripts/package-release.ts', 'scripts/helpers',
+const inputs = ['src', 'native/desktop', 'packages/plugin-api', 'packages/audio-tags/src', 'packages/audio-tags/package.json', 'plugins', 'scripts/build*.ts', 'scripts/package-release.ts', 'scripts/helpers',
   'package.json', 'bun.lock', 'tsconfig*.json', 'vite.config.ts', 'worker-template', 'third-party', 'LICENSE',
   'docs/desktop.md', 'docs/worker.md', 'docs/clients.md', 'docs/user-guide.md', 'docs/plugin-authoring.md', 'docs/architecture/plugin-interface.md'];
 function git(args: string[]): string {

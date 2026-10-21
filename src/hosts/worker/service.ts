@@ -6,6 +6,7 @@ import { createLibrary } from '../../core/library';
 import { createD1Store } from '../../infrastructure/persistence/d1';
 import { sha256 } from '../../infrastructure/sha256';
 import { DEFAULT_PACKAGE_LIMITS } from '../../infrastructure/archives';
+import { createManagementAuth, type ManagementAuth } from '../../infrastructure/management-auth';
 import { createManagementApi } from '../../transport/http';
 import { createDav, type DavOptions, type ReadCredentials } from '../../transport/dav';
 import { createWorkerRegistry, type RegisteredPlugin } from './plugins';
@@ -34,8 +35,10 @@ export function createWorkerService(input: {
   db: D1Database; registrations: RegisteredPlugin[]; adminToken: string; dav: ReadCredentials;
   changes: WorkerPluginChanges; assets?: WorkerAssets; fixedLength?: DavOptions['fixedLength'];
   waitUntil?: (promise: Promise<unknown>) => void; runtime?: WorkerRuntime;
+  authentication?: ManagementAuth;
 }) {
   const { store, sources, library } = input.runtime ?? createWorkerRuntime(input.db, input.registrations);
+  const authentication = input.authentication ?? createManagementAuth({ database: input.db, adminToken: input.adminToken });
   const app = new Hono();
   app.use('*', async (c, next) => {
     await next();
@@ -46,7 +49,8 @@ export function createWorkerService(input: {
       input.waitUntil(library.refreshes.step(pending, AbortSignal.timeout(60_000)).catch(() => {}));
     }
   });
-  app.route('/', createManagementApi({ host: 'worker', adminToken: input.adminToken, sources, library,
+  app.route('/', authentication.app);
+  app.route('/', createManagementApi({ host: 'worker', adminToken: input.adminToken, managementAuth: authentication.middleware, sources, library,
     extensions: { list: () => store.installations() },
     connection: { davPath: '/dav', ...input.dav }, maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
     install: (archive, signal) => input.changes.install(archive, signal),

@@ -5,16 +5,15 @@ import { useQuery } from '@tanstack/react-query';
 import type { Api } from '../api';
 import { Failure } from '../components/feedback';
 import { SharedReadCacheDialog } from '../components/cache-settings';
-import DesktopNetwork from '../components/desktop-network';
 import DesktopHttps from '../components/desktop-https';
 import Mounts from './mounts';
 
-export default function Connection({ api, tab, setTab }: { api: Api; tab: 'mount' | 'dav'; setTab: (value: 'mount' | 'dav') => void }) {
+export default function Connection({ api, tab, setTab, openSettings }: { api: Api; tab: 'mount' | 'dav'; setTab: (value: 'mount' | 'dav') => void; openSettings(): void }) {
   const status = useQuery({ queryKey: ['status'], queryFn: ({ signal }) => api.status(signal) });
   const desktop = status.data?.host === 'desktop';
   return <Tabs className="connection-tabs" activeKey={desktop ? tab : 'dav'} onChange={key => setTab(key as 'mount' | 'dav')} destroyOnHidden items={[
     ...(desktop ? [{ key: 'mount', label: <><DesktopOutlined aria-hidden="true" /> 挂载到电脑</>, children: <Mounts api={api} /> }] : []),
-    { key: 'dav', label: <><LinkOutlined aria-hidden="true" /> WebDAV 播放器</>, children: <DavConnection api={api} desktop={desktop} /> }
+    { key: 'dav', label: <><LinkOutlined aria-hidden="true" /> WebDAV 播放器</>, children: <DavConnection api={api} desktop={desktop} openSettings={openSettings} /> }
   ]} />;
 }
 
@@ -30,7 +29,7 @@ function CopyField({ label, value, secret = false }: { label: string; value: str
     <Button icon={<CopyOutlined aria-hidden="true" />} aria-label={'复制' + label} onClick={() => void copy()}>复制</Button></div></div>;
 }
 
-function DavConnection({ api, desktop }: { api: Api; desktop: boolean }) {
+function DavConnection({ api, desktop, openSettings }: { api: Api; desktop: boolean; openSettings(): void }) {
   const [cacheOpen, setCacheOpen] = useState(false);
   const connection = useQuery({ queryKey: ['connection'], queryFn: ({ signal }) => api.connection(signal) });
   const prerequisites = useQuery({ queryKey: ['mount-prerequisites'], queryFn: ({ signal }) => api.mountPrerequisites(signal), enabled: desktop });
@@ -41,11 +40,10 @@ function DavConnection({ api, desktop }: { api: Api; desktop: boolean }) {
       <div className="credential-grid"><CopyField label="用户名" value={value.username} /><CopyField label="密码" value={value.password} secret /></div>
     </>}
     {desktop && <Collapse className="connection-options" ghost items={[
-      { key: 'lan', label: '局域网连接 · 在手机或其他电脑上使用', children: <DesktopNetwork api={api} /> },
       ...(prerequisites.data?.kind === 'winfsp' ? [{ key: 'https', label: 'Windows 资源管理器原生映射', children: <DesktopHttps api={api} /> }] : [])
     ]} />}
   </section>
-    {desktop && <div className="secondary-toolbar"><Button type="text" icon={<SettingOutlined aria-hidden="true" />} onClick={() => setCacheOpen(true)}>WebDAV 读取缓存</Button></div>}
+    {desktop && <div className="secondary-toolbar"><Button type="text" icon={<SettingOutlined aria-hidden="true" />} onClick={openSettings}>局域网访问设置</Button><Button type="text" icon={<SettingOutlined aria-hidden="true" />} onClick={() => setCacheOpen(true)}>WebDAV 读取缓存</Button></div>}
     {cacheOpen && <SharedReadCacheDialog api={api} onClose={() => setCacheOpen(false)} />}
   </>;
 }

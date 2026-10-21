@@ -23,7 +23,7 @@ export async function buildWorker(input: { directory?: string; pluginArchives?: 
   await rm(directory, { recursive: true, force: true });
   await mkdir(directory, { recursive: true });
   const entrypoint = input.entrypoint ?? 'src/worker.ts';
-  const build = await Bun.build({ entrypoints: [entrypoint], target: 'browser', format: 'esm', metafile: true,
+  const build = await Bun.build({ entrypoints: [entrypoint], target: 'browser', format: 'esm', conditions: ['workerd'], metafile: true,
     outdir: directory, naming: 'core.mjs', plugins: [workerCrypto] });
   if (!build.success) throw new AggregateError(build.logs, 'Worker core build failed');
   const bundle: WorkerBundle = { formatVersion: 1, mainModule: 'worker.mjs', entrypoint,

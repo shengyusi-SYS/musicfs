@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-export type WorkspacePage = 'sources' | 'library' | 'connection' | 'plugins';
-const pages = new Set<WorkspacePage>(['sources', 'library', 'connection', 'plugins']);
+export type WorkspacePage = 'sources' | 'library' | 'connection' | 'plugins' | 'settings';
+const pages = new Set<WorkspacePage>(['sources', 'library', 'connection', 'plugins', 'settings']);
 function currentPage(): WorkspacePage {
   const value = new URLSearchParams(location.search).get('page') as WorkspacePage;
   return pages.has(value) ? value : 'sources';

@@ -45,7 +45,20 @@ test('click launchers exit while one authenticated background survives; repeated
     const reuse = await launchDesktop({ command: [process.execPath, resolve('src/desktop.ts')], directory: data, resourcesDirectory: resources,
       browser: async url => { opened = url; } });
     expect(reuse).toEqual({ origin, reused: true });
-    expect(new URLSearchParams(new URL(opened).hash.slice(1)).get('token')).toBe(token);
+    const fragment = new URLSearchParams(new URL(opened).hash.slice(1));
+    expect(fragment.get('ticket')).toBeTruthy(); expect(fragment.has('token')).toBe(false);
+    const exchange = await fetch(new URL('/api/access/exchange', origin), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket: fragment.get('ticket') }) });
+    expect(exchange.status).toBe(200); await exchange.body?.cancel();
+    const preferencesUrl = new URL('/api/desktop/preferences', origin);
+    const preferences = await (await fetch(preferencesUrl, { headers: auth })).json() as { settings: { launchAtLogin: boolean; openOnLaunch: boolean; openOnLogin: boolean; autoMount: boolean; retryAutoMount: boolean } };
+    expect(preferences.settings).toEqual({ launchAtLogin: true, openOnLaunch: true, openOnLogin: false, autoMount: true, retryAutoMount: true });
+    const saved = await fetch(preferencesUrl, { method: 'PUT', headers: auth, body: JSON.stringify({ ...preferences.settings, openOnLaunch: false, openOnLogin: true }) });
+    expect(saved.status).toBe(200); await saved.body?.cancel();
+    let browserCalls = 0;
+    const launch = { command: [process.execPath, resolve('src/desktop.ts')], directory: data, resourcesDirectory: resources,
+      browser: async () => { browserCalls++; } };
+    await launchDesktop(launch); expect(browserCalls).toBe(0);
+    await launchDesktop({ ...launch, loginStartup: true }); expect(browserCalls).toBe(1);
     expect(JSON.parse(await readFile(join(data, 'runtime.json'), 'utf8')).pid).toBe(runtime.pid);
     expect(await readFile(join(data, 'launcher.log'), 'utf8')).not.toContain(token);
     expect(await readFile(join(data, 'launcher.log'), 'utf8')).not.toContain(credentials.password);

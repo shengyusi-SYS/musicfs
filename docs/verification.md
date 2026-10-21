@@ -4,10 +4,11 @@
 
 ## 当前事实
 
-当前交付为 dev.13：Windows/Linux、离线 Worker、源码与作者包，包含界面流程与目录整理工作区。API 0.1.9/schema10、网易云 alpha.17/QQ alpha.16 不变。界面证据来自独立 WSL 示例服务，性能证据沿用 dev.12 及各自记录；本次没有重跑目标系统或云端验收。产物身份统一见[发行页](release.md)。
+当前交付为 dev.14：桌面常驻、启动与自动挂载、账号密码及手机访问；Windows/Linux、离线 Worker、源码与作者包集中交付。API0.1.9、音乐库 schema10 和平台插件版本不变，Worker 新增认证迁移0011。证据来自隔离本地服务、workerd、浏览器及明确目标的构建；Windows 新增实机行为、macOS 原生产物与免费 CPU 仍未验。产物身份统一见[发行页](release.md)。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
+| 桌面常驻与管理访问 | [本轮核对](verification/desktop-access.md) | 会话、自动恢复与监听的本地证据；新增系统集成的目标环境边界单列 |
 | 界面与使用流程重构 | [真实页面走查](verification/ui-redesign.md)、[目录整理工作区](verification/directory-workspace.md) | 独立本地服务走查；源码与界面已进入 dev.13 发行归档 |
 | 局部性能优化 | [O2/O1/O3与应用场景核对](verification/performance-local-2026-10-22.md) | 正式模块、有界样本和Linux发行冒烟；未重测Windows或真实整库 |
 | 冷刷新与 SDK 请求减法 | [真实冷基线](verification/real-netease-cold-dev5.md)、[请求减法](verification/netease-cold-request-reduction.md)、[两阶段清单](verification/deferred-catalogue.md) | 完整清单、全库标签和全库入库是不同工作范围 |

@@ -23,7 +23,7 @@ const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-product-'));
 const executable = join(release, metadata.executable);
 let origin = ''; let token = ''; let keptForBrowser = false;
 const launch = async () => {
-  const child = Bun.spawn([executable, '--no-open', '--data', directory], { stdout: 'pipe', stderr: 'pipe' });
+  const child = Bun.spawn([executable, '--no-open', '--no-integration', '--data', directory], { stdout: 'pipe', stderr: 'pipe' });
   const [code, error] = await Promise.all([child.exited, new Response(child.stderr).text()]);
   assert.equal(code, 0, error);
   return child.pid;
@@ -39,6 +39,20 @@ try {
   const page = await fetch(origin); assert.equal(page.status, 200); assert((await page.text()).includes('<div id="root">'));
   const status = await fetch(origin + '/api/status', { headers: admin }); assert.equal(status.status, 200);
   assert.deepEqual(await status.json(), { host: 'desktop', version: metadata.version });
+  const ticketResponse = await fetch(origin + '/api/access/ticket', { method: 'POST', headers: admin });
+  assert.equal(ticketResponse.status, 200);
+  const ticket = await ticketResponse.json() as { ticket: string };
+  const exchanged = await fetch(origin + '/api/access/exchange', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ticket) });
+  assert.equal(exchanged.status, 200); await exchanged.body?.cancel();
+  const cookie = exchanged.headers.getSetCookie().map(value => value.split(';')[0]).join('; '); assert(cookie);
+  const preferences = await fetch(origin + '/api/desktop/preferences', { headers: { Cookie: cookie } });
+  assert.equal(preferences.status, 200);
+  assert.deepEqual((await preferences.json() as { settings: unknown }).settings,
+    { launchAtLogin: true, openOnLaunch: true, openOnLogin: false, autoMount: true, retryAutoMount: true });
+  const logout = await fetch(origin + '/api/access/logout', { method: 'POST', headers: { Cookie: cookie } });
+  assert.equal(logout.status, 200); await logout.body?.cancel();
+  const expired = await fetch(origin + '/api/desktop/preferences', { headers: { Cookie: cookie } });
+  assert.equal(expired.status, 401); await expired.body?.cancel();
   const initial = await fetch(origin + '/api/plugins', { headers: admin }); assert.deepEqual(await initial.json(), []);
   const inspection = await fetch(origin + '/api/plugins/inspect', { method: 'POST', headers: admin,
     body: await Bun.file(pluginArchive).arrayBuffer() });
@@ -191,6 +205,7 @@ try {
   console.log(JSON.stringify({ target: native, nativeRelease: true, separateBackground: true, sharedWebUI: true,
     compatibilityInspection: true, externalPluginInstalled: true, directoryListingWithStatus: true, davHead: 16044, exactRange: 'RIFF', repeatedLaunchReused: true,
     ...(authorPlugin ? { authorPluginId: pluginId, independentInstances: 2 } : {}),
+    managementCookie: true, desktopPreferences: true, logoutRevoked: true,
     mountsEndpoint: true, dependencyFailureTested, systemMountTested, ...(systemMountTested ? { mountedBytes: 16044, mountedRanges: 5 } : {}),
     ...(values['crash-recovery'] ? { originalRcloneRetained: true, credentialsRetained: true, crashRecoveries } : {}),
     ...(values['keep-running'] ? { origin, keptForBrowserVerification: true } : {}) }));

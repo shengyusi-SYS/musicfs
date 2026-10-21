@@ -1,5 +1,15 @@
 # MusicFS 当前交付物
 
+## dev.14 桌面常驻与管理登录
+
+2026-10-22：应用 `0.1.0-dev.14`，新增托盘入口、登录自启、分开的手动/自启打开页面选项、全局与逐项自动挂载和有限后台重试。管理页支持账号密码、记住登录与退出；桌面自动进入，手机通过短期二维码进入，局域网由用户在设置手动开启并即时生效。
+
+交付位于 `dist/releases/0.1.0-dev.14/`：[Windows x64](../dist/releases/0.1.0-dev.14/musicfs-0.1.0-dev.14-windows-x64.zip)、[Linux x64](../dist/releases/0.1.0-dev.14/musicfs-0.1.0-dev.14-linux-x64.zip)、[离线 Worker](../dist/releases/0.1.0-dev.14/musicfs-0.1.0-dev.14-worker.zip)、[源码](../dist/releases/0.1.0-dev.14/musicfs-0.1.0-dev.14-source.zip)、[作者包](../dist/releases/0.1.0-dev.14/musicfs-0.1.0-dev.14-plugin-author-kit.zip)、[版本清单](../dist/releases/0.1.0-dev.14/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.14/SHA256SUMS)。桌面包包含原生 helper。
+
+正常退出旧后台，解压完整新版后启动。默认登录自启、自动挂载开启，手动启动打开页面，自启静默；均可在设置调整。首次桌面无需设密码，按需创建账号。公开 API0.1.9、音乐库 schema10、网易云 alpha.17 与 QQ alpha.16 不变，无需重装插件或刷新整库。桌面认证单独存储 auth.sqlite；部署 Worker 时应用新增 D1 迁移0011，现有云端本轮未升级。
+
+本地会话、自动恢复、监听切换和浏览器旅程已定向核对。Windows helper 为 WSL 交叉构建，VM 暂不可达；macOS 适配代码完成编译检查，但缺 Apple SDK，尚无新版可运行包；免费 Worker 密码 CPU 尚未实测。证据见[桌面访问核对](verification/desktop-access.md)。
+
 ## dev.13 界面与目录整理
 
 2026-10-22：应用 `0.1.0-dev.13`，包含来源添加与登录流程、插件安装、播放器连接和目录浏览的界面重构，以及新的目录整理工作区。支持批量添加、原位改名、拖动与明确移动、搜索、撤销和重做；自动目录可直接开始整理，统一保存后发布。
@@ -143,7 +153,7 @@ Linux发行程序在此前版本已有WSL解压运行、FUSE本地/远程挂载�
 
 ## 开始使用
 
-桌面解压完整归档后打开对应入口，保留程序与随包资源的位置，不需要安装Bun、Node.js或rclone。在WebUI安装插件、创建实例并授权，准备需要的内容源，再发布目录布局。连接播放器、OpenList或挂载的完整步骤见[使用说明](user-guide.md)；当前系统挂载条件见[桌面说明](desktop.md#使用旅程)。
+桌面解压完整归档后打开对应入口，保留程序与随包资源的位置，不需要安装Bun、Node.js或rclone。在WebUI安装插件、创建实例并授权，准备需要的内容源，再发布目录布局。连接播放器、OpenList或挂载的完整步骤见[使用说明](user-guide.md)；当前系统挂载条件见[桌面说明](desktop.md#打开常驻和退出)。
 
 三个独立插件为sample`0.1.3`、QQ`0.1.0-alpha.11`、网易云`0.1.0-alpha.9`，位于发行目录的`plugins/`；桌面包内也有`plugins/`，Worker包内为`plugin-packages/`。通过WebUI按需安装，没有自动激活。QQ、网易云是使用公开合同的示例，来源设置按实例保存。
 

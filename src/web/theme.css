@@ -155,3 +155,13 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .field-description > div { line-height: 1.7; margin-top: 8px; }
 .loading-surface { padding: 24px; }
 .directory-search { margin: 16px 0 4px; max-width: 360px; }
+.settings-sections { display: grid; gap: 24px; max-width: 880px; }
+.account-form { max-width: 440px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-block: 14px; border-bottom: 1px solid var(--line); }
+.setting-row:last-child { border-bottom: 0; }
+.setting-row > label { cursor: pointer; }
+.phone-access-content { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 16px 0; }
+.phone-access-content .ant-select { width: 100%; }
+.phone-access-empty { padding-block: 12px; }
+.mount-auto { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+@media (max-width: 640px) { .sidebar .ant-menu { grid-template-columns: repeat(5, minmax(0,1fr)); } }
