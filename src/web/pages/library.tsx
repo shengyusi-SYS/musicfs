@@ -78,13 +78,20 @@ function DirectoryBrowser({ api }: { api: Api }) {
   const [path, setPath] = useState('/');
   const directory = useQuery({ queryKey: ['library', 'directory', path], queryFn: ({ signal }) => api.browseDirectory(path, signal), retry: false });
   const pending = pendingRefreshId(directory.error);
-  const refresh = usePersistentRefresh(api, { operationId: pending });
+  const source = directory.data?.source;
+  const refresh = usePersistentRefresh(api, { instanceId: source?.instanceId, operationId: pending });
+  const busy = refresh.active || refresh.starting || refresh.preparing;
   const parent = path.slice(0, path.lastIndexOf('/')) || '/';
   return <><div className="section-heading"><Typography.Title level={3}>已发布目录</Typography.Title><Button disabled={path === '/'} type="text" icon={<ArrowLeftOutlined />} onClick={() => setPath(parent)}>上一级</Button></div>
     <Breadcrumb items={[{ title: <button className="text-button" onClick={() => setPath('/')}>根目录</button> }, ...(path === '/' ? [] : [{ title: path }])]} />
-    <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh} reload={() => void directory.refetch()} />
+    <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh}
+      reload={() => refresh.view?.scope.kind === 'file-info' ? refresh.start(refresh.view.scope) : void directory.refetch()} />
     {directory.data?.status?.error && <Alert type="warning" showIcon title="刷新失败，保留最近成功内容"
       description={`最近成功：${new Date(directory.data.status.completedAt).toLocaleString()}`} />}
+    {(directory.data?.status?.pendingFileInfo ?? 0) > 0 && <Alert type="info" showIcon title="目录清单已就绪"
+      description="可按需读取单个文件。使用 App 挂载或全库扫描前，请先准备此目录的文件，完成后再连接客户端。"
+      action={source && <Button size="small" disabled={busy} loading={refresh.starting || refresh.active && refresh.view?.scope.kind === 'file-info' && refresh.view.scope.directoryRef === source.directoryRef}
+        onClick={() => refresh.start({ kind: 'file-info', directoryRef: source.directoryRef })}>准备文件</Button>} />}
     {directory.isPending ? <Skeleton active /> : directory.data?.entries.length ? <List key={path} className="directory-list" dataSource={directory.data.entries} rowKey="path"
       pagination={{ position: 'top', pageSize: 50, hideOnSinglePage: true, showSizeChanger: false, simple: true, showTotal: total => `共 ${total} 项` }}
       renderItem={entry => <List.Item><button className="directory-entry" disabled={entry.kind === 'file'} onClick={() => setPath(entry.path)}>{entry.kind === 'directory' ? <FolderOutlined /> : <FileOutlined />}<span>{entry.name}</span>{entry.kind === 'file' && <Tag>音频文件</Tag>}</button></List.Item>} /> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个目录暂时没有内容" />}

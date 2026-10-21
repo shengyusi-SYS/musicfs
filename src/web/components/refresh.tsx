@@ -113,22 +113,29 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
   reauthorize?: (() => void) | undefined;
 }) {
   const value = operation.view;
+  const preparingFiles = value?.scope.kind === 'file-info';
   const needsAuth = value?.error?.sourceFault?.kind === 'needs_auth' || value?.failures.some(item => item.error.sourceFault?.kind === 'needs_auth');
   const waiting = operation.active && value?.retryAt && Date.parse(value.retryAt) > Date.now();
   const progress = value?.current?.progress;
   const waitingTitle = value?.error?.sourceFault?.kind === 'temporary'
     ? '来源暂时请求失败，稍后从当前进度继续' : '来源限流，等待后自动继续';
-  const title = !value ? '正在读取刷新状态' : waiting ? waitingTitle : value.status === 'queued' ? '目录已加入准备队列'
-    : value.status === 'running' ? '正在准备目录' : value.status === 'completed' ? (value.failures.length ? '刷新完成，部分目录保留上次内容' : '目录刷新完成')
-      : value.status === 'cancelled' ? '刷新已取消' : value.status === 'superseded' ? '刷新已被较新的操作替代' : '刷新失败，已保留上次成功内容';
+  const title = !value ? '正在读取准备状态' : waiting ? waitingTitle
+    : value.status === 'queued' ? preparingFiles ? '文件已加入准备队列' : '目录清单已加入准备队列'
+    : value.status === 'running' ? preparingFiles ? '正在准备文件' : '正在更新目录清单'
+    : value.status === 'completed' ? preparingFiles ? (value.failures.length ? '文件准备完成，部分目录仍需重试' : '文件已准备')
+      : value.failures.length ? '清单更新完成，部分目录保留上次内容' : '清单已更新'
+    : value.status === 'cancelled' ? preparingFiles ? '文件准备已取消' : '清单更新已取消'
+    : value.status === 'superseded' ? '准备任务已被较新的操作替代'
+    : preparingFiles ? '文件准备失败，请重试' : '清单更新失败，已保留上次成功内容';
   return <>
     {(value || operation.starting || operation.preparing) && <Alert className="feedback" showIcon
       type={value?.status === 'failed' ? 'error' : value?.failures.length ? 'warning' : value?.status === 'completed' ? 'success' : 'info'}
-      title={operation.starting ? '正在提交刷新' : title}
+      title={operation.starting ? '正在提交准备任务' : title}
       description={value && <>
-        <div>{value.status === 'completed' && value.scope.kind === 'directory' && value.scope.directoryRef === undefined
-          ? '内容入口已更新' : <>已完成 {value.refreshedDirectories} 个目录</>}</div>
-        {value.current && value.status !== 'completed' && <div>当前{value.current.kind === 'roots' ? '内容入口' : '目录'}已读取 {value.current.pages} 页，暂存 {value.current.entries} 条目</div>}
+        <div>{preparingFiles ? value.status === 'completed' ? '已准备此目录中播放器读取所需的文件信息。' : '此任务准备播放器读取所需的文件信息，目录清单仍可浏览。'
+          : value.status === 'completed' && value.scope.kind === 'directory' && value.scope.directoryRef === undefined
+          ? '内容入口已更新' : <>已完成 {value.refreshedDirectories} 个目录的清单</>}</div>
+        {value.current && value.status !== 'completed' && <div>当前{value.current.kind === 'roots' ? '内容入口' : '目录'}已{preparingFiles ? '处理' : '读取'} {value.current.pages} 页，{preparingFiles ? '已处理' : '暂存'} {value.current.entries} 条目</div>}
         {progress && <div>已处理 {progress.completed.toLocaleString()} / {progress.total.toLocaleString()} {progress.unit}
           <Progress size="small" percent={progress.total ? Math.floor(progress.completed / progress.total * 100) : 100} status={waiting ? 'normal' : operation.active ? 'active' : 'normal'} />
         </div>}
@@ -139,9 +146,9 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
         {value.error && <div role="alert">{value.error.message}</div>}
         {value.failures.length > 0 && <div role="alert">{value.failures.length} 个目录失败：{[...new Set(value.failures.map(item => item.error.message))].join('；')}</div>}
       </>}
-      action={operation.active ? <Button size="small" loading={operation.cancelling} onClick={operation.cancel}>取消刷新</Button>
+      action={operation.active ? <Button size="small" loading={operation.cancelling} onClick={operation.cancel}>{preparingFiles ? '取消准备' : '取消刷新'}</Button>
         : needsAuth && reauthorize ? <Button size="small" onClick={reauthorize}>重新授权</Button>
-        : value && value.status !== 'completed' && reload ? <Button size="small" loading={operation.starting} onClick={reload}>重新读取目录</Button> : undefined} />}
+        : value && value.status !== 'completed' && reload ? <Button size="small" loading={operation.starting} onClick={reload}>{preparingFiles ? '重新准备文件' : '重新读取目录'}</Button> : undefined} />}
     <Failure error={operation.error} retry={operation.retry} reauthorize={reauthorize} />
   </>;
 }

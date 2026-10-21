@@ -75,6 +75,7 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     roots: (id: string, signal: AbortSignal) => request<ContentSources>(`/instances/${encodeURIComponent(id)}/roots`, { signal }),
     directoryStatus: (id: string, ref: string, signal: AbortSignal) => request<DirectoryStatus | null>(`/instances/${encodeURIComponent(id)}/directory-status?directoryRef=${encodeURIComponent(ref)}`, { signal }),
     startRefresh: (id: string, scope: RefreshScope) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', scope.kind === 'instance' ? { scope: 'instance' }
+      : scope.kind === 'file-info' ? { scope: 'file-info', directoryRef: scope.directoryRef }
       : scope.directoryRef === undefined ? {} : { directoryRef: scope.directoryRef })),
     currentRefresh: (id: string, signal: AbortSignal) => request<RefreshView | null>(`/instances/${encodeURIComponent(id)}/refresh`, { signal }),
     refreshOperation: (id: string, signal: AbortSignal) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}`, { signal }),

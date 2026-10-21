@@ -8,7 +8,7 @@ export type SqlStatement = { sql: string; values: SqlValue[] };
 export type RefreshDocumentRow = { document: string };
 export type RefreshOutcome = 'committed' | 'stale' | 'duplicate_entry' | 'cyclic_cursor';
 export type SnapshotEntryRow = { document: string | null; error: string | null; published_attempt_id: string | null; entry: string | null };
-export type SnapshotHeaderRow = { stamp: string; id: string; kind: Snapshot['kind']; completed_at: string; statistics: string | null; error: string | null };
+export type SnapshotHeaderRow = { stamp: string; id: string; kind: Snapshot['kind']; completed_at: string; statistics: string | null; pending_file_info?: number | null; error: string | null };
 const statement = (sql: string, ...values: SqlValue[]): SqlStatement => ({ sql, values });
 const active = "status IN ('queued', 'running')";
 const current = `EXISTS (SELECT 1 FROM instances i JOIN installations p ON p.id = i.plugin_id
@@ -29,12 +29,13 @@ export const snapshotEntriesSQL = `SELECT CASE WHEN e.ordinal = 0 OR e.ordinal I
   WHERE s.instance_id = ? AND s.kind = ? AND s.ref = ? ORDER BY e.ordinal`;
 export const snapshotHeaderSQL = `SELECT json_extract(document, '$.stamp') AS stamp, json_extract(document, '$.id') AS id,
   json_extract(document, '$.kind') AS kind, json_extract(document, '$.completedAt') AS completed_at,
-  json_extract(document, '$.statistics') AS statistics, error FROM directory_snapshots
+  json_extract(document, '$.statistics') AS statistics, json_extract(document, '$.pendingFileInfo') AS pending_file_info, error FROM directory_snapshots
   WHERE instance_id = ? AND kind = ? AND ref = ? AND document IS NOT NULL`;
 
 export function snapshotHeaderFromRow(row: SnapshotHeaderRow | null | undefined): (Omit<Snapshot, 'items'> & { error: string | null }) | null {
   return row ? { stamp: JSON.parse(row.stamp) as SourceStamp, id: row.id, kind: row.kind, completedAt: row.completed_at,
-    ...(row.statistics === null ? {} : { statistics: JSON.parse(row.statistics) as Record<string, number> }), error: row.error } : null;
+    ...(row.statistics === null ? {} : { statistics: JSON.parse(row.statistics) as Record<string, number> }),
+    ...(row.pending_file_info == null ? {} : { pendingFileInfo: row.pending_file_info }), error: row.error } : null;
 }
 
 export function refreshFromRow(row: RefreshDocumentRow | null | undefined): RefreshRecord | null {

@@ -7,11 +7,11 @@ export type LayoutNode = { id: string; name: string } & (
 );
 export type Layout = { revision: number; nodes: LayoutNode[] | null };
 export type SnapshotKey = { kind: 'roots' | 'directory'; ref: string };
-export type Snapshot = { stamp: SourceStamp; id: string; completedAt: string; statistics?: Record<string, number> } & (
+export type Snapshot = { stamp: SourceStamp; id: string; completedAt: string; statistics?: Record<string, number>; pendingFileInfo?: number } & (
   | { kind: 'roots'; items: Root[] }
   | { kind: 'directory'; items: Entry[] }
 );
-export type DirectoryStatus = { completedAt: string; statistics: Record<string, number> | null; error: string | null };
+export type DirectoryStatus = { completedAt: string; statistics: Record<string, number> | null; error: string | null; pendingFileInfo?: number };
 export type InstanceRefresh = { refreshedDirectories: number; failures: { directoryRef: string; error: { code: string; message: string; sourceFault?: PluginFault } }[] };
 type Stored<T> = T | Promise<T>;
 export interface LibraryStore {
@@ -32,7 +32,7 @@ export type ViewEntry = Pick<Description, 'kind' | 'path' | 'name' | 'modifiedAt
 export interface FileView {
   list(path: string, signal: AbortSignal): Promise<ViewEntry[]>;
   stat(entry: string | ViewEntry, signal: AbortSignal): Promise<Description>;
-  /** Listed entries with complete info avoid per-file source calls. Legacy entries retain the original stat cost. */
+  /** Complete info is reused. Opt-in deferred entries may start a durable preparation; legacy stat remains live. */
   statMany(entries: readonly ViewEntry[], signal: AbortSignal): Promise<ReadonlyMap<ViewEntry, Description | Error>>;
   open(file: FileDescription, range: ByteRange | undefined, signal: AbortSignal): Promise<ReadResult>;
 }

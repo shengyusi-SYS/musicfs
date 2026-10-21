@@ -1,6 +1,7 @@
 import type { PluginFault, WorkProgress } from '@musicfs/plugin-api';
 
-export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string };
+export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string }
+  | { kind: 'file-info'; directoryRef: string };
 export type RefreshView = {
   operationId: string; instanceId: string; scope: RefreshScope;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'superseded' | 'cancelled';

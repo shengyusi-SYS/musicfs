@@ -40,6 +40,8 @@ export interface Context {
   privateState: Json;
   signal: AbortSignal;
   fetch: typeof fetch;
+  /** On a preparation pass, list must return exact info for each file, or an explicit fault. */
+  fileInfo?: 'required';
   /** Optional host storage for small, serializable plugin data, isolated to this source revision. */
   cache?: PluginCache;
   /** Optional host work allowance for this invocation; plugins may checkpoint before starting more work. */
@@ -66,7 +68,9 @@ export type Entry =
   | { kind: 'directory'; entryId: string; name: string; directoryRef: string }
   | { kind: 'file'; entryId: string; name: string; fileRef: string;
       /** Complete metadata for these exact bytes, never a size hint or a temporary locator. */
-      info?: FileInfo };
+      info?: FileInfo;
+      /** Opt in to background preparation for bulk attributes. Single stat/open still resolve this file on demand. */
+      deferredInfo?: true };
 export type Root = { sourceId: string; name: string; directoryRef: string };
 export type FileInfo = { contentId: string; size: number; mediaType: string;
   /** Optional ISO timestamp for this byte representation, independent of directory refresh time. */

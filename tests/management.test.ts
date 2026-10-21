@@ -46,7 +46,7 @@ test('plugin inspection reports both compatibility dimensions without installing
   const preview = await compatible.json() as PluginInspection;
   expect(preview.manifest).toEqual(parseManifest(manifest, 'desktop'));
   expect(preview.revision).toMatch(/^[0-9a-f]{64}$/);
-  expect(preview.compatibility).toEqual({ host: 'desktop', apiVersion: '0.1.7', apiCompatible: true, hostCompatible: true });
+  expect(preview.compatibility).toEqual({ host: 'desktop', apiVersion: '0.1.8', apiCompatible: true, hostCompatible: true });
   const files = unzipSync(archive);
   const incompatible = zipSync({ ...files, 'manifest.json': strToU8(JSON.stringify({ ...manifest, apiRange: '^9.0.0', hosts: { worker: 'index.mjs' } })) });
   const rejected = await request('/api/plugins/inspect', { method: 'POST', body: incompatible });

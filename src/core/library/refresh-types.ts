@@ -2,7 +2,8 @@ import type { Entry, Root, WorkProgress } from '@musicfs/plugin-api';
 import type { SourceStamp } from '../sources';
 import type { InstanceRefresh, Snapshot, SnapshotKey } from './types';
 
-export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string };
+export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string }
+  | { kind: 'file-info'; directoryRef: string };
 export type RefreshFailure = InstanceRefresh['failures'][number]['error'];
 export type RefreshStatus = 'queued' | 'running' | 'completed' | 'failed' | 'superseded' | 'cancelled';
 export type RefreshView = {
@@ -14,6 +15,7 @@ export type RefreshView = {
 };
 export type RefreshTask = {
   key: SnapshotKey; attemptId: string; cursor?: string; pages: number; entries: number;
+  pendingFileInfo?: number;
   counterKeys?: string; statistics?: Record<string, number>; children: string[];
   progress?: WorkProgress;
 };
@@ -26,7 +28,7 @@ export type RefreshRecord = {
   createdAt: string; updatedAt: string;
   retryAt?: number; rateLimitRetries?: number; temporaryRetries?: number;
 };
-export type SnapshotHeader = Pick<Snapshot, 'stamp' | 'id' | 'kind' | 'completedAt' | 'statistics'>;
+export type SnapshotHeader = Pick<Snapshot, 'stamp' | 'id' | 'kind' | 'completedAt' | 'statistics' | 'pendingFileInfo'>;
 export type RefreshPage = { items: (Root | Entry)[]; nextCursor?: string; publish?: SnapshotHeader };
 type Stored<T> = T | Promise<T>;
 
@@ -51,6 +53,8 @@ export interface Refreshes {
   cancel(operationId: string): Promise<RefreshView | null>;
   /** An ordinary cache miss reuses work instead of replacing it. */
   ensure(stamp: SourceStamp, key: SnapshotKey): Promise<RefreshView>;
+  /** Prepare complete file properties through the same paged directory refresh. */
+  ensureFileInfo(stamp: SourceStamp, directoryRef: string): Promise<RefreshView>;
   /** At most one plugin page; the host decides when a separate invocation runs. */
   stepNext(signal: AbortSignal): Promise<RefreshView | null>;
 }

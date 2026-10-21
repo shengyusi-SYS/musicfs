@@ -94,7 +94,16 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
         if (!('sourceId' in item) || typeof item.directoryRef !== 'string') throw new LibraryError('invalid_source', 'Source returned an invalid content source');
       } else if (!('entryId' in item) || !(item.kind === 'file' && typeof item.fileRef === 'string'
         || item.kind === 'directory' && typeof item.directoryRef === 'string')) throw new LibraryError('invalid_source', 'Source returned an invalid directory entry');
-      if ('kind' in item && item.kind === 'file' && item.info !== undefined) assertInfo(item.info);
+      if ('kind' in item && item.kind === 'file') {
+        if (item.deferredInfo !== undefined && item.deferredInfo !== true) {
+          throw new LibraryError('invalid_source', 'Source returned an invalid deferred file metadata marker');
+        }
+        if (record.scope.kind === 'file-info' && item.info === undefined) {
+          throw new LibraryError('invalid_source', 'Source omitted required file metadata');
+        }
+        if (item.info !== undefined) assertInfo(item.info);
+        else if (item.deferredInfo === true) current.pendingFileInfo = (current.pendingFileInfo ?? 0) + 1;
+      }
     }
     current.pages++; current.entries += page.items.length;
     if (current.entries > budgets.entries) throw new LibraryError('invalid_source', 'Source entry budget exceeded');
@@ -109,7 +118,8 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     } else {
       delete current.cursor;
       accepted.publish = { stamp: record.stamp, id: previous.attemptId, kind: previous.key.kind,
-        completedAt: timestamp(), ...(current.statistics ? { statistics: current.statistics } : {}) };
+        completedAt: timestamp(), ...(current.statistics ? { statistics: current.statistics } : {}),
+        ...(current.pendingFileInfo ? { pendingFileInfo: current.pendingFileInfo } : {}) };
       if (previous.key.kind === 'directory') {
         next.refreshedDirectories++;
         appendUnique(next.pending, current.children, next.seen);
@@ -137,7 +147,8 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
       const current = claimed.task;
       if (current.pages >= budgets.pages) throw new LibraryError('invalid_source', 'Source pagination budget exceeded');
       const outcome = current.key.kind === 'roots' ? await sources.roots(claimed.stamp.id, signal, current.cursor)
-        : await sources.list(claimed.stamp.id, current.key.ref, signal, current.cursor);
+        : await sources.list(claimed.stamp.id, current.key.ref, signal, current.cursor,
+          claimed.scope.kind === 'file-info' ? { fileInfo: 'required' } : undefined);
       signal.throwIfAborted();
       if (!outcome.ok) throw new LibraryError('source_failed', outcome.error.message, outcome.error);
       const accepted = acceptPage(claimed, outcome.value);
@@ -184,6 +195,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
   return {
     start: async (instanceId, scope) => create(await sources.view(instanceId), scope, true),
     ensure: (stamp, key) => create(stamp, { kind: 'directory', ...(key.kind === 'directory' ? { directoryRef: key.ref } : {}) }, false),
+    ensureFileInfo: (stamp, directoryRef) => create(stamp, { kind: 'file-info', directoryRef }, false),
     get: async operationId => { const record = await store.refreshRecord(operationId); return record ? view(record) : null; },
     current: async instanceId => { const record = await store.currentRefresh(instanceId); return record ? view(record) : null; },
     step,

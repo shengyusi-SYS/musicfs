@@ -90,7 +90,7 @@ type Target =
   | { kind: 'instance'; instanceId: string }
   | { kind: 'source'; instanceId: string; sourceId: string }
   | { kind: 'directory'; stamp: SourceStamp; ref: string }
-  | { kind: 'file'; stamp: SourceStamp; ref: string; info?: FileInfo };
+  | { kind: 'file'; stamp: SourceStamp; ref: string; info?: FileInfo; deferredDirectory?: string };
 type Child = { id: string; name: string; target: Target; modifiedAt: string };
 type Resolved = { target: Target; name: string; path: string; modifiedAt: string };
 type MetadataGroup = { stamp: SourceStamp; entries: [ViewEntry, Resolved][] };
@@ -148,13 +148,14 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       // Read this key again; never return that other directory as this result.
     }
   }
-  const publishedViews = createPublishedViews<Child>(store, snapshot, value => value.kind === 'roots'
+  const publishedViews = createPublishedViews<Child>(store, snapshot, (value, key) => value.kind === 'roots'
     ? value.items.map(root => ({ id: root.sourceId, name: root.name, modifiedAt: value.completedAt,
       target: { kind: 'directory', stamp: value.stamp, ref: root.directoryRef } }))
     : value.items.map(entry => ({ id: entry.entryId, name: entry.name,
       modifiedAt: entry.kind === 'file' ? entry.info?.modifiedAt ?? value.completedAt : value.completedAt,
       target: entry.kind === 'directory' ? { kind: 'directory', stamp: value.stamp, ref: entry.directoryRef }
-        : { kind: 'file', stamp: value.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }) } })));
+        : { kind: 'file', stamp: value.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }),
+          ...(entry.deferredInfo === true && entry.info === undefined ? { deferredDirectory: key.ref } : {}) } })));
   async function refreshInstance(instanceId: string, signal: AbortSignal): Promise<InstanceRefresh> {
     signal.throwIfAborted();
     const result = await drain(await refreshes.start(instanceId, { kind: 'instance' }), signal);
@@ -217,7 +218,8 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   async function publishedStatus(stamp: SourceStamp, directoryRef: string): Promise<DirectoryStatus | null> {
     const cached = await store.snapshotHeader(stamp.id, { kind: 'directory', ref: directoryRef });
     if (!cached || !sameStamp(cached.stamp, stamp) || !await sources.current(stamp)) return null;
-    return { completedAt: cached.completedAt, statistics: cached.statistics ?? null, error: cached.error };
+    return { completedAt: cached.completedAt, statistics: cached.statistics ?? null, error: cached.error,
+      ...(cached.pendingFileInfo === undefined ? {} : { pendingFileInfo: cached.pendingFileInfo }) };
   }
   const preparedEtags = new WeakMap<Extract<Target, { kind: 'file' }>, string>();
   async function describe(resolved: Resolved, content?: FileInfo): Promise<Description> {
@@ -283,6 +285,18 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
           for (const [entry] of group.entries) results.set(entry, metadataError(error));
         }
       }
+      for (const group of ready) {
+        const pending = group.entries.find(([, item]) => item.target.kind === 'file'
+          && item.target.info === undefined && item.target.deferredDirectory !== undefined);
+        if (!pending || pending[1].target.kind !== 'file') continue;
+        const operation = await refreshes.ensureFileInfo(group.stamp, pending[1].target.deferredDirectory!);
+        if (options.execution === 'deferred') throw new PendingRefreshError(operation.operationId);
+        await drain(operation, signal);
+        // Preparation atomically publishes a new view. Resolve the original paths
+        // again rather than retaining targets from the names-only snapshot.
+        for (const [entry] of group.entries) listedEntries.delete(entry);
+        return files.statMany(entries, signal);
+      }
       for (const group of ready) for (const [entry, resolved] of group.entries) {
         signal.throwIfAborted();
         try {
@@ -334,7 +348,8 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       if (resolved.target.kind === 'source') resolved.target = await sourceDirectory(resolved.target, signal);
       const entries = await listResolved(resolved, signal);
       const status = resolved.target.kind === 'directory' ? await publishedStatus(resolved.target.stamp, resolved.target.ref) : null;
-      return { entries, status };
+      return { entries, status, ...(resolved.target.kind === 'directory'
+        ? { source: { instanceId: resolved.target.stamp.id, directoryRef: resolved.target.ref } } : {}) };
     },
     async contentSources(instanceId: string, signal: AbortSignal) {
       return (await rootsSnapshot(instanceId, signal)).value.items;

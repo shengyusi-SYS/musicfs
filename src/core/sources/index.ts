@@ -210,8 +210,9 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
     },
     roots: (id: string, signal: AbortSignal, cursor?: string): Promise<Outcome<Page<Root>>> =>
       execute(id, signal, (plugin, ctx) => plugin.roots(ctx, cursor)),
-    list: (id: string, directory: string, signal: AbortSignal, cursor?: string): Promise<Outcome<Page<Entry>>> =>
-      execute(id, signal, (plugin, ctx) => plugin.list(ctx, directory, cursor)),
+    list: (id: string, directory: string, signal: AbortSignal, cursor?: string,
+      options: { fileInfo?: 'required' } = {}): Promise<Outcome<Page<Entry>>> =>
+      execute(id, signal, (plugin, ctx) => plugin.list(options.fileInfo ? { ...ctx, fileInfo: options.fileInfo } : ctx, directory, cursor)),
     stat: (id: string, file: string, signal: AbortSignal): Promise<Outcome<FileInfo>> =>
       execute(id, signal, (plugin, ctx) => plugin.stat(ctx, file)),
     open: (id: string, file: string, read: ReadRequest, signal: AbortSignal): Promise<Outcome<ReadResult>> =>

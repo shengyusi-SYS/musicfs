@@ -19,7 +19,7 @@ export async function namedView<T extends { id: string; name: string }>(entries:
 export function createPublishedViews<T extends { id: string; name: string }>(
   store: Pick<LibraryStore, 'snapshot' | 'snapshotHeader'>,
   ensure: (stamp: SourceStamp, key: SnapshotKey, signal: AbortSignal) => Promise<Snapshot>,
-  project: (snapshot: Snapshot) => T[],
+  project: (snapshot: Snapshot, key: SnapshotKey) => T[],
   limits = { views: 32, estimatedBytes: 8 * 1024 * 1024 }
 ) {
   const cache = new LRUCache<string, PublishedView<T>, Load>({
@@ -30,7 +30,7 @@ export function createPublishedViews<T extends { id: string; name: string }>(
       // A publication may have changed between the header and row reads. Retry using its new identity.
       if (!snapshot || !matches(snapshot, context)) return undefined;
       if (snapshot.kind !== context.key.kind) throw new LibraryError('invalid_source', 'Invalid published snapshot kind');
-      const view = await namedView(project(snapshot));
+      const view = await namedView(project(snapshot, context.key));
       // Estimate retained strings plus child objects/Map slots. This is a bound on the cache's accounting,
       // not an exact JavaScript heap measurement; oversized directories are usable without being retained.
       const estimatedBytes = Math.max(1, JSON.stringify(snapshot).length * 2

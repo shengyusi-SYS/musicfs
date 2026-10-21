@@ -7,6 +7,8 @@ type Property = { namespace: string; name: string };
 type Resource = ViewEntry | Description;
 type CompiledProperty = Property & { text?: (entry: Resource) => string };
 export type PropfindRequest = { mode: 'allprop' | 'propname' | 'prop'; properties: Property[] };
+export const needsFileMetadata = (request: PropfindRequest) => request.mode === 'allprop' || request.mode === 'prop'
+  && request.properties.some(property => property.namespace === DAV && ['getetag', 'getcontentlength', 'getcontenttype'].includes(property.name));
 const children = (element: Element): Element[] => Array.from(element.childNodes).filter((node): node is Element => node.nodeType === 1);
 export function parsePropfind(body: string): PropfindRequest {
   if (!body.trim()) return { mode: 'allprop', properties: [] };

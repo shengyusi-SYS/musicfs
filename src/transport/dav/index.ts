@@ -5,7 +5,7 @@ import { HTTPException } from 'hono/http-exception';
 import parseRange from 'range-parser';
 import { LibraryError, PendingRefreshError, type FileView } from '../../core/library';
 import { SourceError } from '../../core/sources';
-import { parsePropfind, propfindResponse } from './xml';
+import { needsFileMetadata, parsePropfind, propfindResponse } from './xml';
 
 export type ReadCredentials = { username: string; password: string };
 export type DavOptions = { fixedLength?: (size: number) => TransformStream<Uint8Array, Uint8Array> };
@@ -57,9 +57,11 @@ export function createDav(view: FileView, credentials: ReadCredentials, options:
       if (depth !== '0' && depth !== '1') throw new HTTPException(400, { message: 'Depth must be 0 or 1' });
       const request = parsePropfind(await c.req.text());
       const entries = description.kind === 'directory' && depth === '1' ? await view.list(path, signal) : [];
-      let descriptions: ReturnType<FileView['statMany']> | undefined;
+      // A deferred bulk preparation belongs to the whole request (503 + retry
+      // headers), not a misleading successful XML list of unavailable files.
+      let descriptions = entries.length && needsFileMetadata(request) ? await view.statMany(entries, signal) : undefined;
       const xml = await propfindResponse(description, entries, request, async entry => {
-        const values = await (descriptions ??= view.statMany(entries, signal));
+        const values = descriptions ??= await view.statMany(entries, signal);
         const value = values.get(entry);
         if (value instanceof Error) throw value;
         if (!value) throw new Error('Listed entry has no metadata result');

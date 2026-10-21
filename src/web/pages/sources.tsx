@@ -95,8 +95,9 @@ function Roots({ api, instance, reauthorize }: { api: Api; instance: SourceInsta
     queryFn: ({ signal }: { signal: AbortSignal }) => api.directoryStatus(instance.id, root.directoryRef, signal) })) });
   const refresh = usePersistentRefresh(api, { instanceId: instance.id, operationId: pending, onCompleted: result => {
     if (result.failures.length) message.warning(`${result.failures.length} 个目录刷新失败，请查看下方详情`);
-    else message.success(result.scope.kind === 'instance' ? `实例内容已刷新（${result.refreshedDirectories} 个目录）`
-      : result.scope.directoryRef === undefined ? '内容入口已准备' : '目录已刷新');
+    else message.success(result.scope.kind === 'file-info' ? '文件已准备'
+      : result.scope.kind === 'instance' ? `实例清单已更新（${result.refreshedDirectories} 个目录）`
+      : result.scope.directoryRef === undefined ? '内容入口已更新' : '清单已更新');
   } });
   const busy = refresh.active || refresh.starting || refresh.preparing || roots.isFetching;
   return <><div className="page-actions"><Typography.Text type="secondary">可添加到目录布局的内容入口</Typography.Text><Button icon={<ReloadOutlined />} loading={refresh.starting || refresh.active && refresh.view?.scope.kind === 'instance'} disabled={busy} onClick={() => refresh.start({ kind: 'instance' })}>刷新实例内容</Button></div>
@@ -107,10 +108,14 @@ function Roots({ api, instance, reauthorize }: { api: Api; instance: SourceInsta
       {statuses[index]?.data && <><div className="directory-statistics">{Object.entries(configuration.data?.statistics ?? {}).flatMap(([key, label]) => {
         const count = statuses[index]?.data?.statistics?.[key]; return count === undefined ? [] : [<span key={key}>{label} <strong>{count}</strong></span>];
       })}</div>{statuses[index]!.data!.error && <div role="alert"><Typography.Text type="warning">刷新失败，保留最近成功内容</Typography.Text></div>}
+        {(statuses[index]!.data!.pendingFileInfo ?? 0) > 0 && <div><Typography.Text type="secondary">目录清单已就绪，可按需读取单个文件。使用 App 挂载或全库扫描前，请先准备文件，完成后再连接客户端。</Typography.Text></div>}
         <div className="secondary-id">最近成功：{new Date(statuses[index]!.data!.completedAt).toLocaleString()}</div></>}
       <Failure error={statuses[index]?.error ?? null} />
     </div>
-      <Button size="small" icon={<ReloadOutlined />} disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'directory' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'directory', directoryRef: root.directoryRef })}>刷新目录</Button>
+      <Space wrap>
+        {(statuses[index]?.data?.pendingFileInfo ?? 0) > 0 && <Button size="small" disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'file-info' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'file-info', directoryRef: root.directoryRef })}>准备文件</Button>}
+        <Button size="small" icon={<ReloadOutlined />} disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'directory' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'directory', directoryRef: root.directoryRef })}>刷新目录</Button>
+      </Space>
     </div>) : !roots.isError && <Empty description="此实例暂时没有内容源" />}
   </>;
 }
