@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-21",
+  "sourceRevision": "8119104",
+  "candidate": "NetEase alpha.11; no repeat full scan",
+  "richDetail": {
+    "scope": "one SDK-encrypted 100-song detail request, compared with existing cached album data",
+    "requested": 100,
+    "returned": 100,
+    "sameIds": true,
+    "wallMs": 322,
+    "equalToCachedAlbum": { "artistNames": 100, "publishTime": 98, "size": 85 }
+  },
+  "coverCacheInspection": { "cachedEntries": 1762, "resourcePaths": 1640, "potentialRequestsAvoided": 122 },
+  "generatedSdkEndpoint": { "scope": "final generated SDK endpoint, one real three-song request", "returned": 3, "sameIds": true, "wallMs": 59 },
+  "integration": {
+    "tests": 71,
+    "assertions": 5213,
+    "typecheckProjects": 3,
+    "dependencyBoundaries": "226 modules, 883 dependencies, no violations",
+    "localWorker": { "scope": "packed SDK + local workerd/D1; outbound controlled; 24 songs sharing one album", "coldSourceRequests": 55, "previousColdSourceRequests": 80, "maxColdSql": 37, "warmSourceRequests": 3, "warmSql": 24, "metadataAndTailRange": true }
+  },
+  "productionSourceReader": {
+    "scope": "one real complete MP3, current sourceReader.readMany; no library refresh",
+    "wallMs": 336,
+    "nativeLocatorRequests": 1,
+    "cdnRequests": 1,
+    "parts": 2,
+    "bytesPerPart": 4096,
+    "contentIdentityAndRangesMatch": true
+  },
+  "limits": [
+    "Small real requests verify endpoint and byte-range support, not whole-library time.",
+    "Album fields from different endpoints/times are not identical in every sample.",
+    "Current candidate still prepares all final files before publishing the directory.",
+    "Lazy directory and full-property player scan coordination remains active work.",
+    "No repeated full-account scan, cloud deployment or Windows host access."
+  ]
+}

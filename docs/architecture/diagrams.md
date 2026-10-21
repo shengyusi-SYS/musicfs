@@ -540,6 +540,8 @@ sequenceDiagram
 
 ## 可选标签处理设计
 
+alpha.11的冷准备请求减法：SDK富详情真批量代替大部分专辑查询，封面按实际资源复用，可选工具通过`ReadRange.readMany?`请求首尾窗口；CDN请求和标准MIME解析仍归来源Adapter。以下完整准备后发布流程仍是当前实现，快速名单/按需表示的分阶段调整在[调查](../verification/netease-cold-request-reduction.md)中明确为后续工作。
+
 三种插件实现通过同一个文件 Interface 接入，核心不增加强制处理阶段。QQ、网易云已选用共用工具；其他插件保持自主选择。设计见[可选补标签设计](audio-tags.md)，当前证据见[实现记录](../verification/metadata-implementation.md)。
 
 ```mermaid
