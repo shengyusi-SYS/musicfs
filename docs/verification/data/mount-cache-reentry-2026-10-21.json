@@ -1,0 +1,53 @@
+{
+  "scope": "Offline WSL native FUSE, real mount manager/rclone/DAV/SQLite; no platform calls. Does not measure Windows Explorer.",
+  "before": {
+    "runtime": "actual WSL FUSE + production mount manager/rclone v1.75.2 + Library/DAV/SQLite",
+    "files": 4000,
+    "first": {
+      "milliseconds": 477.9,
+      "propfinds": 2,
+      "snapshotReads": 2
+    },
+    "immediate": {
+      "milliseconds": 8.8,
+      "propfinds": 0,
+      "snapshotReads": 0
+    },
+    "afterSixSeconds": {
+      "milliseconds": 119.2,
+      "propfinds": 3,
+      "snapshotReads": 0
+    },
+    "mediaCalls": 0
+  },
+  "after": {
+    "runtime": "actual WSL FUSE + production mount manager/rclone v1.75.2 + Library/DAV/SQLite",
+    "files": 4000,
+    "first": {
+      "milliseconds": 478.2,
+      "propfinds": 2,
+      "snapshotReads": 2
+    },
+    "immediate": {
+      "milliseconds": 8.9,
+      "propfinds": 0,
+      "snapshotReads": 0
+    },
+    "afterSixSeconds": {
+      "milliseconds": 8.2,
+      "propfinds": 0,
+      "snapshotReads": 0
+    },
+    "beforeManualRefresh": {
+      "milliseconds": 8.5,
+      "propfinds": 0,
+      "snapshotReads": 0
+    },
+    "afterManualRefresh": {
+      "milliseconds": 462.3,
+      "propfinds": 1,
+      "snapshotReads": 1
+    },
+    "mediaCalls": 0
+  }
+}

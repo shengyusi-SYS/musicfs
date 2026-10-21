@@ -20,21 +20,58 @@ export async function createDesktopService(input: { directory: string; adminToke
   const store = openSqlite(join(input.directory, 'state.sqlite'));
   const host = createDesktopPlugins(join(input.directory, 'plugins'), store);
   const extensions = createExtensions(store, host.prepare);
-  const sources = createSources(store, host.registry); const library = createLibrary(sources, store, undefined, { execution: 'deferred', sha256 });
-  const changes = createDesktopChanges({ store, plugins: host, extensions });
-  const background = createDesktopRunner(async signal => await changes.stepNext(signal) || Boolean(await library.refreshes.stepNext(signal)), store.nextBackgroundWorkAt);
+  const refreshMounts = () => { void input.mounts?.refreshLocal().catch(() => console.error('MusicFS: mount directory refresh failed; cached names remain until their configured expiry.')); };
+  const sources = createSources({ ...store,
+    insert(...args: Parameters<typeof store.insert>) { const saved = store.insert(...args); if (saved) refreshMounts(); return saved; },
+    configure(...args: Parameters<typeof store.configure>) { const saved = store.configure(...args); if (saved) refreshMounts(); return saved; },
+    advanceAuthentication(...args: Parameters<typeof store.advanceAuthentication>) {
+      const saved = store.advanceAuthentication(...args); if (saved) refreshMounts(); return saved;
+    },
+    saveAuthentication(...args: Parameters<typeof store.saveAuthentication>) {
+      const saved = store.saveAuthentication(...args);
+      if (saved && args[1].stamp.epoch !== args[0].epoch) refreshMounts();
+      return saved;
+    },
+    deleteInstance(id: string) { store.deleteInstance(id); refreshMounts(); }
+  }, host.registry);
+  const library = createLibrary(sources, { ...store,
+    saveLayout(...args: Parameters<typeof store.saveLayout>) { const saved = store.saveLayout(...args); if (saved) refreshMounts(); return saved; },
+    commitRefresh(...args: Parameters<typeof store.commitRefresh>) {
+    const result = store.commitRefresh(...args);
+    // Notify the desktop consumer only after the complete directory pointer changed.
+    if (result === 'committed' && args[2]?.publish) refreshMounts();
+    return result;
+  } }, undefined, { execution: 'deferred', sha256 });
+  const changes = createDesktopChanges({ store: { ...store, commitChange(...args: Parameters<typeof store.commitChange>) {
+    const result = store.commitChange(...args);
+    if (result && args[2].kind === 'activate') refreshMounts();
+    return result;
+  } }, plugins: host, extensions });
+  const background = createDesktopRunner(async signal => {
+    const changed = await changes.stepNext(signal);
+    if (changed) return true;
+    return Boolean(await library.refreshes.stepNext(signal) || await library.schedules.stepNext(signal));
+  }, async () => {
+    const instants = [store.nextBackgroundWorkAt(), await library.schedules.nextAt()].filter((value): value is number => value !== null);
+    return instants.length ? Math.min(...instants) : null;
+  });
   const app = new Hono();
   app.use('*', async (c, next) => {
     await next();
     if (c.res.headers.has('X-MusicFS-Refresh') || c.req.path.startsWith('/api/refreshes/')
-      || c.req.path.startsWith('/api/plugin-changes/') || c.req.method === 'POST' && c.req.path.startsWith('/api/plugins') && c.res.status === 202) background.wake();
+      || c.req.path.startsWith('/api/plugin-changes/') || c.req.path.endsWith('/refresh-policy')
+      || c.req.method === 'POST' && c.req.path.startsWith('/api/plugins') && c.res.status === 202) background.wake();
   });
   app.route('/', createManagementApi({ host: 'desktop', adminToken: input.adminToken, sources, library, extensions,
     connection: { davPath: '/dav', ...input.dav },
     ...(input.mounts ? { mounts: input.mounts } : {}),
     maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
-    install: async (archive, signal) => changes.install(await readPackage(archive, 'desktop', signal), signal),
-    remove: id => extensions.remove(id), pluginChange: id => changes.get(id) }));
+    install: async (archive, signal) => {
+      const installed = await changes.install(await readPackage(archive, 'desktop', signal), signal);
+      if (!('operationId' in installed)) refreshMounts();
+      return installed;
+    },
+    remove: async id => { await extensions.remove(id); refreshMounts(); }, pluginChange: id => changes.get(id) }));
   app.route('/', createDav(library.files, input.dav));
   if (input.webRoot) {
     app.get('/', serveStatic({ root: input.webRoot, path: 'index.html' }));

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { openSqlite } from '../src/infrastructure/persistence/sqlite';
 import { cachePluginDataPlan } from '../src/infrastructure/persistence/plugin-cache-sql';
 
-for (const version of [1, 2, 3, 4, 5, 6, 7, 8]) test(`version-${version} data survives current migrations and subsequent reopening`, async () => {
+for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9]) test(`version-${version} data survives current migrations and subsequent reopening`, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-migration-')); const path = join(directory, 'state.sqlite');
   const snapshot = { id: 'legacy-snapshot', kind: 'roots' as const, items: [], completedAt: '2026-10-20T00:00:00.000Z',
     stamp: { id: 'instance', pluginId: 'legacy', epoch: 1, pluginRevision: 'old', pluginGeneration: 1 } };
@@ -20,6 +20,7 @@ for (const version of [1, 2, 3, 4, 5, 6, 7, 8]) test(`version-${version} data su
     if (version >= 6) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0006.sql').text());
     if (version >= 7) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0007.sql').text());
     if (version >= 8) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0008.sql').text());
+    if (version >= 9) legacy.exec(await Bun.file('src/infrastructure/persistence/migrations/0009.sql').text());
     legacy.exec(`PRAGMA user_version = ${version}`);
     legacy.query('INSERT INTO installations (id, manifest, revision, generation, status) VALUES (?, ?, ?, 1, ?)').run('legacy', '{}', 'old', 'active');
     legacy.query('INSERT INTO instances (id, plugin_id, name, config, private_state, epoch, state_revision) VALUES (?, ?, ?, ?, ?, 1, 1)')
@@ -42,7 +43,7 @@ for (const version of [1, 2, 3, 4, 5, 6, 7, 8]) test(`version-${version} data su
     expect(current.layout()).toEqual({ revision: 0, nodes: null }); expect(current.saveLayout(0, [])).toBe(true); current.close();
     current = openSqlite(path); expect(current.layout()).toEqual({ revision: 1, nodes: [] }); expect(current.instances()).toHaveLength(1); current.close();
     const migrated = new Database(path);
-    expect(migrated.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version).toBe(9);
+    expect(migrated.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version).toBe(10);
     if (version >= 8) {
       expect(migrated.query<{ document: string }, []>('SELECT document FROM source_plugin_cache').get()?.document).toBe('{"retained":true}');
       const cleanup = cachePluginDataPlan({ id: 'instance', pluginId: 'legacy', epoch: 1, pluginRevision: 'old', pluginGeneration: 1 }, 'probe', 'null', null, 1000)[0]!;

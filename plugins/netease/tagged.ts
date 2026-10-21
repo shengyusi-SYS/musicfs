@@ -37,7 +37,7 @@ async function plan(client: NeteaseClient, planKey: string): Promise<StoredPlan>
 const sharedAssets = new WeakMap<NeteaseClient, Set<string>>();
 
 export async function tagFile(client: NeteaseClient, source: MediaReference, sourceInfo: FileInfo, format: AudioFormat, tags: AudioTags, readRange: ReadRange,
-  ready?: { key: string; expiresAt: number }) {
+  ready?: { key: string; expiresAt: number | null }) {
   const cache = client.ctx.cache;
   if (!cache) fail('not_supported', '网易云补标签需要支持插件资料缓存的宿主。');
   const picture = tags.cover ? { data: tags.cover.data, digest: await byteHash(tags.cover.data) } : undefined;
@@ -48,7 +48,7 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
     const saved = await cache.get(previous);
     if (saved !== undefined && saved !== null) {
       const file = { fileRef: JSON.stringify({ version: 2, source, planKey: previous }), info: (saved as unknown as TaggedPlan).content };
-      if (ready) await cache.put(ready.key, file as unknown as Json, { expiresAt: ready.expiresAt });
+      if (ready) await cache.put(ready.key, file as unknown as Json, ready.expiresAt === null ? undefined : { expiresAt: ready.expiresAt });
       return file;
     }
   }
@@ -63,7 +63,7 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
   const file = { fileRef: JSON.stringify({ version: 2, source, planKey }), info: prepared.content };
   const writes = [...(missingAsset ? [{ key: asset.key, value: asset.value }, { key: marker, value: true }] : []),
     { key: planKey, value: packed.plan as unknown as Json }, { key: inputKey, value: planKey },
-    ...(ready ? [{ key: ready.key, value: file as unknown as Json, expiresAt: ready.expiresAt }] : [])];
+    ...(ready ? [{ key: ready.key, value: file as unknown as Json, ...(ready.expiresAt === null ? {} : { expiresAt: ready.expiresAt }) }] : [])];
   if (cache.putMany) await cache.putMany(writes);
   else for (const item of writes) await cache.put(item.key, item.value, 'expiresAt' in item ? { expiresAt: item.expiresAt } : undefined);
   if (asset) known.add(asset.key);
@@ -100,7 +100,7 @@ async function ensurePrepared(client: NeteaseClient, ref: Extract<Reference, { v
   return prepareSongFile(client, key, ref.source, info(ref.source), song as Record<string, unknown>, readRange);
 }
 
-type ReservedPlan = { plan: StoredPlan; expiresAt: number };
+type ReservedPlan = { plan: StoredPlan; expiresAt: number | null };
 async function reservedPlan(client: NeteaseClient, ref: ReservedReference, readRange: ReadRange): Promise<StoredPlan> {
   client.requireSession();
   const cache = client.ctx.cache;
@@ -131,7 +131,8 @@ async function reservedPlan(client: NeteaseClient, ref: ReservedReference, readR
   if (packed.asset) await cache.put(packed.asset.key, packed.asset.value);
   const winner = await cache.putIfAbsent(key, { plan: packed.plan, expiresAt: material.expiresAt } as unknown as Json) as unknown as ReservedPlan;
   // The permanent first winner owns bytes; a TTL only controls reuse by future catalogue scans.
-  await cache.put(readyKey, { fileRef: JSON.stringify(ref), info: content } as unknown as Json, { expiresAt: winner.expiresAt });
+  await cache.put(readyKey, { fileRef: JSON.stringify(ref), info: content } as unknown as Json,
+    winner.expiresAt === null ? undefined : { expiresAt: winner.expiresAt });
   return winner.plan;
 }
 

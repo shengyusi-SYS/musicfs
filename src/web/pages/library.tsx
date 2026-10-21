@@ -8,6 +8,7 @@ import type { Api } from '../api';
 import { ApiError } from '../api';
 import { Failure } from '../components/feedback';
 import { pendingRefreshId, RefreshProgress, usePersistentRefresh } from '../components/refresh';
+import { RefreshPolicyControl } from '../components/refresh-policy';
 import { appendNode, canMove, editNode, findNode, moveNode } from './layout-draft';
 
 type Draft = { base: number; nodes: LayoutNode[] | null };
@@ -84,6 +85,8 @@ function DirectoryBrowser({ api }: { api: Api }) {
   const parent = path.slice(0, path.lastIndexOf('/')) || '/';
   return <><div className="section-heading"><Typography.Title level={3}>已发布目录</Typography.Title><Button disabled={path === '/'} type="text" icon={<ArrowLeftOutlined />} onClick={() => setPath(parent)}>上一级</Button></div>
     <Breadcrumb items={[{ title: <button className="text-button" onClick={() => setPath('/')}>根目录</button> }, ...(path === '/' ? [] : [{ title: path }])]} />
+    {source && <Space wrap><Button disabled={busy} onClick={() => refresh.start({ kind: 'directory', directoryRef: source.directoryRef })}>刷新目录</Button>
+      <RefreshPolicyControl key={`${source.instanceId}:${source.directoryRef}`} api={api} instanceId={source.instanceId} directoryRef={source.directoryRef} disabled={busy} /></Space>}
     <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh}
       reload={() => refresh.view?.scope.kind === 'file-info' ? refresh.start(refresh.view.scope) : void directory.refetch()} />
     {directory.data?.status?.error && <Alert type="warning" showIcon title="刷新失败，保留最近成功内容"

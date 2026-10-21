@@ -1,7 +1,7 @@
 import { access, lstat, mkdir, readFile, readdir } from 'node:fs/promises';
 import { join, posix, win32 } from 'node:path';
 import { z } from 'zod';
-import type { MountInput, MountManager, MountView } from '../../contracts/mounts';
+import type { MountCacheSettings, MountInput, MountManager, MountView } from '../../contracts/mounts';
 import { createRcloneControl, MountError, writePrivateJson, type RcloneControl } from './rclone-control';
 
 export { MountError } from './rclone-control';
@@ -10,9 +10,13 @@ const sourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('local') }).strict(),
   z.object({ kind: z.literal('remote'), url: z.url().max(4096), username: z.string().max(4096), password: z.string().max(4096) }).strict()
 ]);
-const inputSchema = z.object({ name: z.string().trim().min(1).max(120).optional(), mountPoint: z.string().min(1).max(4096), source: sourceSchema }).strict();
+const directoryCacheSeconds = z.number().int().min(0).max(2_147_483_647);
+const cacheSchema = z.object({ directoryCacheSeconds }).strict();
+const inputSchema = z.object({ name: z.string().trim().min(1).max(120).optional(), mountPoint: z.string().min(1).max(4096),
+  directoryCacheSeconds: directoryCacheSeconds.default(300), source: sourceSchema }).strict();
 const viewSchema = z.object({
   id: z.uuid(), name: z.string(), mountPoint: z.string(), source: z.union([z.object({ kind: z.literal('local') }), z.object({ kind: z.literal('remote'), url: z.string() })]),
+  directoryCacheSeconds: directoryCacheSeconds.default(300),
   state: z.enum(['starting', 'mounted', 'unmounting', 'stopped', 'error']), error: z.object({ code: z.string(), message: z.string() }).optional()
 });
 const recordsSchema = z.array(z.object({ input: inputSchema, view: viewSchema, mayBeMounted: z.boolean().default(false) }));
@@ -48,7 +52,7 @@ export async function createMountManager(options: {
   function normalizeInput(value: MountInput): MountInput {
     const parsed = inputSchema.safeParse(value);
     if (!parsed.success) throw new MountError('invalid_mount', '请填写有效的挂载位置与读取连接。');
-    const input: MountInput = { mountPoint: parsed.data.mountPoint, source: parsed.data.source,
+    const input: MountInput = { mountPoint: parsed.data.mountPoint, source: parsed.data.source, directoryCacheSeconds: parsed.data.directoryCacheSeconds,
       ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }) };
     if (/[\u0000\r\n]/.test(input.mountPoint) || input.mountPoint.startsWith('-')) throw new MountError('invalid_mount', '挂载路径包含无效字符。');
     const driveLetter = platform === 'win32' && /^[a-z]:$/i.test(input.mountPoint);
@@ -150,6 +154,7 @@ export async function createMountManager(options: {
   async function start(record: RecordEntry, input: MountInput) {
     record.input = input; record.view.state = 'starting'; delete record.view.error;
     record.view.name = input.name ?? record.view.name;
+    record.view.directoryCacheSeconds = input.directoryCacheSeconds ?? 300;
     record.view.source = input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url };
     await persist();
     try {
@@ -165,7 +170,8 @@ export async function createMountManager(options: {
       record.mayBeMounted = true;
       await persist();
       const result = await control.call<{ mountPoint: string }>('mount/mount', { fs: `${remoteName(record)}:`, mountPoint: input.mountPoint, mountType,
-        mountOpt: { AllowOther: false, AllowNonEmpty: false }, vfsOpt: { ReadOnly: true, CacheMode: 'off', DirCacheTime: '5s' } });
+        mountOpt: { AllowOther: false, AllowNonEmpty: false }, vfsOpt: { ReadOnly: true, CacheMode: 'off',
+          DirCacheTime: record.view.directoryCacheSeconds === 0 ? 'off' : `${record.view.directoryCacheSeconds}s` } });
       record.view.mountPoint = result.mountPoint;
       const mounted = (await activePoints()).some(point => equalPoint(point.MountPoint, result.mountPoint));
       if (!mounted) throw new MountError('mount_failed', 'rclone 未确认挂载就绪。');
@@ -197,12 +203,16 @@ export async function createMountManager(options: {
       await reconcile();
       const previous = records.find(record => equalPoint(record.view.mountPoint, input.mountPoint) || equalPoint(record.input.mountPoint, input.mountPoint));
       if (previous && previous.view.state === 'mounted') {
-        if (JSON.stringify(previous.input.source) === JSON.stringify(input.source)) return view(previous);
+        if (JSON.stringify(previous.input.source) === JSON.stringify(input.source)) {
+          if (previous.view.directoryCacheSeconds !== input.directoryCacheSeconds) throw new MountError('mount_busy', '此位置已挂载；请通过缓存设置保存并重新挂载。');
+          return view(previous);
+        }
         throw new MountError('mount_busy', '此路径已挂载其他连接，请先卸载。');
       }
       if (previous?.mayBeMounted) throw new MountError('mount_busy', '此路径仍有待处理的挂载，请先卸载，再重新挂载。');
       const record: RecordEntry = previous ?? {
         input, mayBeMounted: false, view: { id: crypto.randomUUID(), name: input.name ?? (input.source.kind === 'local' ? '本地 MusicFS' : new URL(input.source.url).host), mountPoint: input.mountPoint,
+          directoryCacheSeconds: input.directoryCacheSeconds ?? 300,
           source: input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url }, state: 'starting' }
       };
       if (!previous) records.push(record);
@@ -221,6 +231,34 @@ export async function createMountManager(options: {
       await stop(record);
       records.splice(records.indexOf(record), 1);
       await persist();
+    }),
+    configureCache: (id: string, settings: MountCacheSettings) => serialize(async () => {
+      const parsed = cacheSchema.safeParse(settings);
+      if (!parsed.success) throw new MountError('invalid_mount', '目录缓存秒数必须为非负整数；0 表示不自动过期。');
+      const record = findRecord(id);
+      if (record.view.directoryCacheSeconds === parsed.data.directoryCacheSeconds) return view(record);
+      const wasMounted = record.mayBeMounted;
+      // Commit the new settings only after a normal unmount succeeds.
+      if (wasMounted) await stop(record);
+      const input = normalizeInput({ ...record.input, ...parsed.data });
+      if (wasMounted) return start(record, input);
+      record.input = input; record.view.directoryCacheSeconds = parsed.data.directoryCacheSeconds;
+      await persist(); return view(record);
+    }),
+    refresh: id => serialize(async () => {
+      const record = findRecord(id);
+      if (!record.mayBeMounted) throw new MountError('invalid_mount', '请先挂载，再刷新挂载目录。');
+      const owned = (await activePoints()).some(point => equalPoint(point.MountPoint, record.view.mountPoint) && point.Fs === `${remoteName(record)}:`);
+      if (!owned) throw new MountError('invalid_mount', '此挂载已不在运行，请重新挂载后重试。');
+      await control.call('vfs/forget', { fs: `${remoteName(record)}:` });
+    }),
+    refreshLocal: () => serialize(async () => {
+      const local = records.filter(record => record.mayBeMounted && record.view.state === 'mounted' && record.input.source.kind === 'local');
+      if (!local.length) return;
+      const points = await activePoints();
+      for (const record of local) if (points.some(point => equalPoint(point.MountPoint, record.view.mountPoint) && point.Fs === `${remoteName(record)}:`)) {
+        await control.call('vfs/forget', { fs: `${remoteName(record)}:` });
+      }
     }),
     close: () => serialize(async () => {
       for (const record of records) if (record.view.state !== 'stopped') await stop(record);

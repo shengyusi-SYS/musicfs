@@ -9,6 +9,7 @@ import type { Result, Connection, Status, PluginInstallation, SourceInstance, So
 import type { PluginChange } from '../../contracts/plugin-changes';
 import type { MountInput, MountManager } from '../../contracts/mounts';
 import type { RefreshView } from '../../contracts/refreshes';
+import type { RefreshPolicy } from '../../contracts/refresh-policy';
 import { ExtensionError, type Extensions, type Installation } from '../../core/extensions';
 import { SourceError, type Sources } from '../../core/sources';
 import { LibraryError, PendingRefreshError, type Library } from '../../core/library';
@@ -17,6 +18,8 @@ import { inspectPackage } from '../../infrastructure/archives';
 const name = z.string().trim().min(1).max(120);
 const instanceInput = z.object({ pluginId: z.string().min(1), name, config: z.json() }).strict();
 const configInput = z.object({ config: z.json() }).strict();
+const refreshPolicyInput = z.object({ intervalMinutes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+  .refine(value => value === 0 || value >= 15) }).strict();
 const layoutInput = z.object({ expectedRevision: z.number().int().nonnegative(), nodes: z.json() }).strict();
 const refreshInput = z.union([
   z.object({ scope: z.literal('instance') }).strict(),
@@ -121,6 +124,16 @@ export function createManagementApi(input: {
     await input.mounts.remove(c.req.param('id'));
     return c.body(null, 204);
   });
+  app.put('/api/mounts/:id/cache', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    const settings = z.object({ directoryCacheSeconds: z.number().int().min(0).max(2_147_483_647) }).strict().parse(await json(c));
+    return c.json(await input.mounts.configureCache(c.req.param('id'), settings));
+  });
+  app.post('/api/mounts/:id/cache/refresh', async c => {
+    if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
+    await input.mounts.refresh(c.req.param('id'));
+    return c.body(null, 204);
+  });
   app.get('/api/plugins/:id/configuration', async c => c.json((await sources.configuration(c.req.param('id'))) satisfies SourceConfiguration));
   app.get('/api/instances', async c => c.json((await sources.instances()) satisfies SourceInstance[]));
   app.post('/api/instances', async c => {
@@ -142,6 +155,12 @@ export function createManagementApi(input: {
     return c.json(result(outcome), outcome.ok ? 200 : 422);
   });
   app.get('/api/instances/:id/roots', async c => c.json(await library.contentSources(c.req.param('id'), c.req.raw.signal)));
+  app.get('/api/instances/:id/refresh-policy', async c => c.json(
+    (await library.schedules.get(c.req.param('id'), c.req.query('directoryRef'))) satisfies RefreshPolicy));
+  app.put('/api/instances/:id/refresh-policy', async c => {
+    const value = refreshPolicyInput.parse(await json(c));
+    return c.json((await library.schedules.set(c.req.param('id'), value.intervalMinutes, c.req.query('directoryRef'))) satisfies RefreshPolicy);
+  });
   app.get('/api/instances/:id/directory-status', async c => {
     const directoryRef = z.string().parse(c.req.query('directoryRef'));
     return c.json(await library.directoryStatus(c.req.param('id'), directoryRef));

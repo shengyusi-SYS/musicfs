@@ -13,9 +13,11 @@ const localConnection = () => ({ url: 'http://127.0.0.1:12345/dav/', username: '
 function fakeControl() {
   const mounted = new Map<string, string>();
   const remotes = new Map<string, Record<string, unknown>>();
+  const calls: { method: string; parameters: Record<string, unknown> }[] = [];
   let mountCalls = 0; let closed = false; let busy = false; let listFailure = false;
   const control: RcloneControl = {
     async call<T>(method: string, parameters: Record<string, unknown> = {}) {
+      calls.push({ method, parameters: structuredClone(parameters) });
       let value: unknown = {};
       if (method === 'config/create') remotes.set(String(parameters.name), parameters.parameters as Record<string, unknown>);
       if (method === 'config/get') value = remotes.get(String(parameters.name)) ?? {};
@@ -29,9 +31,59 @@ function fakeControl() {
     async removeRemote(name) { remotes.delete(name); },
     async close() { closed = true; }
   };
-  return { control, remotes, mountCalls: () => mountCalls, closed: () => closed,
+  return { control, remotes, calls, mountCalls: () => mountCalls, closed: () => closed,
     setBusy(value: boolean) { busy = value; }, setListFailure(value: boolean) { listFailure = value; } };
 }
+
+test('directory cache settings default to five minutes and change only after a normal unmount', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-cache-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const legacyInput = { mountPoint: join(directory, 'music'), source: { kind: 'local' as const } };
+  await mkdir(join(directory, 'state'));
+  await writePrivateJson(join(directory, 'state', 'mounts.json'), [{ input: legacyInput, mayBeMounted: false,
+    view: { id: crypto.randomUUID(), name: 'Legacy mount', mountPoint: legacyInput.mountPoint, source: legacyInput.source, state: 'stopped' } }]);
+  const manager = await createMountManager({ directory: join(directory, 'state'), binary: 'unused', localConnection,
+    control: fake.control, checkDependencies: async () => {} });
+  cleanup.push(async () => { fake.setBusy(false); await manager.close(); });
+  expect((await manager.list())[0]?.directoryCacheSeconds).toBe(300); expect(fake.calls).toHaveLength(0);
+  const mounted = await manager.mount(legacyInput);
+  expect(mounted.directoryCacheSeconds).toBe(300);
+  expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '300s', CacheMode: 'off' });
+  const updated = await manager.configureCache(mounted.id, { directoryCacheSeconds: 0 });
+  expect(updated).toMatchObject({ id: mounted.id, directoryCacheSeconds: 0, state: 'mounted' });
+  expect(fake.calls.filter(call => call.method === 'mount/mount').at(-1)?.parameters.vfsOpt).toMatchObject({ DirCacheTime: 'off', CacheMode: 'off' });
+  fake.setBusy(true);
+  await expect(manager.configureCache(mounted.id, { directoryCacheSeconds: 900 })).rejects.toMatchObject({ code: 'mount_busy' });
+  expect((await manager.list())[0]?.directoryCacheSeconds).toBe(0);
+  const persisted = JSON.parse(await readFile(join(directory, 'state', 'mounts.json'), 'utf8'));
+  expect(persisted[0].input.directoryCacheSeconds).toBe(0); expect(fake.mountCalls()).toBe(2);
+  fake.setBusy(false); await manager.unmount(mounted.id);
+  expect(await manager.configureCache(mounted.id, { directoryCacheSeconds: 1200 })).toMatchObject({ state: 'stopped', directoryCacheSeconds: 1200 });
+  expect(fake.mountCalls()).toBe(2);
+  expect(await manager.remount(mounted.id)).toMatchObject({ state: 'mounted', directoryCacheSeconds: 1200 });
+  expect(fake.calls.filter(call => call.method === 'mount/mount').at(-1)?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '1200s' });
+});
+
+test('mount directory refresh forgets only its VFS and local publishing does not start inactive rclone', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-forget-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const manager = await createMountManager({ directory: join(directory, 'state'), binary: 'unused', localConnection,
+    control: fake.control, checkDependencies: async () => {} });
+  cleanup.push(() => manager.close());
+  await manager.refreshLocal(); expect(fake.calls).toHaveLength(0);
+  const local = await manager.mount({ mountPoint: join(directory, 'local'), source: { kind: 'local' } });
+  const remote = await manager.mount({ mountPoint: join(directory, 'remote'), source: { kind: 'remote', url: 'http://example.com/dav/', username: 'reader', password: 'secret' } });
+  await manager.refreshLocal();
+  expect(fake.calls.filter(call => call.method === 'vfs/forget').map(call => call.parameters)).toEqual([{ fs: `musicfs_${local.id.replaceAll('-', '')}:` }]);
+  await manager.refresh(remote.id);
+  expect(fake.calls.filter(call => call.method === 'vfs/forget').at(-1)?.parameters).toEqual({ fs: `musicfs_${remote.id.replaceAll('-', '')}:` });
+  expect(fake.mountCalls()).toBe(2);
+  await manager.unmount(local.id);
+  const before = fake.calls.length; await manager.refreshLocal(); expect(fake.calls).toHaveLength(before);
+  await expect(manager.refresh(local.id)).rejects.toMatchObject({ code: 'invalid_mount' });
+});
 
 test('concurrent mount requests reuse one filesystem; recovered state and responses exclude credentials', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-desktop-mounts-'));

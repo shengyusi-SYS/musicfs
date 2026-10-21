@@ -14,7 +14,7 @@ export function createQqPlugin(handler: QqHandler = handleRequest): SourcePlugin
     migrateState: input => migrateState(input.fromVersion, input.state),
     validateState: input => validateState(input.state),
     renewal: { needed: renewalNeeded, renew: ctx => run(ctx, handler, client => client.renew()) },
-    configuration: { schema: schema as JsonObject, ui: { order: ['label', 'channel', 'audio'] } },
+    configuration: { schema: schema as JsonObject, ui: { order: ['label', 'channel', 'audio', 'metadataCacheDays'] } },
     async validateConfig(ctx, candidate) {
       const config: Json = normalizeConfig(candidate);
       if (!validate(config)) return { ok: false, error: { kind: 'invalid_config', message: '请检查 QQ 实例配置。',

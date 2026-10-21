@@ -2,7 +2,7 @@
 
 日期：2026-10-21。状态：设计与当前实现并列说明，插件合同仍为 alpha。插件/实例、目录、共用协议和 UI 已接线；QQ 与[网易云](../verification/p2-netease-source.md)有真实扫码/目录/音频证据，[桌面启动/挂载](../desktop.md)与[Worker 后台发布](../worker.md)有正式入口及本地验证。真实云端已有部署/发布/双示例授权读取/核心升级证据；四目标原生运行及剩余示例/资源仍按台账收口。产品合同以 [统一需求](../../outputs/musicfs-requirements-and-technical-design.md) 为准，执行顺序以 [实施计划](../../outputs/musicfs-implementation-plan.md) 为准。
 
-设计采用一个应用中的领域 Module、独立发布的插件合同，以及实际有差异的宿主 Adapter。Module 按其 Interface 能隐藏的业务责任划分，Interface 包括数据、调用顺序、失败与性能合同，不按文件行数或页面数量拆包。结构和流程见 [图表](diagrams.md)。
+设计采用一个应用中的领域 Module、独立发布的插件合同，以及实际有差异的宿主 Adapter。Module 按其 Interface 能隐藏的业务责任划分，Interface 包括数据、调用顺序、失败与性能合同，不按文件行数或页面数量拆包。结构和流程见 [图表](diagrams.md)，目录快照、挂载清单、插件资料与定时更新见[分层缓存设计](cache-policy.md)。
 
 ## 领域划分与所有权
 

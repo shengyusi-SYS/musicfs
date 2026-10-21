@@ -1,11 +1,12 @@
 import type { Json, PluginFault } from '@musicfs/plugin-api';
 import type { Status, SourceInstance, PluginInstallation, PluginInspection, SourceConfiguration, ContentSources, DirectoryStatus, DirectoryListing, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
 import type { PluginChange } from '../contracts/plugin-changes';
-import type { MountInput, MountView } from '../contracts/mounts';
+import type { MountCacheSettings, MountInput, MountView } from '../contracts/mounts';
 import type { RefreshScope, RefreshView } from '../contracts/refreshes';
 import type { DesktopNetworkSettings, DesktopNetworkView } from '../contracts/desktop';
 import type { MountPrerequisitesView } from '../contracts/mount-prerequisites';
 import type { DesktopHttpsView } from '../contracts/desktop-https';
+import type { RefreshPolicy } from '../contracts/refresh-policy';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -57,6 +58,8 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     remount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/mount`, { method: 'POST' }),
     unmount: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/unmount`, { method: 'POST' }),
     removeMount: (id: string) => request<void>(`/mounts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    configureMountCache: (id: string, settings: MountCacheSettings) => request<MountView>(`/mounts/${encodeURIComponent(id)}/cache`, json('PUT', settings)),
+    refreshMount: (id: string) => request<void>(`/mounts/${encodeURIComponent(id)}/cache/refresh`, { method: 'POST' }),
     mountPrerequisites: (signal: AbortSignal) => request<MountPrerequisitesView>('/desktop/mount-prerequisites', { signal }),
     installWinFsp: () => request<MountPrerequisitesView>('/desktop/mount-prerequisites/install', { method: 'POST' }),
     desktopHttps: (signal: AbortSignal) => request<DesktopHttpsView>('/desktop/https', { signal }),
@@ -78,6 +81,8 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
       : scope.kind === 'file-info' ? { scope: 'file-info', directoryRef: scope.directoryRef }
       : scope.directoryRef === undefined ? {} : { directoryRef: scope.directoryRef })),
     currentRefresh: (id: string, signal: AbortSignal) => request<RefreshView | null>(`/instances/${encodeURIComponent(id)}/refresh`, { signal }),
+    refreshPolicy: (id: string, directoryRef: string | undefined, signal: AbortSignal) => request<RefreshPolicy>(`/instances/${encodeURIComponent(id)}/refresh-policy${directoryRef === undefined ? '' : '?directoryRef=' + encodeURIComponent(directoryRef)}`, { signal }),
+    saveRefreshPolicy: (id: string, intervalMinutes: number, directoryRef?: string) => request<RefreshPolicy>(`/instances/${encodeURIComponent(id)}/refresh-policy${directoryRef === undefined ? '' : '?directoryRef=' + encodeURIComponent(directoryRef)}`, json('PUT', { intervalMinutes })),
     refreshOperation: (id: string, signal: AbortSignal) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}`, { signal }),
     stepRefresh: (id: string, signal?: AbortSignal) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}/step`, { method: 'POST', ...(signal ? { signal } : {}) }),
     cancelRefresh: (id: string) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}`, { method: 'DELETE' }),

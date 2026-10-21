@@ -35,7 +35,7 @@ export const songKey = (source: MediaReference, sourceInfo: FileInfo, song: Reco
   hash([source, sourceInfo, song]).then(value => `ready:${value}`);
 
 export async function tagFile(client: QqClient, source: MediaReference, sourceInfo: FileInfo, format: AudioFormat, tags: AudioTags, readRange: ReadRange,
-  ready?: { key: string; expiresAt: number }): Promise<PreparedFile> {
+  ready?: { key: string; expiresAt: number | null }): Promise<PreparedFile> {
   const cache = client.ctx.cache;
   if (!cache) fail('not_supported', 'QQ 补标签需要支持插件资料缓存的宿主。');
   const tagIdentity = tags.cover ? { ...tags, cover: { mimeType: tags.cover.mimeType, description: tags.cover.description, digest: await byteHash(tags.cover.data) } } : tags;
@@ -60,7 +60,7 @@ export async function tagFile(client: QqClient, source: MediaReference, sourceIn
   const planKey = `tag-plan:${prepared.content.contentId}`;
   const file = { fileRef: JSON.stringify({ version: 2, source, planKey, ...(ready ? { readyKey: ready.key } : {}) }), info: prepared.content };
   writes.push({ key: inputKey, value: { planKey, info: prepared.content } as unknown as Json });
-  if (ready) writes.push({ key: ready.key, value: file as unknown as Json, expiresAt: ready.expiresAt });
+  if (ready) writes.push({ key: ready.key, value: file as unknown as Json, ...(ready.expiresAt === null ? {} : { expiresAt: ready.expiresAt }) });
   if (cache.putMany) await cache.putMany(writes);
   else for (const item of writes) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
   return file;

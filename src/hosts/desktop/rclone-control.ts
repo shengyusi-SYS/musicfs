@@ -92,7 +92,7 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       if (!await Bun.file(logPath).exists()) await writeFile(logPath, '', { mode: 0o600 });
       child = Bun.spawn([input.binary, 'rcd', '--rc-addr', `127.0.0.1:${port}`, '--config', configPath,
         '--cache-dir', join(input.directory, 'cache'), '--log-file', logPath, '--log-level', 'ERROR'], {
-        env: { ...process.env, RCLONE_RC_USER: 'musicfs', RCLONE_RC_PASS: password }, stdin: 'ignore', stdout: 'ignore', stderr: 'ignore'
+        windowsHide: true, env: { ...process.env, RCLONE_RC_USER: 'musicfs', RCLONE_RC_PASS: password }, stdin: 'ignore', stdout: 'ignore', stderr: 'ignore'
       });
       launched = child;
       const current = { pid: child.pid, port, password };

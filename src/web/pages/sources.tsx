@@ -8,6 +8,7 @@ import type { SourceInstance } from '../../contracts/management';
 import type { Api } from '../api';
 import { Failure } from '../components/feedback';
 import { pendingRefreshId, RefreshProgress, usePersistentRefresh } from '../components/refresh';
+import { RefreshPolicyControl } from '../components/refresh-policy';
 
 const SchemaForm = lazy(() => import('../components/schema-form'));
 const Authentication = lazy(() => import('../components/authentication'));
@@ -113,6 +114,7 @@ function Roots({ api, instance, reauthorize }: { api: Api; instance: SourceInsta
       <Failure error={statuses[index]?.error ?? null} />
     </div>
       <Space wrap>
+        <RefreshPolicyControl api={api} instanceId={instance.id} directoryRef={root.directoryRef} disabled={busy} />
         {(statuses[index]?.data?.pendingFileInfo ?? 0) > 0 && <Button size="small" disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'file-info' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'file-info', directoryRef: root.directoryRef })}>准备文件</Button>}
         <Button size="small" icon={<ReloadOutlined />} disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'directory' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'directory', directoryRef: root.directoryRef })}>刷新目录</Button>
       </Space>

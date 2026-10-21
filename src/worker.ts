@@ -33,7 +33,9 @@ export default function createWorker(registrations: RegisteredPlugin[]) {
       const signal = AbortSignal.timeout(60_000);
       if (await changes.stepNext(signal)) return;
       // The native scheduler is a slow fallback when no management page is open.
-      await runtime(env.DB).library.refreshes.stepNext(signal);
+      const { library } = runtime(env.DB);
+      if (await library.refreshes.stepNext(signal)) return;
+      await library.schedules.stepNext(signal);
     }
   };
 }

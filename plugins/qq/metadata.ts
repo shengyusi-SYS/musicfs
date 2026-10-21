@@ -1,8 +1,9 @@
 import type { Json } from '@musicfs/plugin-api';
 import type { AudioTags } from '@musicfs/audio-tags';
 import { fail, object, QqFailure, type QqClient } from './client';
+import { metadataCacheExpiry } from './configuration';
 
-const lifetime = 24 * 60 * 60 * 1000;
+const missingLifetime = 24 * 60 * 60 * 1000;
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value : undefined;
 const positive = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : undefined;
 const names = (value: unknown) => Array.isArray(value) ? value.map(item => text(object(item).name ?? object(item).singername)).filter((item): item is string => item !== undefined) : [];
@@ -14,22 +15,27 @@ const encodedLyric = (value: unknown) => {
   catch { return; }
 };
 
-type Asset = { value: Json; expiresAt: number };
+type Asset = { value: Json; expiresAt: number | null };
+const earliestExpiry = (...values: (number | null | undefined)[]): number | null => {
+  const finite = values.filter((value): value is number => typeof value === 'number');
+  return finite.length ? Math.min(...finite) : null;
+};
 const pending = new WeakMap<QqClient, Map<string, Promise<Asset>>>();
 async function cached(client: QqClient, key: string, read: () => Promise<Json>): Promise<Asset> {
   const cache = client.ctx.cache;
   if (!cache) fail('not_supported', 'QQ 补标签需要支持插件资料缓存的宿主。');
   let reads = pending.get(client); if (!reads) { reads = new Map(); pending.set(client, reads); }
   const earlier = reads.get(key);
-  if (earlier) { const saved = await earlier; if (saved.expiresAt > Date.now()) return saved; reads.delete(key); }
+  if (earlier) { const saved = await earlier; if (saved.expiresAt === null || saved.expiresAt > Date.now()) return saved; reads.delete(key); }
   // This envelope owns its original expiry; a cache hit never renews dependent ready indexes.
   const storageKey = `metadata:${key}`;
   const result = (async () => {
     const previous = await cache.get(storageKey);
     if (previous !== undefined) return previous as unknown as Asset;
     const value = await read(); client.ctx.signal.throwIfAborted();
-    const asset = { value, expiresAt: Date.now() + lifetime };
-    await cache.put(storageKey, asset, { expiresAt: asset.expiresAt }); return asset;
+    const missing = value === null || typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
+    const asset = { value, expiresAt: missing ? Date.now() + missingLifetime : metadataCacheExpiry(client.ctx.config) };
+    await cache.put(storageKey, asset, asset.expiresAt === null ? undefined : { expiresAt: asset.expiresAt }); return asset;
   })();
   reads.set(key, result);
   try { return await result; } catch (error) { if (reads.get(key) === result) reads.delete(key); throw error; }
@@ -48,7 +54,7 @@ async function legacy(client: QqClient, path: string, params: Record<string, str
   return result;
 }
 
-async function cover(client: QqClient, albumId: string, url: string): Promise<{ picture: AudioTags['cover']; expiresAt: number }> {
+async function cover(client: QqClient, albumId: string, url: string): Promise<{ picture: AudioTags['cover']; expiresAt: number | null }> {
   const asset = await cached(client, `cover:${albumId}:${url}`, async () => {
     const response = await client.ctx.fetch(url, { signal: client.ctx.signal });
     if (response.status === 404) { await response.body?.cancel(); return null; }
@@ -62,15 +68,16 @@ async function cover(client: QqClient, albumId: string, url: string): Promise<{ 
   const saved = object(asset.value); return { picture: { mimeType: String(saved.mimeType), data: decode(String(saved.base64)) }, expiresAt: asset.expiresAt };
 }
 
-export async function musicTags(client: QqClient, source: Record<string, unknown>): Promise<{ tags: AudioTags; expiresAt: number }> {
+export async function musicTags(client: QqClient, source: Record<string, unknown>): Promise<{ tags: AudioTags; expiresAt: number | null }> {
   const mid = String(source.mid);
   const sourceAlbum = object(source.album);
   const complete = source.index_album !== undefined && source.index_cd !== undefined && sourceAlbum.mid && sourceAlbum.name;
-  const detailAsset = complete ? { value: source as Json, expiresAt: Date.now() + lifetime } : await cached(client, `song:${mid}`, async () => {
+  const detailAsset = complete ? { value: source as Json, expiresAt: metadataCacheExpiry(client.ctx.config) } : await cached(client, `song:${mid}`, async () => {
     try {
       const result = await client.rpc(() => ({ module: 'music.pf_song_detail_svr', method: 'get_song_detail_yqq', param: { song_type: 0, song_mid: mid }, readOnly: true, operation: 'session.authenticated-read' }));
-      return { ...source, ...object(result.track_info) } as Json;
-    } catch (error) { if (error instanceof QqFailure && error.fault.kind === 'not_found') return source as Json; throw error; }
+      const received = object(result.track_info);
+      return Object.keys(received).length ? { ...source, ...received } as Json : null;
+    } catch (error) { if (error instanceof QqFailure && error.fault.kind === 'not_found') return null; throw error; }
   });
   // The fresh catalogue's fields win over an older auxiliary detail response.
   const detail: Record<string, unknown> = { ...object(detailAsset.value), ...source,
@@ -99,7 +106,7 @@ export async function musicTags(client: QqClient, source: Record<string, unknown
   const track = positive(detail.index_album); const disc = positive(detail.index_cd); const total = positive(album.total);
   const coverUrl = text(originalAlbum.picUrl) ?? text(album.picUrl) ?? (albumMid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albumMid}.jpg?max_age=2592000` : undefined);
   const picture = coverUrl ? await cover(client, albumMid ?? mid, coverUrl) : undefined;
-  return { expiresAt: Math.min(detailAsset.expiresAt, albumAsset.expiresAt, lyricAsset.expiresAt, picture?.expiresAt ?? Infinity),
+  return { expiresAt: earliestExpiry(detailAsset.expiresAt, albumAsset.expiresAt, lyricAsset.expiresAt, picture?.expiresAt),
     tags: { ...(title ? { title } : {}), ...(artists.length ? { artists } : {}), ...(albumName ? { album: albumName } : {}),
     ...(albumArtists.length ? { albumArtists } : {}), ...(released ? { date: released } : {}), ...(track ? { track: { number: track, ...(total ? { total } : {}) } } : {}),
     ...(disc ? { disc: { number: disc } } : {}), ...(picture?.picture ? { cover: picture.picture } : {}), ...(Object.keys(lyrics).length ? { lyrics: lyrics as NonNullable<AudioTags['lyrics']> } : {}) } };

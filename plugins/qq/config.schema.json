@@ -4,6 +4,8 @@
   "additionalProperties": false,
   "properties": {
     "label": { "type": "string", "title": "目录名称", "minLength": 1, "maxLength": 80, "default": "QQ 音乐" },
+    "metadataCacheDays": { "type": "integer", "title": "音乐资料缓存天数", "minimum": 0, "default": 1,
+      "description": "封面、歌词和补充音乐资料的保留天数；0 表示长期保留。空或缺失结果仍在 1 天后重试，不影响播放地址和歌单名单更新。" },
     "channel": { "type": "string", "title": "授权方式", "default": "qq", "oneOf": [
       { "const": "qq", "title": "手机 QQ 扫码" }, { "const": "wechat", "title": "微信扫码" }
     ] },

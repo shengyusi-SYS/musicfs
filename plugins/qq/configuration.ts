@@ -9,9 +9,9 @@ const defaults: AudioPolicy = { mode: 'single', qualities: ['128'], missingQuali
 
 export function normalizeConfig(candidate: Json): Json {
   if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate;
-  const audio = candidate.audio;
+  const { audio, metadataCacheDays, ...rest } = candidate;
   const initial = { ...defaults, qualities: [...defaults.qualities] };
-  return { label: 'QQ 音乐', channel: 'qq', ...candidate,
+  return { label: 'QQ 音乐', channel: 'qq', ...rest, ...(metadataCacheDays === undefined || metadataCacheDays === 1 ? {} : { metadataCacheDays }),
     audio: audio === undefined ? initial : audio !== null && typeof audio === 'object' && !Array.isArray(audio)
       ? { ...initial, ...audio } : audio };
 }
@@ -26,4 +26,11 @@ export function audioPolicy(config: Json): AudioPolicy {
 export function lowerQualities(quality: Quality): Quality[] {
   if (quality === 'flac' || quality === 'ape') return ['320', '128', 'm4a'];
   return quality === '320' ? ['128', 'm4a'] : quality === '128' ? ['m4a'] : [];
+}
+
+/** Read the default without adding fields to existing saved configurations. */
+export function metadataCacheExpiry(config: Json, now = Date.now()): number | null {
+  const days = object(config).metadataCacheDays ?? 1;
+  if (typeof days !== 'number' || !Number.isInteger(days) || days < 0) fail('invalid_config', '音乐资料缓存天数必须是非负整数，0 表示长期保留。');
+  return days === 0 ? null : now + days * 24 * 60 * 60 * 1000;
 }

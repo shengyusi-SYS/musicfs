@@ -11,6 +11,10 @@ import pluginChangesSchema from './migrations/0006.sql' with { type: 'text' };
 import renewalsSchema from './migrations/0007.sql' with { type: 'text' };
 import pluginCacheSchema from './migrations/0008.sql' with { type: 'text' };
 import pluginCacheIndexes from './migrations/0009.sql' with { type: 'text' };
+import refreshSchedulesSchema from './migrations/0010.sql' with { type: 'text' };
+import type { RefreshScheduleStore } from '../../core/library/schedules';
+import { refreshScheduleSQL, nextRefreshScheduleSQL, saveRefreshScheduleStatement, claimDueRefreshScheduleStatement,
+  scheduleFromRow, type RefreshScheduleRow } from './refresh-schedule-sql';
 import type { PluginCacheStore } from '../../core/sources/cache';
 import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDataPlan, cachePluginDataManyPlan, cachePluginDataIfAbsentPlan } from './plugin-cache-sql';
 import type { RenewalStore } from '../../core/sources/renewal';
@@ -36,8 +40,8 @@ export function openSqlite(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = db.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version;
-  if (version === undefined || version < 0 || version > 9) { db.close(); throw new Error('Unsupported MusicFS database version'); }
-  if (version < 9) db.transaction(() => {
+  if (version === undefined || version < 0 || version > 10) { db.close(); throw new Error('Unsupported MusicFS database version'); }
+  if (version < 10) db.transaction(() => {
     if (version === 0) db.exec(initialSchema);
     if (version < 2) db.exec(librarySchema);
     if (version < 3) db.exec(authenticationSchema);
@@ -46,7 +50,8 @@ export function openSqlite(path: string) {
     if (version < 6) db.exec(pluginChangesSchema);
     if (version < 7) db.exec(renewalsSchema);
     if (version < 8) db.exec(pluginCacheSchema);
-    db.exec(pluginCacheIndexes); db.exec('PRAGMA user_version = 9');
+    if (version < 9) db.exec(pluginCacheIndexes);
+    db.exec(refreshSchedulesSchema); db.exec('PRAGMA user_version = 10');
   })();
 
   const installation = (id: string): Installation | undefined => {
@@ -178,6 +183,12 @@ export function openSqlite(path: string) {
     readyRefreshes(now, limit) {
       return db.query<{ operation_id: string }, [number, number]>(readyRefreshesSQL).all(now, limit).map(row => row.operation_id);
     },
+    refreshSchedule(instanceId, key) {
+      return scheduleFromRow(db.query<RefreshScheduleRow, [string, string, string]>(refreshScheduleSQL).get(instanceId, key.kind, key.ref));
+    },
+    saveRefreshSchedule(instanceId, key, intervalMinutes, nextRunAt) { execute(saveRefreshScheduleStatement(instanceId, key, intervalMinutes, nextRunAt)); },
+    claimDueRefreshSchedule(now) { return scheduleFromRow(execute<RefreshScheduleRow>(claimDueRefreshScheduleStatement(now))[0]); },
+    nextRefreshScheduleAt() { return db.query<{ instant: number | null }, []>(nextRefreshScheduleSQL).get()?.instant ?? null; },
     nextBackgroundWorkAt() {
       // Reuse the ready predicates with an unbounded lease horizon, including
       // the refresh source fence. No timer is needed when only stale jobs remain.
@@ -188,5 +199,5 @@ export function openSqlite(path: string) {
           WHERE operation_id IN (${readyRefreshesSQL}))`).get(Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1)?.instant ?? null;
     },
     close: () => db.close()
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & RenewalStore & PluginCacheStore & { close(): void; nextBackgroundWorkAt(): number | null };
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & RefreshScheduleStore & PluginChangeStore & RenewalStore & PluginCacheStore & { close(): void; nextBackgroundWorkAt(): number | null };
 }

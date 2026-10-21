@@ -2,8 +2,8 @@ import type { Json } from '@musicfs/plugin-api';
 import type { AudioTags } from '@musicfs/audio-tags';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, rateLimited, NeteaseFailure, object, type NeteaseClient } from './client';
+import { metadataCacheExpiry } from './configuration';
 
-const lifetime = 7 * 24 * 60 * 60 * 1000;
 const missingLifetime = 24 * 60 * 60 * 1000;
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value : undefined;
 const positive = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : undefined;
@@ -12,7 +12,11 @@ const date = (value: unknown) => typeof value === 'number' && value > 0 && Numbe
 const encode = (value: Uint8Array) => { let result = ''; for (let offset = 0; offset < value.length; offset += 16_384) result += String.fromCharCode(...value.subarray(offset, offset + 16_384)); return btoa(result); };
 const decode = (value: string) => Uint8Array.from(atob(value), character => character.charCodeAt(0));
 
-type Asset = { value: Json; expiresAt: number };
+type Asset = { value: Json; expiresAt: number | null };
+const earliestExpiry = (...values: (number | null | undefined)[]): number | null => {
+  const finite = values.filter((value): value is number => typeof value === 'number');
+  return finite.length ? Math.min(...finite) : null;
+};
 const pending = new WeakMap<NeteaseClient, Map<string, Promise<Asset>>>();
 async function cached(client: NeteaseClient, key: string, read: () => Promise<Json>): Promise<Asset> {
   const cache = client.ctx.cache;
@@ -21,7 +25,7 @@ async function cached(client: NeteaseClient, key: string, read: () => Promise<Js
   let result = reads.get(key);
   if (result) {
     const saved = await result;
-    if (saved.expiresAt > Date.now()) return saved;
+    if (saved.expiresAt === null || saved.expiresAt > Date.now()) return saved;
     reads.delete(key); result = undefined;
   }
   if (!result) {
@@ -30,8 +34,8 @@ async function cached(client: NeteaseClient, key: string, read: () => Promise<Js
       if (previous !== undefined) return previous as unknown as Asset;
       const value = await read(); client.ctx.signal.throwIfAborted();
       const missing = value === null || typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
-      const asset = { value, expiresAt: Date.now() + (missing ? missingLifetime : lifetime) };
-      await cache.put(key, asset, { expiresAt: asset.expiresAt }); return asset;
+      const asset = { value, expiresAt: missing ? Date.now() + missingLifetime : metadataCacheExpiry(client.ctx.config) };
+      await cache.put(key, asset, asset.expiresAt === null ? undefined : { expiresAt: asset.expiresAt }); return asset;
     })();
     reads.set(key, result);
   }
@@ -44,7 +48,7 @@ function coverKey(url: URL): string {
   return coverHosts.has(url.host) ? `cover:netease:${url.pathname}${url.search}` : `cover:url:${url.href}`;
 }
 
-async function cover(client: NeteaseClient, url: string): Promise<{ picture: AudioTags['cover']; expiresAt: number }> {
+async function cover(client: NeteaseClient, url: string): Promise<{ picture: AudioTags['cover']; expiresAt: number | null }> {
   const sized = new URL(url); sized.searchParams.set('param', '500y500');
   const asset = await cached(client, coverKey(sized), async () => {
     const response = await client.ctx.fetch(sized, { signal: client.ctx.signal });
@@ -62,15 +66,16 @@ async function cover(client: NeteaseClient, url: string): Promise<{ picture: Aud
 }
 
 /** Source album positions describe the recording; catalogue occurrence indices never enter tags. */
-export async function musicTags(client: NeteaseClient, song: Record<string, unknown>): Promise<{ tags: AudioTags; expiresAt: number }> {
+export async function musicTags(client: NeteaseClient, song: Record<string, unknown>): Promise<{ tags: AudioTags; expiresAt: number | null }> {
   const songId = String(song.id); const originalAlbum = object(song.al ?? song.album);
   const albumId = positive(originalAlbum.id);
-  const albumAsset = albumId === undefined ? { value: originalAlbum as Json, expiresAt: Date.now() + lifetime } : await cached(client, `album:${albumId}`, async () => {
+  const albumAsset = albumId === undefined ? { value: originalAlbum as Json, expiresAt: metadataCacheExpiry(client.ctx.config) } : await cached(client, `album:${albumId}`, async () => {
     if (names(originalAlbum.artists ?? (originalAlbum.artist ? [originalAlbum.artist] : undefined)).length && (date(originalAlbum.publishTime) ?? date(song.publishTime))) return originalAlbum as Json;
-    try { const result = await client.call(endpoints.album, { id: albumId }); return { ...originalAlbum, ...object(result.album) } as Json; }
-    catch (error) { if (error instanceof NeteaseFailure && error.fault.kind === 'not_found') return originalAlbum as Json; throw error; }
+    try { const result = await client.call(endpoints.album, { id: albumId }); const received = object(result.album);
+      return Object.keys(received).length ? { ...originalAlbum, ...received } as Json : null; }
+    catch (error) { if (error instanceof NeteaseFailure && error.fault.kind === 'not_found') return null; throw error; }
   });
-  const album = object(albumAsset.value);
+  const album = { ...originalAlbum, ...object(albumAsset.value) };
   const lyricAsset = await cached(client, `lyrics:${songId}`, async () => {
     let result: Record<string, unknown>;
     try { result = await client.call(endpoints.lyric, { id: songId }); }
@@ -85,7 +90,7 @@ export async function musicTags(client: NeteaseClient, song: Record<string, unkn
   const track = positive(song.no); const total = positive(album.size); const disc = positive(song.cd);
   const coverUrl = text(originalAlbum.picUrl) ?? text(album.picUrl);
   const picture = coverUrl ? await cover(client, coverUrl) : undefined;
-  return { expiresAt: Math.min(albumAsset.expiresAt, lyricAsset.expiresAt, picture?.expiresAt ?? Infinity),
+  return { expiresAt: earliestExpiry(albumAsset.expiresAt, lyricAsset.expiresAt, picture?.expiresAt),
     tags: { ...(title ? { title } : {}), ...(artists.length ? { artists } : {}), ...(albumName ? { album: albumName } : {}),
     ...(albumArtists.length ? { albumArtists } : {}), ...(released ? { date: released } : {}),
     ...(track ? { track: { number: track, ...(total ? { total } : {}) } } : {}), ...(disc ? { disc: { number: disc } } : {}),

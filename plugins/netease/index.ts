@@ -9,7 +9,7 @@ import { normalizeConfig } from './configuration';
 export { normalizeConfig } from './configuration';
 
 const plugin: SourcePlugin = {
-  configuration: { schema: schema as JsonObject, ui: { order: ['label', 'quality', 'audio'] } },
+  configuration: { schema: schema as JsonObject, ui: { order: ['label', 'quality', 'audio', 'metadataCacheDays'] } },
   statistics: { tracks: '曲目', files: '导出文件', hiddenTracks: '未导出曲目', missingVersions: '缺失目标版本', fallbackVersions: '回退目标', deduplicatedVersions: '合并重复版本' },
   async validateConfig(ctx, candidate) {
     const config = normalizeConfig(candidate);

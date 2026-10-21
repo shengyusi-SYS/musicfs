@@ -4,6 +4,9 @@ import { ExtensionError, type Installation, type InstallationStore } from '../..
 import type { AuthenticationRecord, Instance, InstanceStore, SourceStamp } from '../../core/sources';
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
 import type { RefreshStore } from '../../core/library/refresh-types';
+import type { RefreshScheduleStore } from '../../core/library/schedules';
+import { refreshScheduleSQL, nextRefreshScheduleSQL, saveRefreshScheduleStatement, claimDueRefreshScheduleStatement,
+  scheduleFromRow, type RefreshScheduleRow } from './refresh-schedule-sql';
 import type { PluginChangeStore } from '../../application/change-plugin';
 import type { RenewalStore } from '../../core/sources/renewal';
 import type { PluginCacheStore } from '../../core/sources/cache';
@@ -178,6 +181,12 @@ export function createD1Store(db: D1Database) {
     async readyRefreshes(now, limit) {
       const rows = await db.prepare(readyRefreshesSQL).bind(now, limit).all<{ operation_id: string }>();
       return rows.results.map(row => row.operation_id);
-    }
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & PluginChangeStore & RenewalStore & PluginCacheStore;
+    },
+    async refreshSchedule(instanceId, key) {
+      return scheduleFromRow(await db.prepare(refreshScheduleSQL).bind(instanceId, key.kind, key.ref).first<RefreshScheduleRow>());
+    },
+    async saveRefreshSchedule(instanceId, key, intervalMinutes, nextRunAt) { await prepare(saveRefreshScheduleStatement(instanceId, key, intervalMinutes, nextRunAt)).run(); },
+    async claimDueRefreshSchedule(now) { return scheduleFromRow(await prepare(claimDueRefreshScheduleStatement(now)).first<RefreshScheduleRow>()); },
+    async nextRefreshScheduleAt() { return (await db.prepare(nextRefreshScheduleSQL).first<{ instant: number | null }>())?.instant ?? null; }
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & RefreshScheduleStore & PluginChangeStore & RenewalStore & PluginCacheStore;
 }

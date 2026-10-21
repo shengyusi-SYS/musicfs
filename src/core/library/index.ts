@@ -3,6 +3,7 @@ import type { ByteRange, FileInfo, Outcome, ReadResult } from '@musicfs/plugin-a
 import type { Sources, SourceStamp } from '../sources';
 import { createPublishedViews, namedView, type NamedView } from './published-views';
 import { createRefreshes } from './refresh';
+import { createRefreshSchedules, type RefreshScheduleStore } from './schedules';
 import { assertInfo } from './file-info';
 import type { RefreshScope, RefreshStore, RefreshView } from './refresh-types';
 import { LibraryError, PendingRefreshError, type Description, type FileDescription, type FileView, type LayoutNode,
@@ -95,12 +96,13 @@ type Child = { id: string; name: string; target: Target; modifiedAt: string };
 type Resolved = { target: Target; name: string; path: string; modifiedAt: string };
 type MetadataGroup = { stamp: SourceStamp; entries: [ViewEntry, Resolved][] };
 
-export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore,
+export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore & Partial<RefreshScheduleStore>,
   budgets: { pages: number; entries: number; directories?: number } = { pages: 10_000, entries: 100_000 },
-  options: { execution?: 'inline' | 'deferred'; sha256?: (bytes: Uint8Array) => string | Promise<string> } = {}) {
+  options: { execution?: 'inline' | 'deferred'; sha256?: (bytes: Uint8Array) => string | Promise<string>; now?: () => number } = {}) {
   const hash = options.sha256 ?? webSha256;
   const digest = (value: unknown) => hash(new TextEncoder().encode(JSON.stringify(value)));
-  const refreshes = createRefreshes(sources, store, budgets);
+  const refreshes = createRefreshes(sources, store, budgets, options.now);
+  const schedules = createRefreshSchedules(sources, refreshes, store, options.now);
   async function drain(initial: RefreshView, signal: AbortSignal): Promise<RefreshView> {
     let progress = initial;
     try {
@@ -341,6 +343,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   return {
     files,
     refreshes,
+    schedules,
     refreshInstance,
     directoryStatus: async (instanceId: string, directoryRef: string) => publishedStatus(await sources.view(instanceId), directoryRef),
     async browseDirectory(path: string, signal: AbortSignal) {

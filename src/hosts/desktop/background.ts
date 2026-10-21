@@ -1,7 +1,7 @@
 import { setImmediate as yieldToIo } from 'node:timers/promises';
 
 /** One desktop process may drain persisted work after the management page closes. */
-export function createDesktopRunner(step: (signal: AbortSignal) => Promise<boolean>, nextAt: () => number | null) {
+export function createDesktopRunner(step: (signal: AbortSignal) => Promise<boolean>, nextAt: () => number | null | Promise<number | null>) {
   const controller = new AbortController();
   let running: Promise<void> | undefined; let requested = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -19,9 +19,9 @@ export function createDesktopRunner(step: (signal: AbortSignal) => Promise<boole
           await yieldToIo(undefined, { signal: controller.signal });
         }
       } while (requested && !controller.signal.aborted);
-      const instant = nextAt();
+      const instant = await nextAt();
       if (!controller.signal.aborted && instant !== null) {
-        timer = setTimeout(wake, Math.max(25, instant - Date.now()));
+        timer = setTimeout(wake, Math.min(2_147_483_647, Math.max(25, instant - Date.now())));
         timer.unref();
       }
     })().catch(() => {
