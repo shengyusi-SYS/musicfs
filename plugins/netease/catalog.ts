@@ -5,13 +5,13 @@ import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
 import { info, sourceReader, resolveVariants, type Resolution } from './media';
 import { audioPolicy, labels } from './configuration';
-import { songKey, descriptorKey, deferredFileRef, prepareSongFile, type PreparedFile } from './tagged';
+import { songKey, descriptorKey, deferredFileRef, reservedFile, prepareSongFile, type PreparedFile } from './tagged';
 import { batchSize, compactSong, playlistScan, scanSongs, scanVersions, verifyScan } from './scan';
 
 const rootsList = [ ['liked', '喜欢的歌曲'], ['daily', '每日推荐歌曲'], ['created', '自建歌单'], ['favorites', '收藏歌单'], ['recommended', '每日推荐歌单'] ] as const;
 const playlistRef = z.object({ kind: z.literal('playlist'), id: z.string().regex(/^[1-9]\d*$/) }).strict();
 const cursorSchema = z.object({ directory: z.string(), offset: z.number().int().nonnegative().safe(), revision: z.string().optional(),
-  scanId: z.string().optional(), likedPlaylistId: z.string().regex(/^[1-9]\d*$/).optional(), instanceId: z.string().min(1).optional() }).strict()
+  scanId: z.string().optional(), startedAt: z.string().optional(), likedPlaylistId: z.string().regex(/^[1-9]\d*$/).optional(), instanceId: z.string().min(1).optional() }).strict()
   .refine(value => (value.likedPlaylistId === undefined) === (value.instanceId === undefined));
 const emptyStatistics = () => ({ tracks: 0, files: 0, hiddenTracks: 0, missingVersions: 0, fallbackVersions: 0, deduplicatedVersions: 0 });
 function id(value: unknown): string {
@@ -45,7 +45,7 @@ export async function roots(client: NeteaseClient, value?: string): Promise<Page
 export type PreparationPolicy = { warmFiles: number; concurrency: number; coldFiles?: number; milliseconds?: number };
 const preparation: PreparationPolicy = { warmFiles: 100, concurrency: 2, coldFiles: 32, milliseconds: 2000 };
 async function songPage(client: NeteaseClient, tracks: unknown[], offset: number, policy: PreparationPolicy,
-  versions?: Map<string, Resolution>): Promise<{ page: Page<Entry>; consumed: number }> {
+  versions?: Map<string, Resolution>, generation?: { id: string; modifiedAt: string }): Promise<{ page: Page<Entry>; consumed: number }> {
   const started = performance.now();
   const songs = tracks.map(item => compactSong(item) ?? object(item)); const ids = songs.map(song => id(song.id));
   const statistics = emptyStatistics();
@@ -74,7 +74,8 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
     const artist = artists.map(value => label(object(value).name)).join('、');
     return { kind: 'file', entryId: `${item.position}:${item.songId}:${media.level}`,
       name: `${String(item.position).padStart(4, '0')}. ${label(item.song.name)} - ${artist} [${labels[media.level]}].${media.type}`,
-      fileRef: deferredFileRef(media, candidate.key), ...(file ? { info: file.info } : { deferredInfo: true }) };
+      fileRef: client.ctx.cache?.putIfAbsent && file ? file.fileRef : deferredFileRef(media, candidate.key),
+      ...(file ? { info: file.info } : { deferredInfo: true }) };
   };
   const count = (item: typeof candidates[number]) => {
     statistics.tracks++;
@@ -85,7 +86,8 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
   if (client.ctx.fileInfo !== 'required') {
     const items = candidates.flatMap(item => {
       count(item);
-      return item.files.map(candidate => entry(item, candidate, ready.get(candidate.key)));
+      return item.files.map(candidate => entry(item, candidate, ready.get(candidate.key)
+        ?? (client.ctx.cache!.putIfAbsent && generation ? reservedFile(candidate.variant.reference, candidate.key, generation) : undefined)));
     });
     await saveSeeds(candidates);
     statistics.files = items.length;
@@ -170,9 +172,11 @@ export async function list(client: NeteaseClient, directory: string, value?: str
     }
     if (!Array.isArray(tracks)) fail('content_changed', '网易云每日推荐分页资料已失效，请重新刷新。');
     const count = client.ctx.fileInfo === 'required' ? Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length)) : batchSize;
-    const content = await songPage(client, tracks.slice(page.offset, page.offset + count), page.offset, policy);
+    const generation = client.ctx.cache?.putIfAbsent ? { id: page.scanId ?? crypto.randomUUID(), modifiedAt: page.startedAt ?? new Date().toISOString() } : undefined;
+    const content = await songPage(client, tracks.slice(page.offset, page.offset + count), page.offset, policy, undefined, generation);
     return { ...content.page, progress: { completed: page.offset + content.consumed, total: tracks.length, unit: '曲目' },
-      ...(page.offset + content.consumed < tracks.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + content.consumed, revision }) } : {}) };
+      ...(page.offset + content.consumed < tracks.length ? { nextCursor: JSON.stringify({ directory, offset: page.offset + content.consumed, revision,
+        ...(generation ? { scanId: generation.id, startedAt: generation.modifiedAt } : {}) }) } : {}) };
   }
   let playlistId: string;
   if (directory === 'liked') {
@@ -198,7 +202,8 @@ export async function list(client: NeteaseClient, directory: string, value?: str
   const batch = await scanSongs(client, scan, page.offset);
   const versions = await scanVersions(client, scan, batch.start, batch.songs.map(song => id(song.id)));
   const count = client.ctx.fileInfo === 'required' ? Math.max(1, Math.floor(policy.warmFiles / audioPolicy(client.ctx.config).qualities.length)) : batchSize;
-  const content = await songPage(client, batch.songs.slice(page.offset - batch.start, page.offset - batch.start + count), page.offset, policy, versions);
+  const content = await songPage(client, batch.songs.slice(page.offset - batch.start, page.offset - batch.start + count), page.offset, policy, versions,
+    { id: scan.id, modifiedAt: scan.startedAt });
   const next = page.offset + content.consumed;
   if (next >= scan.ids.length) await verifyScan(client, scan);
   return { ...content.page, progress: { completed: next, total: scan.ids.length, unit: '曲目' }, ...(next < scan.ids.length ? { nextCursor: JSON.stringify({ directory, offset: next, revision: scan.revision, scanId: scan.id,

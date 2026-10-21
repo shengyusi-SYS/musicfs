@@ -7,6 +7,7 @@ export interface PluginCacheStore {
   cachedPluginDataMany?(source: SourceStamp, keys: string[], now: number): Stored<{ key: string; document: string }[]>;
   cachePluginData(source: SourceStamp, key: string, document: string, expiresAt: number | null, now: number, cleanup?: boolean): Stored<boolean>;
   cachePluginDataMany?(source: SourceStamp, items: { key: string; document: string; expiresAt: number | null }[], now: number, cleanup?: boolean): Stored<boolean>;
+  cachePluginDataIfAbsent?(source: SourceStamp, key: string, document: string, now: number, cleanup?: boolean): Stored<string | undefined>;
 }
 
 /** Keep small data in the existing database, never credentials or complete audio buffers. */
@@ -49,6 +50,16 @@ export function pluginCache(store: PluginCacheStore, source: SourceStamp, signal
       if (!await store.cachePluginData(source, keyOf(key), document, expiresAt, now(), clean)) throw new SourceError('stale_call', 'The source changed while preparing cached data');
       signal.throwIfAborted();
     },
+    ...(store.cachePluginDataIfAbsent ? { async putIfAbsent(key: string, value: Json) {
+      signal.throwIfAborted();
+      const { document } = dataOf(key, value, null);
+      // Conditional insert and winner lookup share one transaction/batch.
+      const clean = cleanup(); spend(clean ? 3 : 2);
+      const winner = await store.cachePluginDataIfAbsent!(source, key, document, now(), clean);
+      if (winner === undefined) throw new SourceError('stale_call', 'The source changed while preparing cached data');
+      signal.throwIfAborted();
+      return JSON.parse(winner) as Json;
+    } } : {}),
     ...(store.cachePluginDataMany ? { async putMany(items: { key: string; value: Json; expiresAt?: number }[]) {
       signal.throwIfAborted();
       const rows = [...new Map(items.map(item => [item.key, dataOf(item.key, item.value, item.expiresAt ?? null)])).values()];

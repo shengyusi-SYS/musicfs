@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { Miniflare, Log, LogLevel } from 'miniflare';
 import { parseBuffer } from 'music-metadata';
 import type { TaggedPlan } from '../packages/audio-tags/src';
+import { segmentSize } from '../packages/audio-tags/src/bytes';
 import { audioTagBuildOptions } from './build-plugin';
 import { requestReady } from './helpers/refresh-http';
 
@@ -49,7 +50,7 @@ try {
   assert.deepEqual(parsed.picture?.[0]?.data, new Uint8Array(cover)); assert.deepEqual(parsed.lyrics?.[0]?.syncText, [{ timestamp: 0, text: 'Original' }, { timestamp: 500, text: 'Second line' }]);
   assert(Buffer.from(bytes).includes(Buffer.from('Translation'))); assert(Buffer.from(bytes).includes(Buffer.from('Romanization')));
   let boundary = 0; let offset = 0;
-  for (const segment of plan.segments) { if (segment.kind === 'bytes' && offset > 0) boundary = offset; offset += segment.kind === 'bytes' ? Buffer.from(segment.base64, 'base64').length : segment.end - segment.start + 1; }
+  for (const segment of plan.segments) { if (segment.kind === 'bytes' && offset > 0) boundary = offset; offset += segmentSize(segment); }
   assert(boundary > 8 && boundary < bytes.length - 8, 'The range must cross source and rewritten metadata');
   for (const [range, start, end] of [[`bytes=${boundary - 8}-${boundary + 7}`, boundary - 8, boundary + 7], ['bytes=-32', bytes.length - 32, bytes.length - 1]] as const) {
     const response = await dispatch(file, { headers: { ...auth, Range: range } }); assert.equal(response.status, 206);

@@ -14,6 +14,10 @@ An optional `readRange.readMany(ranges, signal)` can return matching results in 
 
 `prepare` reads the source metadata needed for that format. `open` maps the requested range of the final file onto the plan and streams original audio; it does not download the whole song. Changing the source identity or generated metadata changes the final content identity. The first original-source response is checked before returning the tagged result; later stream failure or source change terminates that read. Cancelling the response aborts and cancels its current original-source read.
 
+Plugins may pass `reserveBytes` to `prepare` for MP3, FLAC or M4A. The final size is then exactly `sourceInfo.size + reserveBytes`: legal ID3v2.3 padding, FLAC PADDING or M4A `free` space fills the difference. Plans represent that space as compact `{ kind: 'zeros', size }` segments; `open` generates only the requested intersections in chunks up to 64 KiB. An insufficient budget fails with `AudioReservationError` (an `AudioTagError` with kind `not_supported`), without truncating tags or changing the advertised size. This includes a remainder too small for a required padding/free header. Unsupported formats/layouts remain ordinary `AudioTagError`s. APE does not support the reservation option. Existing variable-size plans and version-1 cached plans remain supported.
+
+A reservation lets a plugin advertise an accurate size before fetching lyrics/artwork or reading the source layout. It does not freeze those inputs by itself: the plugin owns the published representation identity and must pin the corresponding prepared plan. Reserved MP3 uses ordinary v2.3 frame encoding without tag-level unsynchronization. Full-file downloads and caches include the reserved padding bytes; directory enumeration does not need to materialize them.
+
 ## Fields
 
 All fields are optional. Missing fields preserve the tags already present where the format/library can represent them. There is no global source merge or guessing policy here.

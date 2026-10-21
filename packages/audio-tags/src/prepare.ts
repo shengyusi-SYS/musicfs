@@ -1,6 +1,6 @@
-import { ByteVector, Id3v1Tag, Id3v2Tag, ApeTag, FlacBlock, FlacBlockType, XiphComment, XiphPicture } from 'node-taglib-sharp';
-import { AudioTagError, type PrepareOptions, type TaggedPlan, type TagSegment } from './types';
-import { ascii, inline, segmentSize, source } from './bytes';
+import { ByteVector, Id3v1Tag, Id3v2Tag, Id3v2TagHeaderFlags, ApeTag, FlacBlock, FlacBlockType, XiphComment, XiphPicture } from 'node-taglib-sharp';
+import { AudioTagError, AudioReservationError, type PrepareOptions, type TaggedPlan, type TagSegment } from './types';
+import { ascii, decode, inline, segmentSize, source } from './bytes';
 import { readBytes, bufferedRanges } from './read';
 import { applyId3, applyTags } from './tags';
 import { prepareM4a } from './m4a';
@@ -28,7 +28,24 @@ async function mp3(options: PrepareOptions): Promise<TagSegment[]> {
   const tag = leading.tag ?? Id3v2Tag.fromEmpty();
   trailing.tag?.copyTo(tag, false);
   applyId3(tag, options.tags);
-  return [inline(tag.render().toByteArray()), ...source(leading.size, trailing.end - 1)];
+  // Render ordinary v2.3 frame lengths, so library-generated padding can remain a compact zero segment.
+  if (options.reserveBytes !== undefined) tag.flags &= ~Id3v2TagHeaderFlags.Unsynchronization;
+  const rendered = tag.render().toByteArray();
+  const audio = source(leading.size, trailing.end - 1);
+  if (options.reserveBytes === undefined) return [inline(rendered), ...audio];
+  let frameEnd = 10;
+  while (frameEnd + 10 <= rendered.length && rendered[frameEnd] !== 0) {
+    const size = new DataView(rendered.buffer, rendered.byteOffset + frameEnd + 4, 4).getUint32(0);
+    frameEnd += 10 + size;
+    if (frameEnd > rendered.length) throw new AudioTagError('not_supported', 'Invalid rendered ID3 frame length.');
+  }
+  const regionSize = options.sourceInfo.size + options.reserveBytes - (trailing.end - leading.size);
+  if (regionSize < frameEnd) throw new AudioReservationError('Audio metadata exceeds the reserved extra-byte budget.');
+  if (regionSize - 10 > 0x0fffffff) throw new AudioTagError('not_supported', 'The reserved ID3 tag exceeds its format size limit.');
+  const prefix = rendered.slice(0, frameEnd);
+  let size = regionSize - 10;
+  for (let index = 9; index >= 6; index--) { prefix[index] = size & 127; size = Math.floor(size / 128); }
+  return [inline(prefix), ...(regionSize > frameEnd ? [{ kind: 'zeros' as const, size: regionSize - frameEnd }] : []), ...audio];
 }
 async function flac(options: PrepareOptions): Promise<TagSegment[]> {
   const leading = await leadingId3(options);
@@ -78,7 +95,25 @@ async function flac(options: PrepareOptions): Promise<TagSegment[]> {
     });
     retained.push(inline(FlacBlock.fromData(FlacBlockType.Picture, image.renderForFlacBlock()).render(true).toByteArray()));
   }
-  return [...retained, ...source(offset, options.sourceInfo.size - 1)];
+  const audio = source(offset, options.sourceInfo.size - 1);
+  if (options.reserveBytes === undefined) return [...retained, ...audio];
+  let remaining = options.sourceInfo.size + options.reserveBytes
+    - [...retained, ...audio].reduce((size, part) => size + segmentSize(part), 0);
+  if (remaining === 0) return [...retained, ...audio];
+  if (remaining < 4) throw new AudioReservationError('Audio metadata exceeds the reserved extra-byte budget including FLAC padding.');
+  const finalBlock = retained.at(-1)!;
+  if (finalBlock.kind !== 'bytes') throw new AudioTagError('not_supported', 'Missing final FLAC metadata block.');
+  const finalBytes = decode(finalBlock.base64); finalBytes[0]! &= 127;
+  retained[retained.length - 1] = inline(finalBytes);
+  while (remaining > 0) {
+    let total = Math.min(remaining, 0xffffff + 4);
+    // Leave enough room for the next block's four-byte header.
+    if (remaining > total && remaining - total < 4) total -= 4 - (remaining - total);
+    const payload = total - 4; remaining -= total;
+    retained.push(inline(new Uint8Array([remaining === 0 ? 0x81 : 1, payload >>> 16, payload >>> 8 & 255, payload & 255])));
+    if (payload > 0) retained.push({ kind: 'zeros', size: payload });
+  }
+  return [...retained, ...audio];
 }
 async function ape(options: PrepareOptions): Promise<TagSegment[]> {
   const leading = await leadingId3(options);
@@ -109,6 +144,13 @@ async function ape(options: PrepareOptions): Promise<TagSegment[]> {
 }
 export async function prepare(options: PrepareOptions): Promise<TaggedPlan> {
   options.signal.throwIfAborted();
+  if (options.reserveBytes !== undefined) {
+    if (!Number.isSafeInteger(options.reserveBytes) || options.reserveBytes < 0
+      || !Number.isSafeInteger(options.sourceInfo.size + options.reserveBytes)) {
+      throw new RangeError('Reserved audio bytes must be a non-negative safe integer within the final file size.');
+    }
+    if (options.format === 'ape') throw new AudioTagError('not_supported', 'Fixed-size audio tag reservation is not supported for APE.');
+  }
   const encoders = { mp3, flac, ape, m4a: prepareM4a };
   if (!encoders[options.format]) throw new AudioTagError('not_supported', 'Audio tag generation is not supported for this format.');
   const generated = await encoders[options.format]({ ...options, readRange: bufferedRanges(options) });

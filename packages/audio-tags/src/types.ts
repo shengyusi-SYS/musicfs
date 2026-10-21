@@ -18,6 +18,7 @@ export type ReadRange = ((range: ByteRange, signal: AbortSignal) => Promise<Read
 };
 export type TagSegment =
   | { kind: 'bytes'; base64: string }
+  | { kind: 'zeros'; size: number }
   | { kind: 'source'; start: number; end: number };
 /** Cacheable exact byte description; source ranges are inclusive and contain no locator. */
 export type TaggedPlan = {
@@ -33,10 +34,19 @@ export type PrepareOptions = {
   readRange: ReadRange;
   tags: AudioTags;
   signal: AbortSignal;
+  /** Fix final length at sourceInfo.size + reserveBytes using legal container padding. Not supported for APE. */
+  reserveBytes?: number;
 };
 export class AudioTagError extends Error {
   constructor(readonly kind: PluginFault['kind'], message: string) {
     super(message);
     this.name = 'AudioTagError';
+  }
+}
+/** Metadata cannot fit the selected exact-size representation; the plugin may publish a new representation. */
+export class AudioReservationError extends AudioTagError {
+  constructor(message: string) {
+    super('not_supported', message);
+    this.name = 'AudioReservationError';
   }
 }

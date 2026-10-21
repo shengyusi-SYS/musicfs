@@ -2,7 +2,7 @@ import { ByteVector, File, Mpeg4AppleDataBoxFlagType, Mpeg4AppleTag, Mpeg4BoxHea
   Mpeg4BoxType, Mpeg4IsoUserDataBox, Mpeg4IsoMetaBox, ReadStyle, StringType, TagTypes } from 'node-taglib-sharp';
 import type { IStream } from 'node-taglib-sharp';
 import Mpeg4BoxRenderer from 'node-taglib-sharp/dist/mpeg4/mpeg4BoxRenderer';
-import { AudioTagError, type AudioTags, type PrepareOptions, type TagSegment } from './types';
+import { AudioTagError, AudioReservationError, type AudioTags, type PrepareOptions, type TagSegment } from './types';
 import { ascii, inline, join, source } from './bytes';
 import { readBytes } from './read';
 import { applyTags } from './tags';
@@ -131,5 +131,16 @@ export async function prepareM4a(options: PrepareOptions): Promise<TagSegment[]>
   for (const patch of patches) {
     segments.push(...source(offset, patch.start - 1), inline(patch.bytes)); offset = patch.start + patch.bytes.length;
   }
-  return [...segments, ...source(offset, options.sourceInfo.size - 1), inline(newMovie)];
+  const result: TagSegment[] = [...segments, ...source(offset, options.sourceInfo.size - 1), inline(newMovie)];
+  if (options.reserveBytes === undefined) return result;
+  const padding = options.reserveBytes - newMovie.length;
+  if (padding === 0) return result;
+  const headerSize = padding > 0xffffffff ? 16 : 8;
+  if (padding < headerSize) throw new AudioReservationError('Audio metadata exceeds the reserved extra-byte budget including M4A free space.');
+  const free = new Uint8Array(headerSize); const view = new DataView(free.buffer);
+  view.setUint32(0, headerSize === 16 ? 1 : padding); free.set(new TextEncoder().encode('free'), 4);
+  if (headerSize === 16) view.setBigUint64(8, BigInt(padding));
+  result.push(inline(free));
+  if (padding > headerSize) result.push({ kind: 'zeros', size: padding - headerSize });
+  return result;
 }

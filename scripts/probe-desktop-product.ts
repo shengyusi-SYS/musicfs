@@ -45,7 +45,7 @@ try {
   assert.equal(inspection.status, 200);
   const preview = await inspection.json() as PluginInspection;
   assert.equal(preview.manifest.id, pluginId);
-  assert.deepEqual(preview.compatibility, { host: 'desktop', apiVersion: '0.1.8', apiCompatible: true, hostCompatible: true });
+  assert.deepEqual(preview.compatibility, { host: 'desktop', apiVersion: '0.1.9', apiCompatible: true, hostCompatible: true });
   assert.deepEqual(await (await fetch(origin + '/api/plugins', { headers: admin })).json(), []);
   const installed = await fetch(origin + '/api/plugins', { method: 'POST', headers: admin, body: await Bun.file(pluginArchive).arrayBuffer() });
   assert.equal(installed.status, 201); await installed.body?.cancel();

@@ -54,7 +54,7 @@
     },
     "packages/audio-tags": {
       "name": "@musicfs/audio-tags",
-      "version": "0.1.0-dev.1",
+      "version": "0.1.0-dev.2",
       "dependencies": {
         "node-taglib-sharp": "6.0.3",
       },
@@ -64,7 +64,7 @@
     },
     "packages/plugin-api": {
       "name": "@musicfs/plugin-api",
-      "version": "0.1.8-dev.0",
+      "version": "0.1.9-dev.0",
     },
     "plugins/netease": {
       "name": "@musicfs/plugin-netease",

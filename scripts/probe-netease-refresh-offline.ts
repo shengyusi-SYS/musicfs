@@ -100,7 +100,7 @@ try {
     const start = await invoke<RefreshView>(`${base}/refresh`, body); const completed = await finish(start.value);
     return { ...completed, metrics: { startQueries: start.queries, ...completed.metrics } };
   };
-  const tagPlans = async () => (await db.prepare("SELECT count(*) AS count FROM source_plugin_cache WHERE cache_key LIKE 'tag-plan:%'").first<{ count: number }>())!.count;
+  const tagPlans = async () => (await db.prepare("SELECT count(*) AS count FROM source_plugin_cache WHERE cache_key LIKE 'reserved-plan:%'").first<{ count: number }>())!.count;
   type MusicFile = Extract<Entry, { kind: 'file' }>;
   const publishedFiles = async () => {
     const rows = await db.prepare(`SELECT e.document FROM library_snapshot_entries e JOIN directory_snapshots s ON s.published_attempt_id = e.attempt_id
@@ -109,8 +109,10 @@ try {
   };
   const cold = await run(); assert.equal(cold.metrics.pages, 1); assert.equal(cold.job.current?.progress?.completed, ids.length);
   const catalogueFiles = await publishedFiles(); assert.equal(catalogueFiles.length, ids.length);
-  assert(catalogueFiles.every(file => file.deferredInfo === true && file.info === undefined)); assert.equal(await tagPlans(), 0);
-  const catalogue = { ...cold.metrics, entries: catalogueFiles.length, pendingFileInfo: catalogueFiles.length, tagPlans: await tagPlans() };
+  assert(catalogueFiles.every(file => file.info?.size === source.length + 1_048_576 && !file.deferredInfo));
+  assert.equal(await tagPlans(), 0);
+  assert(!Object.keys(cold.metrics.calls).some(path => /lyric|album|cover|[.]mp3/.test(path)));
+  const catalogue = { ...cold.metrics, entries: catalogueFiles.length, pendingFileInfo: 0, tagPlans: 0 };
 
   // Resolve the real published path, including its roots snapshot, before exercising DAV.
   const rootsSetup = await run({});
@@ -123,63 +125,51 @@ try {
   const dav = (path: string, init: { method: 'GET' | 'HEAD' | 'PROPFIND'; headers?: Record<string, string>; body?: string }) => mf.dispatchFetch('http://probe' + davPath(path), { ...init,
     headers: { Authorization: 'Basic ' + btoa('reader:fixture'), ...init.headers } });
   const firstBefore = mark(); const firstHead = await dav(first.path, { method: 'HEAD' });
-  assert.equal(firstHead.status, 200); assert.equal(await tagPlans(), 1);
-  const firstCost = cost(firstBefore);
-  const audioTracks = Object.keys(firstCost.calls).filter(path => /^\/\d+\.mp3$/.test(path));
-  assert.deepEqual(audioTracks, ['/1.mp3']);
+  assert.equal(firstHead.status, 200); assert.equal(await tagPlans(), 0);
+  const firstCost = cost(firstBefore); assert.equal(firstCost.transportRequests, 0);
   const firstFile = { status: firstHead.status, queries: Number(firstHead.headers.get('X-Probe-Queries')), ...firstCost,
-    preparedFiles: 1, contentLength: Number(firstHead.headers.get('Content-Length')), etag: firstHead.headers.get('ETag') };
-  assert(firstFile.contentLength > source.length); assert(firstFile.etag);
+    preparedFiles: 0, contentLength: Number(firstHead.headers.get('Content-Length')), etag: firstHead.headers.get('ETag') };
+  assert.equal(firstFile.contentLength, source.length + 1_048_576); assert(firstFile.etag);
 
   const allprop = '<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>';
-  const pendingBefore = mark(); const pending = await dav(path, { method: 'PROPFIND', headers: { Depth: '1' }, body: allprop });
-  const pendingCost = cost(pendingBefore);
-  assert.equal(pending.status, 503); assert.equal(pending.headers.get('Retry-After'), '2');
-  assert.equal(pendingCost.transportRequests, 0); assert.equal(await tagPlans(), 1);
-  const operationId = pending.headers.get('X-MusicFS-Refresh'); assert(operationId); await pending.body?.cancel();
-  const automatic = await invoke<RefreshView>(`/api/refreshes/${operationId}`);
-  assert.equal(automatic.value.scope.kind, 'file-info'); assert.equal(automatic.value.status, 'queued');
-  const prepared = await finish(automatic.value); assert.equal(prepared.job.current?.progress?.completed, ids.length);
-  assert.equal(await tagPlans(), ids.length);
-  const preparedFiles = await publishedFiles(); assert.equal(preparedFiles.length, ids.length); assert(preparedFiles.every(file => file.info));
-  const completeBefore = mark(); const complete = await dav(path, { method: 'PROPFIND', headers: { Depth: '1' }, body: allprop });
+  const listBefore = mark(); const complete = await dav(path, { method: 'PROPFIND', headers: { Depth: '1' }, body: allprop });
   assert.equal(complete.status, 207); const xml = await complete.text();
   const lengths = Array.from(xml.matchAll(/<D:getcontentlength>(\d+)<\/D:getcontentlength>/g), match => Number(match[1]));
-  assert.deepEqual(lengths, preparedFiles.map(file => file.info!.size));
-  const completeCost = cost(completeBefore); assert.equal(completeCost.transportRequests, 0);
-  const filePreparation = { request: { status: pending.status, queries: Number(pending.headers.get('X-Probe-Queries')),
-    ...pendingCost, queued: true, preparedFiles: 0 }, ...prepared.metrics, newlyPreparedFiles: ids.length - 1,
-    complete: { status: complete.status, queries: Number(complete.headers.get('X-Probe-Queries')), ...completeCost, exactFileProperties: lengths.length } };
+  assert.deepEqual(lengths, catalogueFiles.map(file => file.info!.size));
+  const completeCost = cost(listBefore); assert.equal(completeCost.transportRequests, 0); assert.equal(await tagPlans(), 0);
+  const listingProperties = { status: complete.status, queries: Number(complete.headers.get('X-Probe-Queries')),
+    ...completeCost, exactFileProperties: lengths.length, preparedFiles: 0 };
 
-  const warmRun = await run(); assert.equal(warmRun.metrics.pages, 1);
-  const warmFiles = await publishedFiles();
-  assert.deepEqual(warmFiles.map(file => file.fileRef), catalogueFiles.map(file => file.fileRef));
-  assert.deepEqual(warmFiles.map(file => file.info), preparedFiles.map(file => file.info));
-  assert.equal(await tagPlans(), ids.length);
-  const warm = { ...warmRun.metrics, entries: warmFiles.length, pendingFileInfo: warmFiles.filter(file => file.info === undefined).length,
-    reusedFileReferences: true, reusedFileInfo: true, tagPlans: await tagPlans() };
-  const rows = await db.prepare("SELECT cache_key AS key, length(document) AS bytes FROM source_plugin_cache WHERE cache_key LIKE 'tag-plan:%' OR cache_key LIKE 'tag-bytes:%'").all<{ key: string; bytes: number }>();
-  const storage = { planBytes: rows.results.filter(row => row.key.startsWith('tag-plan:')).reduce((n, row) => n + row.bytes, 0),
-    sharedArtworkCount: rows.results.filter(row => row.key.startsWith('tag-bytes:')).length };
-  assert.equal(storage.sharedArtworkCount, 1); assert(storage.planBytes < ids.length * 8192);
-  const file = warmFiles[0]!; assert(file.info);
-  const preparedHead = await dav(first.path, { method: 'HEAD' });
-  assert.equal(preparedHead.status, 200); assert.equal(preparedHead.headers.get('ETag'), firstFile.etag);
-  assert.equal(Number(preparedHead.headers.get('Content-Length')), firstFile.contentLength);
+  const reads: { queries: number; transportRequests: number; milliseconds: number; calls: Record<string, number> }[] = [];
   const openFile = async (range?: { start: number; end: number }) => {
+    const before = mark();
     const response = await dav(first.path, { method: 'GET', ...(range ? { headers: { Range: `bytes=${range.start}-${range.end}`, 'If-Range': firstFile.etag! } } : {}) });
     assert.equal(response.status, range ? 206 : 200); assert.equal(response.headers.get('ETag'), firstFile.etag);
-    return new Uint8Array(await response.arrayBuffer());
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const queries = Number(response.headers.get('X-Probe-Queries')); assert(queries <= 50, `Free D1 query ceiling exceeded on GET: ${queries}`);
+    reads.push({ queries, ...cost(before) }); return bytes;
   };
-  const bytes = await openFile(); assert.equal(bytes.length, file.info.size);
-  const parsed = await parseBuffer(bytes, { mimeType: file.info.mediaType });
+  const bytes = await openFile(); assert.equal(bytes.length, firstFile.contentLength); assert.equal(await tagPlans(), 1);
+  const parsed = await parseBuffer(bytes, { mimeType: catalogueFiles[0]!.info!.mediaType });
   assert.equal(parsed.common.title, 'Song 1'); assert.deepEqual(parsed.common.picture?.[0]?.data, picture);
   const range = { start: bytes.length - 32, end: bytes.length - 1 }; assert.deepEqual(await openFile(range), bytes.slice(range.start));
+  assert(!Object.keys(reads[0]!.calls).some(path => /^\/[2-9]\d*[.]mp3$/.test(path)));
+
+  const warmRun = await run(); assert.equal(warmRun.metrics.pages, 1);
+  const warmFiles = await publishedFiles(); assert.equal(warmFiles.length, ids.length);
+  assert.equal(warmFiles[0]!.fileRef, catalogueFiles[0]!.fileRef); assert.deepEqual(warmFiles[0]!.info, catalogueFiles[0]!.info);
+  assert(warmFiles.every(file => file.info?.size === source.length + 1_048_576)); assert.equal(await tagPlans(), 1);
+  assert.equal(warmRun.metrics.transportRequests, 3);
+  const warm = { ...warmRun.metrics, entries: warmFiles.length, pendingFileInfo: 0, reusedOpenedFile: true, tagPlans: 1 };
+  const rows = await db.prepare("SELECT cache_key AS key, length(document) AS bytes FROM source_plugin_cache WHERE cache_key LIKE 'reserved-plan:%' OR cache_key LIKE 'tag-bytes:%'").all<{ key: string; bytes: number }>();
+  const storage = { planBytes: rows.results.filter(row => row.key.startsWith('reserved-plan:')).reduce((n, row) => n + row.bytes, 0),
+    sharedArtworkCount: rows.results.filter(row => row.key.startsWith('tag-bytes:')).length };
+  assert.equal(storage.sharedArtworkCount, 1); assert(storage.planBytes < 8192);
   const report = { runtime: 'local workerd + D1, packed NetEase SDK, all outbound responses controlled',
     sqlAccounting: 'Application D1 statements per request; probe inspection queries excluded', tracks: ids.length,
-    catalogue, firstFile, filePreparation, warm, setup: { roots: rootsSetup.metrics, listingQueries: listing.queries }, storage,
+    catalogue, firstFile, listingProperties, reads, warm, setup: { roots: rootsSetup.metrics, listingQueries: listing.queries }, storage,
     sharedPlanRead: { bytes: bytes.length, metadata: true, tailRange: true }, calls };
-  const output = `.musicfs/refresh-evaluation/worker-deferred${tracks === 24 ? '' : '-200'}.json`;
+  const output = `.musicfs/refresh-evaluation/worker-reserved${tracks === 24 ? '' : '-200'}.json`;
   await Bun.write(output, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report));
 } finally { await mf.dispose(); await rm(root, { recursive: true, force: true }); }

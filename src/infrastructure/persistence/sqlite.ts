@@ -12,7 +12,7 @@ import renewalsSchema from './migrations/0007.sql' with { type: 'text' };
 import pluginCacheSchema from './migrations/0008.sql' with { type: 'text' };
 import pluginCacheIndexes from './migrations/0009.sql' with { type: 'text' };
 import type { PluginCacheStore } from '../../core/sources/cache';
-import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDataPlan, cachePluginDataManyPlan } from './plugin-cache-sql';
+import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDataPlan, cachePluginDataManyPlan, cachePluginDataIfAbsentPlan } from './plugin-cache-sql';
 import type { RenewalStore } from '../../core/sources/renewal';
 import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
@@ -120,6 +120,10 @@ export function openSqlite(path: string) {
     cachePluginDataMany(source, items, now, cleanup = true) {
       const plan = cachePluginDataManyPlan(source, items, now);
       return batch(cleanup ? plan : plan.slice(1)).at(-1)!.length === items.length;
+    },
+    cachePluginDataIfAbsent(source, key, document, now, cleanup = true) {
+      const plan = cachePluginDataIfAbsentPlan(source, key, document, now);
+      return batch<{ document: string }>(cleanup ? plan : plan.slice(1)).at(-1)?.[0]?.document;
     },
     claimRenewal(expected, token, now, until) {
       return renewalClaimFromRow(batch<RenewalClaimRow>(claimRenewalPlan(expected, token, now, until)).at(-1)?.[0]);

@@ -4,6 +4,7 @@ import { decode, segmentSize } from './bytes';
 import { verifyRead } from './read';
 
 type Part = { kind: 'bytes'; base64: string; start: number; end: number }
+  | { kind: 'zeros'; size: number }
   | { kind: 'source'; range: ByteRange };
 
 /** Read only intersections with the requested final-file range, keeping source audio streaming. */
@@ -24,6 +25,7 @@ export async function open(plan: TaggedPlan, readRange: ReadRange, range: ByteRa
     const end = Math.min(selected.end, offset + size - 1);
     if (start <= end) parts.push(segment.kind === 'bytes'
       ? { kind: 'bytes', base64: segment.base64, start: start - offset, end: end - offset }
+      : segment.kind === 'zeros' ? { kind: 'zeros', size: end - start + 1 }
       : { kind: 'source', range: { start: segment.start + start - offset, end: segment.start + end - offset } });
     offset += size;
   }
@@ -73,6 +75,13 @@ export async function open(plan: TaggedPlan, readRange: ReadRange, range: ByteRa
           if (part.kind === 'bytes') {
             controller.enqueue(decode(part.base64).subarray(part.start, part.end + 1));
             index++;
+            return;
+          }
+          if (part.kind === 'zeros') {
+            const count = Math.min(part.size, 64 * 1024);
+            controller.enqueue(new Uint8Array(count));
+            part.size -= count;
+            if (part.size === 0) index++;
             return;
           }
           if (activePart !== index) await getSource(part, index);

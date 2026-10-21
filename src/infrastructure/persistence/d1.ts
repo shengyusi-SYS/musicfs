@@ -7,7 +7,7 @@ import type { RefreshStore } from '../../core/library/refresh-types';
 import type { PluginChangeStore } from '../../application/change-plugin';
 import type { RenewalStore } from '../../core/sources/renewal';
 import type { PluginCacheStore } from '../../core/sources/cache';
-import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDataPlan, cachePluginDataManyPlan } from './plugin-cache-sql';
+import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDataPlan, cachePluginDataManyPlan, cachePluginDataIfAbsentPlan } from './plugin-cache-sql';
 import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import { changeFromRow, changeLeaseFromRow, changeInputFromRow, changeRecordSQL, nextChangeInstanceSQL, readyChangesSQL,
   createChangeStatement, claimChangeStatement, releaseChangeStatement, commitChangePlan, type ChangeRow, type ChangeInputRow } from './plugin-change-sql';
@@ -110,6 +110,11 @@ export function createD1Store(db: D1Database) {
       const plan = cachePluginDataManyPlan(source, items, now);
       const result = await db.batch<{ written: number }>((cleanup ? plan : plan.slice(1)).map(prepare));
       return result.at(-1)!.results.length === items.length;
+    },
+    async cachePluginDataIfAbsent(source, key, document, now, cleanup = true) {
+      const plan = cachePluginDataIfAbsentPlan(source, key, document, now);
+      const result = await db.batch<{ document: string }>((cleanup ? plan : plan.slice(1)).map(prepare));
+      return result.at(-1)?.results[0]?.document;
     },
     async claimRenewal(expected, token, now, until) {
       const results = await db.batch<RenewalClaimRow>(claimRenewalPlan(expected, token, now, until).map(prepare));

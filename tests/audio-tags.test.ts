@@ -8,7 +8,8 @@ const tags = { title: '新歌名', artists: ['歌手甲', '歌手乙'], albumArt
   track: { number: 3, total: 12 }, disc: { number: 2, total: 2 }, lyrics: { original: originalLyrics, translation, romanization } } satisfies AudioTags;
 const bytes = async (result: ReadResult) => new Uint8Array(await new Response(result.body).arrayBuffer());
 function materialize(plan: TaggedPlan, input: Uint8Array) {
-  return join(plan.segments.map(segment => segment.kind === 'bytes' ? decode(segment.base64) : input.slice(segment.start, segment.end + 1)));
+  return join(plan.segments.map(segment => segment.kind === 'bytes' ? decode(segment.base64)
+    : segment.kind === 'zeros' ? new Uint8Array(segment.size) : input.slice(segment.start, segment.end + 1)));
 }
 for (const format of ['mp3', 'flac', 'ape'] as AudioFormat[]) {
   test(`${format}: prepare preserves untouched music bytes, missing fields and independent lyric variants`, async () => {

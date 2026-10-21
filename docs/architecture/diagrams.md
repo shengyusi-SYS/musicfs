@@ -135,7 +135,7 @@ flowchart LR
 
 属性选择每请求按文件/目录编译一次；快照单查询只在首行携带头，唯一名称不进入冲突散列。请求内的日期/来源戳复用不跨请求缓存，范围见[CPU定位](../verification/p2-read-cpu.md)。
 
-API0.1.8的文件条目可提供完整可信的 `Entry.info`，或显式选择 `deferredInfo: true`；library 校验后暂存，目录完整成功才连同条目及待准备数发布。已列对象私下关联解析目标及已发布 info，不新增持久路径索引。需要准确批量属性时，显式延迟条目复用持久 `file-info` 刷新；旧插件缺 info 时保留实时 stat。正式延迟执行宿主返回503及重试头，单文件HEAD/GET只按需准备该文件。流程与证据见[两阶段验证](../verification/deferred-catalogue.md)，不代表所有播放器自动重试或免费 Worker 额度已验收。
+API0.1.9沿用文件条目的完整可信 `Entry.info` 和显式 `deferredInfo: true`；library 校验后暂存，目录完整成功才连同条目及待准备数发布。网易云alpha.14对MP3/FLAC/M4A预定准确N+1MiB，目录与HEAD直接复用已发布info，首GET才准备单曲，见下方标签流程。已列对象私下关联解析目标及已发布 info，不新增持久路径索引。旧的显式延迟条目仍通过持久 `file-info` 刷新准备批量属性，准备期间返回503及重试头；旧插件缺 info 时保留实时 stat。历史流程与证据见[两阶段验证](../verification/deferred-catalogue.md)，不代表所有播放器自动重试或免费 Worker 额度已验收。
 
 ```mermaid
 sequenceDiagram
@@ -553,7 +553,7 @@ sequenceDiagram
 
 ## 可选标签处理设计
 
-网易云alpha.13默认每页200首先发布完整清单，不取全库歌词、封面或音频；单文件HEAD/GET按需构造最终表示，或通过既有持久分页刷新提前准备文件。QQ继续在目录分页内准备最终信息。alpha.11已有的富详情批量、共享封面及`ReadRange.readMany?`首尾读取继续用于文件准备，CDN请求和标准MIME解析仍归来源Adapter。当前[两阶段验证](../verification/deferred-catalogue.md)与此前[冷准备调查](../verification/netease-cold-request-reduction.md)分别保留适用范围。
+网易云alpha.14默认每页200首先发布完整清单，对MP3/FLAC/M4A预定最终大小N+1MiB，不取全库歌词、封面或音频。目录与HEAD不补标签，首GET才构造所读单曲；API0.1.9可选原子缓存固定首次计划，紧凑零区段在流式读取时生成合法填充。QQ继续在目录分页内准备最终信息，APE不默认预留。富详情批量、共享封面及`ReadRange.readMany?`首尾读取继续用于文件准备，CDN请求和标准MIME解析仍归来源Adapter。[生产接线与原型边界](../verification/lazy-mount-feasibility.md)、历史[两阶段验证](../verification/deferred-catalogue.md)与[冷准备调查](../verification/netease-cold-request-reduction.md)分别保留适用范围。
 
 三种插件实现通过同一个文件 Interface 接入，核心不增加强制处理阶段。QQ、网易云已选用共用工具；其他插件保持自主选择。设计见[可选补标签设计](audio-tags.md)，当前证据见[实现记录](../verification/metadata-implementation.md)。
 
@@ -586,24 +586,33 @@ sequenceDiagram
   L->>P: 普通 list 当前游标
   P->>U: 批量成员、歌曲详情及播放版本
   P->>C: 保存永久紧凑歌曲 seed，查询准备索引
-  P-->>L: v3 稳定引用；已有 info 或 deferredInfo
+  P-->>L: 预定版本v4与完整info，准确大小N+1MiB
   Note over P,L: 全部分页成功后发布完整清单
-  alt 单文件 HEAD / GET
-    L->>P: stat 此文件
-  else 管理页“准备文件”或批量属性触发
-    L->>P: 持久 file-info 刷新，list(fileInfo: required)
+  opt 目录属性或HEAD
+    L->>L: 复用已发布info与ETag，无标签准备
   end
-  P->>C: 复用索引，或取得稳定 seed
-  opt 尚未准备
+  L->>P: GET open(期望内容身份, 最终范围)
+  P->>C: 查询此版本的永久计划
+  alt 已有计划
+    C-->>P: 固定字节计划，不受ready TTL影响
+  else 此版本首次读取
+    P->>C: 取得稳定seed
     P->>U: 该文件缺少的资料、封面、歌词与头尾范围
-    P->>T: prepare(资料, 原文件范围读取)
-    T-->>P: 最终 FileInfo 与区段计划
-    P->>C: 保存小资料、准备索引与不可变内容计划
+    P->>T: prepare(资料, 原文件范围, reserveBytes)
+    alt 标签与容器结构适合预留空间
+      T-->>P: 标签字节、紧凑零区段、原音频区段
+      P->>C: putIfAbsent原子固定首次永久计划
+      C-->>P: 返回实际获胜计划
+      P->>C: 保存带TTL的ready索引，供未来刷新复用
+    else 资料超预算
+      P->>C: 保存此曲准确exact v2计划及ready索引
+      P-->>L: content_changed，提示刷新后打开
+      Note over P,L: 下次完整刷新发布新描述，不增长旧版本
+    end
   end
-  P-->>L: 准确最终 FileInfo
-  L->>P: open(期望内容身份, 最终范围)
-  P->>C: 按期望内容身份取得不可变计划
-  P->>U: open 时取得媒体地址和所需范围
-  P->>T: open(计划, 原文件读取, 最终范围)
-  T-->>L: 小标签区段与原音频流
+  opt 本次读取取得固定计划
+    P->>U: 取得同一媒体版本的地址和所需范围
+    P->>T: open(固定计划, 原文件读取, 最终范围)
+    T-->>L: 标签、按需生成填充和原音频流
+  end
 ```

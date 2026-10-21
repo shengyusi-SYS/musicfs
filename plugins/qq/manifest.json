@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "id": "org.musicfs.qq",
   "name": "QQ 音乐（开发预览）",
-  "version": "0.1.0-alpha.13",
+  "version": "0.1.0-alpha.14",
   "apiRange": ">=0.1.6 <0.2.0",
   "hosts": {
     "desktop": "index.mjs",

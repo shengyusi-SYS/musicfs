@@ -3,7 +3,7 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { D1Database } from '@cloudflare/workers-types';
-import type { PluginManifest } from '@musicfs/plugin-api';
+import type { Json, PluginManifest } from '@musicfs/plugin-api';
 import { Log, LogLevel, Miniflare } from 'miniflare';
 import { pluginCache, type PluginCacheStore } from '../src/core/sources/cache';
 import type { InstallationStore } from '../src/core/extensions';
@@ -40,7 +40,7 @@ async function setup(adapter: 'SQLite' | 'D1') {
   for (const id of ['a', 'b']) await store.insert({ id, pluginId: manifest.id, name: id, config: {}, epoch: 1 }, { credential: id }, installation);
   let now = 1000;
   return { get store() { return store; }, reopen, time: (value: number) => { now = value; },
-    async cache(id = 'a') { return pluginCache(store, present(await store.capture(id)), new AbortController().signal, () => now); } };
+    async cache(id = 'a', spend?: (amount: number) => void) { return pluginCache(store, present(await store.capture(id)), new AbortController().signal, () => now, spend); } };
 }
 
 for (const adapter of ['SQLite', 'D1'] as const) {
@@ -82,4 +82,54 @@ for (const adapter of ['SQLite', 'D1'] as const) {
     await expect(updated.put('plan', null)).rejects.toMatchObject({ code: 'stale_call' });
     expect(await updated.get('plan')).toBeUndefined();
   }, 20_000);
+
+  test(`${adapter}: atomic cache reservation freezes a concurrent winner, including null, across reopen`, async () => {
+    const f = await setup(adapter); const costs: number[] = [];
+    const contenders = await Promise.all([f.cache('a', amount => costs.push(amount)), f.cache(), f.cache()]);
+    const winners = await Promise.all(contenders.map((cache, contender) => cache.putIfAbsent!('frozen-plan', { contender })));
+    const winner = winners[0] as Json;
+    expect(winners).toEqual([winner, winner, winner]);
+    expect(await contenders[0]!.putIfAbsent!('frozen-plan', { contender: 'late' })).toEqual(winner);
+    expect(costs).toEqual([3, 2]);
+    expect(await contenders[0]!.putIfAbsent!('empty-plan', null)).toBeNull();
+    expect(await contenders[1]!.putIfAbsent!('empty-plan', { contender: 'late' })).toBeNull();
+    expect(await (await f.cache('b')).putIfAbsent!('frozen-plan', { contender: 'other-source' })).toEqual({ contender: 'other-source' });
+    await f.reopen();
+    const reopened = await f.cache();
+    expect(await reopened.putIfAbsent!('frozen-plan', { contender: 'after-reopen' })).toEqual(winner);
+    expect(await reopened.get('empty-plan')).toBeNull();
+    await expect(reopened.putIfAbsent!('oversized-plan', 'x'.repeat(1_048_576))).rejects.toThrow('Plugin cache value exceeds 1 MiB');
+  }, 20_000);
+
+  test(`${adapter}: reservation replaces expired data and fences late writes after source/plugin invalidation`, async () => {
+    const f = await setup(adapter); const old = await f.cache();
+    await old.put('plan', { marker: 'expired' }, { expiresAt: 2000 });
+    f.time(2000);
+    // put already ran cleanup in this invocation; the conditional insert must handle expiry itself.
+    expect(await old.putIfAbsent!('plan', { marker: 'first-immutable' })).toEqual({ marker: 'first-immutable' });
+    f.time(3000);
+    expect(await old.putIfAbsent!('plan', { marker: 'late' })).toEqual({ marker: 'first-immutable' });
+    const staleUncleaned = await f.cache(); const before = present(await f.store.capture('a'));
+    expect(await f.store.configure(before, { account: 'replacement' }, null)).toBe(true);
+    await expect(old.putIfAbsent!('plan', { marker: 'stale-source' })).rejects.toMatchObject({ code: 'stale_call' });
+    const replacement = await f.cache();
+    await replacement.putIfAbsent!('cleanup-already-ran', null);
+    expect(await replacement.putIfAbsent!('plan', { marker: 'new-account' })).toEqual({ marker: 'new-account' });
+    await expect(staleUncleaned.putIfAbsent!('plan', null)).rejects.toMatchObject({ code: 'stale_call' });
+    await expect(old.putIfAbsent!('plan', null)).rejects.toMatchObject({ code: 'stale_call' });
+    expect(await replacement.get('plan')).toEqual({ marker: 'new-account' });
+    await f.store.activate({ ...manifest, version: '1.0.1' }, 'revision-two', 1);
+    await expect(replacement.putIfAbsent!('plan', null)).rejects.toMatchObject({ code: 'stale_call' });
+    const updated = await f.cache();
+    expect(await updated.putIfAbsent!('plan', { marker: 'new-plugin' })).toEqual({ marker: 'new-plugin' });
+    await f.store.deleteInstance('a');
+    await expect(updated.putIfAbsent!('plan', null)).rejects.toMatchObject({ code: 'stale_call' });
+  }, 20_000);
 }
+
+test('hosts without atomic cache storage do not advertise reservations', () => {
+  const unavailable = () => { throw new Error('Should not access storage'); };
+  const store: PluginCacheStore = { cachedPluginData: unavailable, cachePluginData: unavailable };
+  const cache = pluginCache(store, { id: 'a', pluginId: manifest.id, epoch: 1, pluginRevision: 'one', pluginGeneration: 1 }, new AbortController().signal, () => 0);
+  expect(cache.putIfAbsent).toBeUndefined();
+});

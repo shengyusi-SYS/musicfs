@@ -57,6 +57,8 @@ export interface PluginCache {
   put(key: string, value: Json, options?: { expiresAt?: number }): Promise<void>;
   /** Optional atomic batch with the same expiry and source-revision rules as put. */
   putMany?(items: { key: string; value: Json; expiresAt?: number }[]): Promise<void>;
+  /** Atomically store without expiry if missing/expired; otherwise return the existing winner, including null. */
+  putIfAbsent?(key: string, value: Json): Promise<Json>;
 }
 
 export interface Configuration {

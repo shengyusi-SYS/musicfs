@@ -5,7 +5,7 @@ import { resolveVariants, resolutionKey, type Resolution } from './media';
 
 export const batchSize = 200;
 const lifetime = 24 * 60 * 60_000;
-export type SongScan = { id: string; playlistId: string; ids: string[]; revision: string };
+export type SongScan = { id: string; playlistId: string; ids: string[]; revision: string; startedAt: string };
 export const hash = async (value: unknown) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',
   new TextEncoder().encode(JSON.stringify(value)))), byte => byte.toString(16).padStart(2, '0')).join('');
 export function trackId(value: unknown): string {
@@ -55,7 +55,7 @@ export async function playlistScan(client: NeteaseClient, playlistId: string, sc
   }
   const result = await membership(client, playlistId);
   if (revision && revision !== result.revision) fail('content_changed', '网易云歌单在分页期间已变化，请重新刷新。');
-  const scan = { id: crypto.randomUUID(), playlistId, ids: result.ids, revision: result.revision };
+  const scan = { id: crypto.randomUUID(), playlistId, ids: result.ids, revision: result.revision, startedAt: new Date().toISOString() };
   // Keep the ordered IDs separate from bounded song-detail blocks.
   const seeds = new Map(result.tracks.flatMap(item => { const song = compactSong(item); return song ? [[trackId(song.id), song] as const] : []; }));
   const blocks: { key: string; value: Json; expiresAt: number }[] = [];

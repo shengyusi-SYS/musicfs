@@ -55,3 +55,16 @@ export function cachePluginDataManyPlan(source: SourceStamp, items: { key: strin
     values: [source.id, source.epoch, source.pluginRevision, source.pluginGeneration, JSON.stringify(items), ...sourceValues(source)]
   }];
 }
+
+/** Preserve a live winner; stale/expired rows can be replaced even when cleanup is skipped. */
+export function cachePluginDataIfAbsentPlan(source: SourceStamp, key: string, document: string, now: number): SqlStatement[] {
+  return [cleanupPluginData(source, now), {
+    sql: `INSERT INTO source_plugin_cache (instance_id, cache_key, epoch, plugin_revision, plugin_generation, document, expires_at)
+      SELECT ?, ?, ?, ?, ?, ?, NULL WHERE EXISTS (${current})
+      ON CONFLICT(instance_id, cache_key) DO UPDATE SET epoch = excluded.epoch, plugin_revision = excluded.plugin_revision,
+      plugin_generation = excluded.plugin_generation, document = excluded.document, expires_at = NULL
+      WHERE epoch != excluded.epoch OR plugin_revision != excluded.plugin_revision OR plugin_generation != excluded.plugin_generation
+        OR expires_at <= ?`,
+    values: [source.id, key, source.epoch, source.pluginRevision, source.pluginGeneration, document, ...sourceValues(source), now]
+  }, cachedPluginDataStatement(source, key, now)];
+}

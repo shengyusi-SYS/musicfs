@@ -24,7 +24,7 @@ export default {
   migrateState({ state }) { return { session: state.token, version: 2 }; },
   validateState({ state }) { return state?.version === 2 && typeof state?.session === 'string'; },
   async roots(ctx) { return { ok: true, value: { items: [{ sourceId: 'audio', directoryRef: 'audio', name: version === 1 ? ctx.config.label : ctx.config.title }] } }; },
-  async list() { return { ok: true, value: { items: [{ kind: 'file', entryId: 'tone', name: 'fixture.wav', fileRef: 'tone', info }] } }; },
+  async list() { return { ok: true, value: { items: [{ kind: 'file', entryId: 'tone', name: 'fixture.wav', fileRef: 'tone', ...(version === 2 ? { info } : {}) }] } }; },
   async stat(ctx) {
     if (version === 1 && await (await ctx.fetch(ctx.config.server + '/stat', { signal: ctx.signal })).text() === 'late')
       return { ok: true, value: info, nextPrivateState: { token: 'fixture-stale-secret' } };
