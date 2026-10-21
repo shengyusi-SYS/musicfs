@@ -20,13 +20,14 @@ flowchart LR
 
 ## 音频读取与挂载缓存管理
 
-目录、资料和标签计划的缓存与音频正文分属不同模块。App挂载复用rclone稀疏文件；直接DAV仍是来源流，不假定客户端都有磁盘缓存。缓存管理查询原生采样，不建第二套磁盘索引。证据与适用边界见[缓存消费](../verification/cache-consumption-2026-10-21.md)。
+目录、资料和标签计划的缓存与音频正文分属不同模块。App挂载复用rclone稀疏文件；桌面dev.11直接DAV使用共享VFS，Worker仍是来源流，不假定客户端都有磁盘缓存。缓存管理查询原生采样，不建第二套磁盘索引。证据与适用边界见[缓存消费](../verification/cache-consumption-2026-10-21.md)。
 
 ```mermaid
 flowchart LR
   App[App挂载消费] --> VFS[rclone原生稀疏缓存]
   VFS -->|缺失范围| DAV[共用DAV与library]
-  Direct[直接DAV播放器] --> DAV
+  Direct[直接DAV播放器] --> Shared[桌面共享VFS缓存]
+  Shared -->|缺失范围| DAV
   DAV --> Source[来源插件 资料及固定标签计划]
   Source -->|需要源音频| CDN[平台CDN]
   UI[缓存管理] --> Mounts[桌面mounts模块]
@@ -634,3 +635,5 @@ sequenceDiagram
     T-->>L: 标签、按需生成填充和原音频流
   end
 ```
+
+桌面dev.11对外DAV继续拥有HTTP合同，实际共享缓存/内部直读的精确位置与时序见[共享读取设计图](shared-read-cache.md)。

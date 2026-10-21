@@ -7,6 +7,7 @@ import type { DesktopNetworkSettings, DesktopNetworkView } from '../contracts/de
 import type { MountPrerequisitesView } from '../contracts/mount-prerequisites';
 import type { DesktopHttpsView } from '../contracts/desktop-https';
 import type { RefreshPolicy } from '../contracts/refresh-policy';
+import type { ReadCacheSettings, ReadCacheStatus } from '../contracts/read-cache';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -62,6 +63,9 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     mountCacheStatus: (id: string, signal: AbortSignal) => request<MountCacheStatus>(`/mounts/${encodeURIComponent(id)}/cache`, { signal }),
     clearMountCache: (id: string) => request<MountView>(`/mounts/${encodeURIComponent(id)}/cache`, { method: 'DELETE' }),
     refreshMount: (id: string) => request<void>(`/mounts/${encodeURIComponent(id)}/cache/refresh`, { method: 'POST' }),
+    desktopReadCache: (signal: AbortSignal) => request<ReadCacheStatus>('/desktop/read-cache', { signal }),
+    configureDesktopReadCache: (settings: ReadCacheSettings) => request<ReadCacheStatus>('/desktop/read-cache', json('PUT', settings)),
+    clearDesktopReadCache: () => request<ReadCacheStatus>('/desktop/read-cache', { method: 'DELETE' }),
     mountPrerequisites: (signal: AbortSignal) => request<MountPrerequisitesView>('/desktop/mount-prerequisites', { signal }),
     installWinFsp: () => request<MountPrerequisitesView>('/desktop/mount-prerequisites/install', { method: 'POST' }),
     desktopHttps: (signal: AbortSignal) => request<DesktopHttpsView>('/desktop/https', { signal }),

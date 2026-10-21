@@ -10,7 +10,7 @@ import { bearerAuth } from 'hono/bearer-auth';
 import { z } from 'zod';
 import { createDesktopService } from './service';
 import { createMountManager } from './mounts';
-import { writePrivateJson } from './rclone-control';
+import { createRcloneControl, writePrivateJson } from './rclone-control';
 import { readDesktopNetworkSettings } from './network';
 import { createMountPrerequisites } from './mount-prerequisites';
 import { createDesktopHttps } from './https';
@@ -134,16 +134,19 @@ export async function startDesktopBackground(input: { directory?: string; resour
     } catch { /* Missing or invalid crash metadata cannot choose a listening endpoint. */ }
     let origin = '';
     const prerequisites = createMountPrerequisites({ resourcesDirectory: resources });
-    const mounts = await createMountManager({ directory: join(directory, 'mounts'), binary: join(resources, process.platform === 'win32' ? 'rclone.exe' : 'rclone'),
-      localConnection: () => ({ url: `${origin}/dav/`, username: credentials.username, password: credentials.password }),
+    const controlDirectory = join(directory, 'mounts');
+    const binary = join(resources, process.platform === 'win32' ? 'rclone.exe' : 'rclone');
+    const control = createRcloneControl({ directory: controlDirectory, binary });
+    const mounts = await createMountManager({ control, manageControl: false, directory: controlDirectory, binary,
+      localConnection: () => service?.readCache?.mountConnection ?? ({ url: `${origin}/dav/`, username: credentials.username, password: credentials.password }),
       ...(process.platform === 'win32' ? { checkDependencies: () => prerequisites.check() } : {}) });
     service = await createDesktopService({ directory, adminToken: credentials.adminToken,
-      dav: { username: credentials.username, password: credentials.password }, webRoot: join(resources, 'web'), mounts });
+      dav: { username: credentials.username, password: credentials.password }, webRoot: join(resources, 'web'), mounts, readCache: { control, controlDirectory } });
     https = await createDesktopHttps({ directory: join(directory, 'https'), fetch: service.app.fetch });
     const app = new Hono();
     app.use('/__musicfs/*', bearerAuth({ token: credentials.adminToken }));
     app.get('/__musicfs/identity', c => c.json({ pid: process.pid, origin, instanceId: credentials.instanceId }));
-    app.route('/', createDesktopHttp({ directory, adminToken: credentials.adminToken, network, port: () => server!.port!, mounts, prerequisites, https, close }));
+    app.route('/', createDesktopHttp({ directory, adminToken: credentials.adminToken, network, port: () => server!.port!, mounts, prerequisites, https, ...(service.readCache ? { readCache: service.readCache, prepareQuit: async () => service!.readCache!.prepareQuit() } : {}), close }));
     app.route('/', service.app);
     const hostname = network.access === 'lan' ? '0.0.0.0' : '127.0.0.1';
     try { server = Bun.serve({ hostname, port: preferredPort, fetch: app.fetch, idleTimeout: 0 }); }

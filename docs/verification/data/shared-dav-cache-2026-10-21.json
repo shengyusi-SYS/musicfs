@@ -1,0 +1,278 @@
+{
+  "scope": "production shared read-cache + rclone1.75.2 + Library/DAV/audio-tags + actual FFprobe + synthetic MP3; no platform or mount driver",
+  "success": true,
+  "status": {
+    "settings": {
+      "maxMiB": 16384,
+      "maxAgeHours": 168
+    },
+    "actualMode": "full",
+    "state": "active",
+    "directory": "/tmp/musicfs-shared-dav-5vMFhH/rclone/cache/vfs/musicfs_shared_reads",
+    "bytesUsed": 3178624,
+    "files": 1,
+    "sampledAt": "2026-10-21T15:32:01.355Z",
+    "message": null
+  },
+  "reports": [
+    {
+      "operation": "first-ffprobe",
+      "milliseconds": 852.380883,
+      "metadata": {
+        "format": {
+          "duration": "120.000000",
+          "tags": {
+            "title": "Cache fixture title"
+          }
+        }
+      },
+      "dav": [],
+      "source": [
+        {
+          "range": {
+            "start": 0,
+            "end": 4095
+          },
+          "phase": "preparation",
+          "sentBytes": 4096,
+          "consumedBytes": 4096
+        },
+        {
+          "range": {
+            "start": 4800512,
+            "end": 4802393
+          },
+          "phase": "preparation",
+          "sentBytes": 1882,
+          "consumedBytes": 1882
+        },
+        {
+          "range": {
+            "start": 44,
+            "end": 2097151
+          },
+          "phase": "read",
+          "sentBytes": 2097108,
+          "consumedBytes": 1275592
+        }
+      ],
+      "preparations": 1,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Cache fixture title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    },
+    {
+      "operation": "repeat-ffprobe",
+      "milliseconds": 52.92316400000004,
+      "metadata": {
+        "format": {
+          "duration": "120.000000",
+          "tags": {
+            "title": "Cache fixture title"
+          }
+        }
+      },
+      "dav": [],
+      "source": [
+        {
+          "range": {
+            "start": 1048576,
+            "end": 2097151
+          },
+          "phase": "read",
+          "sentBytes": 1048576,
+          "consumedBytes": 983040
+        }
+      ],
+      "preparations": 0,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Cache fixture title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    },
+    {
+      "operation": "finite-first",
+      "dav": [],
+      "source": [
+        {
+          "range": {
+            "start": 1966080,
+            "end": 3014655
+          },
+          "phase": "read",
+          "sentBytes": 442368,
+          "consumedBytes": 294912
+        }
+      ],
+      "preparations": 0,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Cache fixture title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    },
+    {
+      "operation": "finite-overlap",
+      "dav": [],
+      "source": [],
+      "preparations": 0,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Cache fixture title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    },
+    {
+      "operation": "after-vfs-recreation",
+      "dav": [],
+      "source": [],
+      "preparations": 0,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Cache fixture title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    },
+    {
+      "operation": "same-path-size-and-time-new-identity",
+      "dav": [],
+      "source": [
+        {
+          "range": {
+            "start": 0,
+            "end": 4095
+          },
+          "phase": "preparation",
+          "sentBytes": 4096,
+          "consumedBytes": 4096
+        },
+        {
+          "range": {
+            "start": 4800512,
+            "end": 4802393
+          },
+          "phase": "preparation",
+          "sentBytes": 1882,
+          "consumedBytes": 1882
+        },
+        {
+          "range": {
+            "start": 44,
+            "end": 2097151
+          },
+          "phase": "read",
+          "sentBytes": 2097108,
+          "consumedBytes": 540672
+        }
+      ],
+      "preparations": 1,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Changed cache title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    },
+    {
+      "operation": "stale-source-gate",
+      "status": 503,
+      "dav": [],
+      "source": [],
+      "preparations": 0,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Changed cache title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    },
+    {
+      "operation": "after-clear",
+      "dav": [],
+      "source": [
+        {
+          "range": {
+            "start": 4802266,
+            "end": 4802393
+          },
+          "phase": "read",
+          "sentBytes": 128,
+          "consumedBytes": 128
+        }
+      ],
+      "preparations": 0,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Changed cache title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    },
+    {
+      "operation": "disabled",
+      "dav": [],
+      "source": [
+        {
+          "range": {
+            "start": 4802266,
+            "end": 4802329
+          },
+          "phase": "read",
+          "sentBytes": 64,
+          "consumedBytes": 64
+        }
+      ],
+      "preparations": 0,
+      "sourceSize": 4802394,
+      "finalSize": 5850970,
+      "libraryPath": "实例 & #/Music",
+      "selected": "Track 1.mp3",
+      "title": "Changed cache title",
+      "names": [
+        "Track 1.mp3",
+        "Track 2.mp3",
+        "Track 3.mp3"
+      ]
+    }
+  ]
+}

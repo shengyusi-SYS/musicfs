@@ -14,8 +14,10 @@ import { createDesktopPlugins } from './plugins';
 import type { MountManager } from '../../contracts/mounts';
 import { createDesktopRunner } from './background';
 import { createDesktopChanges } from './changes';
+import { createDesktopReadCache } from './read-cache';
+import type { RcloneControl } from './rclone-control';
 
-export async function createDesktopService(input: { directory: string; adminToken: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager }) {
+export async function createDesktopService(input: { directory: string; adminToken: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager; readCache?: { control: RcloneControl; controlDirectory: string } }) {
   await mkdir(input.directory, { recursive: true, mode: 0o700 });
   const store = openSqlite(join(input.directory, 'state.sqlite'));
   const host = createDesktopPlugins(join(input.directory, 'plugins'), store);
@@ -55,6 +57,8 @@ export async function createDesktopService(input: { directory: string; adminToke
     const instants = [store.nextBackgroundWorkAt(), await library.schedules.nextAt()].filter((value): value is number => value !== null);
     return instants.length ? Math.min(...instants) : null;
   });
+  const readCache = input.readCache ? await createDesktopReadCache({ directory: join(input.directory, 'read-cache'),
+    ...input.readCache, view: library.files, current: file => sources.current(file.handle.stamp) }) : undefined;
   const app = new Hono();
   app.use('*', async (c, next) => {
     await next();
@@ -72,11 +76,17 @@ export async function createDesktopService(input: { directory: string; adminToke
       return installed;
     },
     remove: async id => { await extensions.remove(id); refreshMounts(); }, pluginChange: id => changes.get(id) }));
-  app.route('/', createDav(library.files, input.dav));
+  app.route('/', createDav(readCache?.files ?? library.files, input.dav));
   if (input.webRoot) {
     app.get('/', serveStatic({ root: input.webRoot, path: 'index.html' }));
     app.on(['GET', 'HEAD'], '/assets/*', serveStatic({ root: input.webRoot }));
   }
   background.wake();
-  return { app, store, close: async () => { if (input.mounts) await input.mounts.close(); await background.close(); store.close(); } };
+  return { app, store, readCache, close: async () => {
+    const resume = readCache?.prepareQuit();
+    try {
+      if (input.mounts) await input.mounts.close();
+      await readCache?.close(); await input.readCache?.control.close(); await background.close(); store.close();
+    } catch (error) { resume?.(); throw error; }
+  } };
 }

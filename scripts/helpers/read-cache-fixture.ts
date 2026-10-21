@@ -17,6 +17,7 @@ export async function createReadCacheFixture() {
   const bytes = new Uint8Array(await Bun.file(path).arrayBuffer());
   const source = { contentId: new Bun.CryptoHasher('sha256').update(bytes).digest('hex'), size: bytes.length, mediaType: 'audio/mpeg' };
   const content = { ...source, contentId: `offline-tagged:${source.contentId}`, size: source.size + 1_048_576, modifiedAt: '2026-10-21T00:00:00.000Z' };
+  let title = 'Cache fixture title';
   const names = ['Track 1.mp3', 'Track 2.mp3', 'Track 3.mp3'];
   const fresh = () => ({ dav: [] as { method: string; range: string | null; status: number }[],
     source: [] as { range: ByteRange; phase: string; sentBytes: number; consumedBytes: number }[], preparations: 0 });
@@ -49,7 +50,7 @@ export async function createReadCacheFixture() {
     stats.preparations++; preparing = true;
     try {
       const prepared = await prepare({ format: 'mp3', sourceInfo: source, readRange: reader, reserveBytes: 1_048_576,
-        tags: { title: 'Cache fixture title', artists: ['Fixture artist'], album: 'Fixture album',
+        tags: { title, artists: ['Fixture artist'], album: 'Fixture album',
           cover: { mimeType: 'image/jpeg', data: new Uint8Array(await Bun.file('tests/fixtures/source-metadata/cover.jpg').arrayBuffer()) },
           lyrics: { original: '[00:00.00]Offline cache fixture\n[00:01.00]Second line' } }, signal: new AbortController().signal });
       assert.equal(prepared.content.size, content.size); return { ...prepared, content };
@@ -65,7 +66,7 @@ export async function createReadCacheFixture() {
   const f = await libraryFixture(plugin); const dav = createDav(f.library.files, { username: 'reader', password: 'fixture' });
   await f.library.refresh(f.id, undefined, new AbortController().signal); await f.library.refresh(f.id, 'root', new AbortController().signal);
   const snapshot = () => structuredClone({ ...stats, sourceSize: source.size, finalSize: content.size, libraryPath: '实例 & #/Music',
-    selected: names[0], title: 'Cache fixture title', names });
+    selected: names[0], title, names });
   const reset = () => { stats = fresh(); };
   const expected = async () => {
     assert(plan, 'Do not prepare the fixture through the verification endpoint');
@@ -82,6 +83,9 @@ export async function createReadCacheFixture() {
     const current = stats; const response = await dav.fetch(request);
     current.dav.push({ method: request.method, range: request.headers.get('range'), status: response.status }); return response;
   } });
-  return { server, url: new URL('/dav/' + ['实例 & #', 'Music', 'Track 1.mp3'].map(encodeURIComponent).join('/'), server.url).href, content,
-    snapshot, reset, expected, async close() { await server.stop(true); await cdn.stop(true); f.close(); await rm(scratch, { recursive: true, force: true }); } };
+  return { server, files: f.library.files, url: new URL('/dav/' + ['实例 & #', 'Music', 'Track 1.mp3'].map(encodeURIComponent).join('/'), server.url).href, content,
+    snapshot, reset, expected, async reviseTitle(value: string) {
+      title = value; content.contentId += ':updated'; plan = undefined;
+      await f.library.refresh(f.id, 'root', new AbortController().signal);
+    }, async close() { await server.stop(true); await cdn.stop(true); f.close(); await rm(scratch, { recursive: true, force: true }); } };
 }

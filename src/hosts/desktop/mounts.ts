@@ -38,6 +38,8 @@ export async function createMountManager(options: {
   directory: string; binary: string; localConnection: () => Connection;
   /** Narrow integration seam for lifecycle tests, never accepted from an HTTP request. */
   control?: RcloneControl;
+  /** A desktop composition sharing RC with DAV cache closes it after both consumers. */
+  manageControl?: boolean;
   platform?: NodeJS.Platform;
   checkDependencies?: () => Promise<void>;
 }): Promise<MountManager> {
@@ -329,7 +331,7 @@ export async function createMountManager(options: {
     }),
     close: () => serialize(async () => {
       for (const record of records) if (record.view.state !== 'stopped') await stop(record);
-      await control.close();
+      if (options.manageControl !== false) await control.close();
     })
   };
 }
