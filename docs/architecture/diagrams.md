@@ -26,8 +26,9 @@ flowchart LR
 flowchart LR
   App[App挂载消费] --> VFS[rclone原生稀疏缓存]
   VFS -->|缺失范围| DAV[共用DAV与library]
-  Direct[直接DAV播放器] --> Shared[桌面共享VFS缓存]
-  Shared -->|缺失范围| DAV
+  Direct[直接DAV播放器] --> PublicDAV[原DAV HTTP合同]
+  PublicDAV --> Shared[桌面共享VFS缓存]
+  Shared -->|缺失范围 内部直读| DAV
   DAV --> Source[来源插件 资料及固定标签计划]
   Source -->|需要源音频| CDN[平台CDN]
   UI[缓存管理] --> Mounts[桌面mounts模块]

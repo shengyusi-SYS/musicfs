@@ -6,7 +6,9 @@
 
 正式模块的有限范围、重叠、原生VFS重建后头尾重读0次源请求；同路径/大小/mtime的新内容身份、旧来源拒绝、活动读取、清理/关闭及退出准备通过。有界FFprobe开放GET会因取消时机不同补读新增范围，不承诺第二次零网络或真实4000首固定耗时。Worker保持流式，不重建/部署云端。[设计、证据及容量取舍](architecture/shared-read-cache.md)
 
-Windows发行物和对应源码将在本次目标系统验收后归档，目标系统结论不沿用dev.10。
+最终Windows包已在现有VM通过直接DAV重复范围、整个App正常重启后的缓存复用、清理后重新取源及App本机挂载绕过共享落盘；正常退出。未测真实整库或新增平台请求，Worker未重建或部署。
+
+产物：[Windows x64](../dist/releases/0.1.0-dev.11/musicfs-0.1.0-dev.11-windows-x64.zip)、[对应源码](../dist/releases/0.1.0-dev.11/musicfs-0.1.0-dev.11-source.zip)、[版本清单](../dist/releases/0.1.0-dev.11/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.11/SHA256SUMS)。构建输入为干净提交`bd80956`；正常退出旧后台、解压完整新版并重新挂载即可，原数据/授权/插件保留。本轮接入不新增第三方依赖，也未替换为自制分块框架。
 
 ## dev.10 缓存管理与播放范围调整
 

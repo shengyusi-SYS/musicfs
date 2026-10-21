@@ -6,7 +6,7 @@
 
 **缓存系统当前收口：** [缓存优化方案](musicfs-cache-optimization-plan.md)的B/C/D已完成：播放起步块调至1MiB以减少SDK/CDN调用，挂载缓存可查询实际状态与定向清理，实际FFprobe开放GET证明仅做短Range缓存覆盖不足，因此不实施候选E，Worker缓存延后。A已用最终dev.10 Windows包通过Shell属性、FileStream、重挂零GET与清理重新取源，Windows更新与对应源码已按dev.10版本归档并通过三项校验；不恢复真实全库或平台压力测试。[证据与边界](../docs/verification/cache-consumption-2026-10-21.md)
 
-**直接DAV补充方案评估：** 新一轮[缓存方案](musicfs-cache-optimization-plan.md#直接webdav共享读取补充方案评估2026-10-21尚未实施)补充了容量工作集、rclone服务端VFS复用和开放GET流式首尾窗口。建议先做有界rclone可行性验证，再在复用路线与完整分块路线之间选择；此前“短Range缓存不足”不再被扩大为所有轻量方案都不值得。用户已授权继续，dev.11已实现rclone服务端共享缓存、独立管理入口及App内部直读，WSL有界消费通过，当前准备Windows最终包验收与归档；未追加平台或云端验证。[当前设计](../docs/architecture/shared-read-cache.md)
+**直接DAV补充方案评估：** 新一轮[缓存方案](musicfs-cache-optimization-plan.md#直接webdav共享读取补充方案评估2026-10-21尚未实施)补充了容量工作集、rclone服务端VFS复用和开放GET流式首尾窗口。建议先做有界rclone可行性验证，再在复用路线与完整分块路线之间选择；此前“短Range缓存不足”不再被扩大为所有轻量方案都不值得。用户已授权继续，dev.11已实现rclone服务端共享缓存、独立管理入口及App内部直读，WSL有界消费通过，最终Windows包的直接DAV/正常重启复用、清理及App绕过也已通过，当前归档Windows更新与源码；未追加平台或云端验证。[当前设计](../docs/architecture/shared-read-cache.md)
 
 **当前续接PERF22：** dev.8后重进仍慢，用户截图确认有公网下载；实际WSL/HTTP/FUSE复现rclone默认预读放大与音频字节未缓存，已按原生VFS缩小初始范围、开启可配置的稀疏缓存，连续读取保留递增分块。跨重挂头尾读取0次GET，同路径同大小更新仍能取得新字节。范围、取舍和其它DAV客户端边界统一见[挂载设计](../docs/architecture/desktop-mounts.md#文件头扫描与读取范围)；此前目录枚举测试不能证明资源管理器的文件信息扫描已优化。
 

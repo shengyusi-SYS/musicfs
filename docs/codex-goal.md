@@ -1,6 +1,6 @@
 # MusicFS Codex 主线目标
 
-**当前PERF23：直接DAV共享缓存。** 用户已授权继续，dev.11复用随包rclone服务端VFS，独立16GiB/7天共享设置与清理；App内部直读避免同次重复落盘。不可变最终身份、原来源门禁、批量元数据及共享RC退出所有权已接线，WSL正式模块验证通过，正在完成Windows发行物必要验收和归档。不转向自制缓存引擎，也不追加真实全库/平台或云端矩阵。[设计与范围](architecture/shared-read-cache.md)
+**PERF23已收口：直接DAV共享缓存。** 用户已授权继续，dev.11复用随包rclone服务端VFS，独立16GiB/7天共享设置与清理；App内部直读避免同次重复落盘。不可变最终身份、原来源门禁、批量元数据及共享RC退出所有权已接线，WSL正式模块验证通过，最终Windows包的直接DAV复用、正常App重启、清理和App绕过已通过，按dev.11归档。不转向自制缓存引擎，也不追加真实全库/平台或云端矩阵。[设计与范围](architecture/shared-read-cache.md)
 
 **最新续接PERF22已收口：** dev.10沿用rclone原生稀疏缓存，补齐实际模式/占用/路径查询和定向清理；依据播放成本对照将初始块调至1MiB，SDK/CDN调用7次降至4次。最终Windows包的Shell属性/FileStream消费、正常重挂零GET及清理后重新取源已通过。直接DAV的FFprobe开放GET仍重复消费源音频，小范围缓存覆盖不足，故不实施该候选；完整共享稀疏缓存5—8人日、Worker音频缓存暂不进入主线。已有用户场景的高ROI缓存缺口已收口，不将小样本当成4000首GUI等待全消失。当前证据集中见[缓存消费记录](verification/cache-consumption-2026-10-21.md)，候选及停止理由见[缓存规划](../outputs/musicfs-cache-optimization-plan.md)，产物见[交付页](release.md)。
 

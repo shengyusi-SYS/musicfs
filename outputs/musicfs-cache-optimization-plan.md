@@ -4,7 +4,7 @@
 
 ## dev.11实施结果（本轮当前）
 
-用户已授权实施补充评估。已选用rclone serve/start服务端VFS，保持外部DAV与library合同，通过不可变最终身份键处理同路径/大小/mtime更新；App本机挂载绕过共享落盘并保留原statMany。共享默认16GiB/7天、原生状态/设置/清理、共用RC所有权及正常退出已接线。没有实现自有分块/窗口引擎或引入字节缓存依赖。当前正式模块已通过有界WSL回环消费验证，Windows最终包待本轮验收与归档。[设计与精确证据](../docs/architecture/shared-read-cache.md)
+用户已授权实施补充评估。已选用rclone serve/start服务端VFS，保持外部DAV与library合同，通过不可变最终身份键处理同路径/大小/mtime更新；App本机挂载绕过共享落盘并保留原statMany。共享默认16GiB/7天、原生状态/设置/清理、共用RC所有权及正常退出已接线。没有实现自有分块/窗口引擎或引入字节缓存依赖。当前正式模块及最终Windows包已通过有界消费、重启复用、定向清理和App绕过重复落盘验收，进入版本归档。[设计与精确证据](../docs/architecture/shared-read-cache.md)
 
 下面补充评估是实施前的候选记录，未实施措辞只指当时状态；当前以上述结果为准。
 
