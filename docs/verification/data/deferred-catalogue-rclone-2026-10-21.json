@@ -1,0 +1,72 @@
+{
+  "client": "rclone v1.75.2",
+  "runtime": "loopback Bun + createLibrary/createDav + on-disk SQLite + offline SourcePlugin",
+  "tracks": 6,
+  "bytesPerTrack": 8,
+  "firstAllprop": {
+    "status": 503,
+    "retryAfter": "2",
+    "milliseconds": 13.7,
+    "synchronousStatCalls": 0,
+    "synchronousPreparationPages": 0,
+    "queued": true,
+    "survivedSqliteReopen": true
+  },
+  "unpreparedRclone": {
+    "exitCode": 1,
+    "lowLevelRetries": 1
+  },
+  "preparation": {
+    "steps": 3,
+    "pages": 3,
+    "statCalls": 0,
+    "partialSnapshotStayedPublished": true
+  },
+  "preparedRclone": {
+    "files": 6,
+    "sizes": [
+      8,
+      8,
+      8,
+      8,
+      8,
+      8
+    ],
+    "fullRead": true,
+    "ranges": [
+      {
+        "range": "bytes=0-1",
+        "status": 206
+      },
+      {
+        "range": "bytes=2-3",
+        "status": 206
+      },
+      {
+        "range": "bytes=6-7",
+        "status": 206
+      },
+      {
+        "range": "bytes=2-3",
+        "status": 206
+      }
+    ]
+  },
+  "shortFixtureAutomaticRetry": {
+    "files": 6,
+    "lowLevelRetries": 3,
+    "highLevelRetries": 1,
+    "milliseconds": 396,
+    "exitCode": 1,
+    "pendingResponses": 3,
+    "backgroundSteps": 3,
+    "preparationMilliseconds": 2.7,
+    "completedWithinFiniteRetries": false,
+    "scanAfterPreparationSucceeded": true
+  },
+  "limits": [
+    "Large libraries should prepare file properties in the UI before third-party scans.",
+    "This short fixture proves only these bounded rclone retries; clients are not guaranteed to wait automatically.",
+    "No mount, real platform, desktop/Worker host, cloud, or new download was exercised."
+  ]
+}

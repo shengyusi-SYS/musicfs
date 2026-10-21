@@ -135,7 +135,7 @@ flowchart LR
 
 属性选择每请求按文件/目录编译一次；快照单查询只在首行携带头，唯一名称不进入冲突散列。请求内的日期/来源戳复用不跨请求缓存，范围见[CPU定位](../verification/p2-read-cpu.md)。
 
-文件条目可随分页提供完整可信的 `Entry.info`；library 校验后暂存，目录完整成功才连同条目发布。已列对象私下关联解析目标及已发布 info，不新增持久路径索引。DAV 需要元数据时才懒调用一次 `statMany`，按不同来源代际在批量前后核对；提供 info 的条目直接描述，旧插件缺 info 时保留实时 stat。该调用次数优化不代表真实免费 Worker 的 CPU 或总体额度已验收。
+API0.1.8的文件条目可提供完整可信的 `Entry.info`，或显式选择 `deferredInfo: true`；library 校验后暂存，目录完整成功才连同条目及待准备数发布。已列对象私下关联解析目标及已发布 info，不新增持久路径索引。需要准确批量属性时，显式延迟条目复用持久 `file-info` 刷新；旧插件缺 info 时保留实时 stat。正式延迟执行宿主返回503及重试头，单文件HEAD/GET只按需准备该文件。流程与证据见[两阶段验证](../verification/deferred-catalogue.md)，不代表所有播放器自动重试或免费 Worker 额度已验收。
 
 ```mermaid
 sequenceDiagram
@@ -148,7 +148,7 @@ sequenceDiagram
   opt 目录刷新：每个独立 step 最多一页
     L->>S: list 当前游标
     S->>P: 当前实例的分页调用
-    P-->>S: 有序 Entry，可含完整 info
+    P-->>S: 有序 Entry，可含完整 info 或 deferredInfo
     S-->>L: 分页结果
     L->>L: 校验提供的 info 与页面合同
     alt 仍有下一页
@@ -160,27 +160,40 @@ sequenceDiagram
   C->>D: PROPFIND Depth 1
   D->>L: stat 父项、list 子项
   L->>DB: 读取已发布快照
-  L-->>D: 名称/类型/日期，内部关联目标与 info
+  L-->>D: 名称/类型/日期，关联目标、info 或延迟标记
   alt propname 或仅名称/类型标记/日期
     D-->>C: 直接生成子项属性，不调用 statMany
   else allprop 或实际 etag/大小/媒体类型
-    D->>L: 懒调用一次 statMany（已列对象）
+    D->>L: 调用一次 statMany（已列对象）
     L->>S: 按不同来源戳做批量前检查
     S->>DB: 核对实例与安装代际
     S-->>L: 来源有效性
-    L->>L: 使用快照 info 生成文件描述与 ETag
-    loop 仅旧插件缺 info 的文件
-      L->>S: 实时 stat
-      S->>P: 获取当前文件描述
-      P-->>S: 内容身份、大小和类型
-      S-->>L: 受实例约束的结果
+    alt 存在没有 info 的显式延迟条目
+      L->>DB: 创建或复用此目录的 file-info 刷新
+      L-->>D: PendingRefreshError（operationId）
+      D-->>C: 503 + Retry-After + X-MusicFS-Refresh
+      loop 后台或管理页推进，每步最多一页
+        L->>S: list 当前游标，fileInfo: required
+        S->>P: 准备该页准确文件信息
+        P-->>L: 每个文件均有完整 info，或明确故障
+        L->>DB: 检查点；末页成功原子发布新完整快照
+      end
+      Note over C,DB: 准备期间原清单可浏览；完成后客户端重试
+    else 所需 info 已有，或未声明延迟能力
+      L->>L: 使用快照 info 生成文件描述与 ETag
+      loop 仅旧插件缺 info 的文件
+        L->>S: 实时 stat
+        S->>P: 获取当前文件描述
+        P-->>S: 内容身份、大小和类型
+        S-->>L: 受实例约束的结果
+      end
+      L->>S: 整批完成后按不同来源戳再核对
+      S->>DB: 核对实例与安装代际
+      S-->>L: 来源有效性
+      L->>L: 变化的来源整组标记 Error
+      L-->>D: 每项 Description 或 Error
+      D-->>C: 属性与逐项结果
     end
-    L->>S: 整批完成后按不同来源戳再核对
-    S->>DB: 核对实例与安装代际
-    S-->>L: 来源有效性
-    L->>L: 变化的来源整组标记 Error
-    L-->>D: 每项 Description 或 Error
-    D-->>C: 属性与逐项结果
   end
   opt 单文件 HEAD / GET
     C->>D: HEAD / GET 文件
@@ -188,9 +201,9 @@ sequenceDiagram
     L->>S: 检查来源戳
     alt 已发布文件有完整 info
       L->>L: 复用描述与该精确表示的 ETag
-    else 旧插件缺少 info
+    else 缺少 info（包括显式延迟条目）
       L->>S: 实时 stat
-      S->>P: 获取当前文件描述
+      S->>P: 按需准备或获取该文件描述
       P-->>S: 内容身份、大小和类型
       S-->>L: 当前文件描述
     end
@@ -540,7 +553,7 @@ sequenceDiagram
 
 ## 可选标签处理设计
 
-alpha.11的冷准备请求减法：SDK富详情真批量代替大部分专辑查询，封面按实际资源复用，可选工具通过`ReadRange.readMany?`请求首尾窗口；CDN请求和标准MIME解析仍归来源Adapter。以下完整准备后发布流程仍是当前实现，快速名单/按需表示的分阶段调整在[调查](../verification/netease-cold-request-reduction.md)中明确为后续工作。
+网易云alpha.13默认每页200首先发布完整清单，不取全库歌词、封面或音频；单文件HEAD/GET按需构造最终表示，或通过既有持久分页刷新提前准备文件。QQ继续在目录分页内准备最终信息。alpha.11已有的富详情批量、共享封面及`ReadRange.readMany?`首尾读取继续用于文件准备，CDN请求和标准MIME解析仍归来源Adapter。当前[两阶段验证](../verification/deferred-catalogue.md)与此前[冷准备调查](../verification/netease-cold-request-reduction.md)分别保留适用范围。
 
 三种插件实现通过同一个文件 Interface 接入，核心不增加强制处理阶段。QQ、网易云已选用共用工具；其他插件保持自主选择。设计见[可选补标签设计](audio-tags.md)，当前证据见[实现记录](../verification/metadata-implementation.md)。
 
@@ -565,21 +578,31 @@ flowchart LR
 
 ```mermaid
 sequenceDiagram
-  participant P as 示例插件
+  participant P as 网易云插件
   participant C as 实例缓存 SQLite/D1
   participant U as 来源接口与原音频
   participant T as 可选音频工具
   participant L as 核心快照 / DAV
-  P->>C: 查询歌曲/专辑资料及表示计划
-  opt 冷准备
-    P->>U: 缺少的资料、封面、歌词与头尾范围
+  L->>P: 普通 list 当前游标
+  P->>U: 批量成员、歌曲详情及播放版本
+  P->>C: 保存永久紧凑歌曲 seed，查询准备索引
+  P-->>L: v3 稳定引用；已有 info 或 deferredInfo
+  Note over P,L: 全部分页成功后发布完整清单
+  alt 单文件 HEAD / GET
+    L->>P: stat 此文件
+  else 管理页“准备文件”或批量属性触发
+    L->>P: 持久 file-info 刷新，list(fileInfo: required)
+  end
+  P->>C: 复用索引，或取得稳定 seed
+  opt 尚未准备
+    P->>U: 该文件缺少的资料、封面、歌词与头尾范围
     P->>T: prepare(资料, 原文件范围读取)
     T-->>P: 最终 FileInfo 与区段计划
-    P->>C: 保存小资料与计划
+    P->>C: 保存小资料、准备索引与不可变内容计划
   end
-  P-->>L: 分页返回最终描述和版本化引用
-  L->>P: stat / open(最终范围)
-  P->>C: 取得已有计划
+  P-->>L: 准确最终 FileInfo
+  L->>P: open(期望内容身份, 最终范围)
+  P->>C: 按期望内容身份取得不可变计划
   P->>U: open 时取得媒体地址和所需范围
   P->>T: open(计划, 原文件读取, 最终范围)
   T-->>L: 小标签区段与原音频流

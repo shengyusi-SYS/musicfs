@@ -8,7 +8,7 @@
 
 ## 包与版本
 
-当前宿主合同版本为 **0.1.7**，增加可选批量缓存、工作预算提示和分页工作进度。0.1.6 的可选 `Context.cache` 仍有效；有兼容回退的插件仍可声明 `apiRange >=0.1.6 <0.2.0`。0.1.5 的可选续期、0.1.4 的候选迁移、0.1.3 的完整文件 `info`、0.1.2 的目录计数及0.1.1二维码图片仍有效。旧插件无需使用缓存或续期；未提供 info 时保持原 stat 行为，不自动获得大目录请求预算保证。
+当前宿主合同版本为 **0.1.8**，增加显式可选的 `Entry.deferredInfo` 和准备调用提示 `Context.fileInfo: 'required'`，复用持久分页刷新准备文件信息。0.1.7 的批量缓存、工作预算提示和分页进度，0.1.6 的可选 `Context.cache` 仍有效；不采用新能力且有兼容回退的插件仍可声明原兼容范围。0.1.5 的可选续期、0.1.4 的候选迁移、0.1.3 的完整文件 `info`、0.1.2 的目录计数及0.1.1二维码图片仍有效。旧插件无需修改、使用缓存或补标签；缺少 info 且未声明 deferredInfo 时保持原 stat 行为，不自动获得大目录请求预算保证。
 
 首轮验证 ZIP 插件包，采用现成归档库解析。包内有一份 manifest、预构建 ESM 入口及依赖模块、JSON 配置 Schema、UI 提示和必要只读资产/许可；模块和资产路径在 manifest 中明确列出，不运行安装脚本或在线安装 npm 依赖。
 
@@ -56,6 +56,7 @@ type Context = {
   privateState: Json; // 当前调用的快照；不允许原地写数据库
   signal: AbortSignal;
   fetch: typeof fetch; // 标准请求能力，允许测试与宿主预算接线
+  fileInfo?: 'required'; // 文件准备遍历：每个文件须返回准确 info，或明确失败
   cache?: {
     get(key: string): Promise<Json | undefined>;
     put(key: string, value: Json, options?: { expiresAt?: number }): Promise<void>;
@@ -64,7 +65,8 @@ type Context = {
 
 type Entry =
   | { kind: 'directory'; entryId: string; name: string; directoryRef: Ref }
-  | { kind: 'file'; entryId: string; name: string; fileRef: Ref; info?: FileInfo };
+  | { kind: 'file'; entryId: string; name: string; fileRef: Ref;
+      info?: FileInfo; deferredInfo?: true };
 
 type Root = { sourceId: string; name: string; directoryRef: Ref };
 type FileInfo = {
@@ -116,11 +118,15 @@ interface SourcePlugin {
 
 0.1.2 的 `SourcePlugin.statistics?: Record<string,string>` 声明计数的显示标签；没有统计概念的插件可以省略。最多 100 项，键长 1—64、标签长 1—80；声明不携带 UI 代码或核心音质枚举。`Page.statistics` 是**本页增量**的非负安全整数计数，不是累计总数或平均值；同一分页序列各页使用相同键集。核心检查、相加并在完整成功快照中保存，失败、溢出或不一致不覆盖旧目录/计数。管理界面按插件标签显示已保存计数及最近成功时间；不从文件数推断曲目或权限。旧快照无统计时保持未知，不补零。
 
-0.1.3 的文件 `Entry.info` 是该 fileRef 对应实际字节的完整 `{contentId,size,mediaType}`，与 stat 使用相同语义；不是 size_* 提示、试听大小、短 URL 或将来才能兑现的描述。来源未知时省略整个字段，不填零或虚构内容版本。核心校验后随有序目录页持久化，完整目录成功才发布，失败不覆盖旧内容。新版示例插件均在本页准备好信息：网易云复用原生精确 MD5/大小，QQ 用有界小页和真实 Range 响应确认；需要多少来源工作由插件决定。
+0.1.3 的文件 `Entry.info` 是该 fileRef 对应实际字节的完整 `{contentId,size,mediaType}`，与 stat 使用相同语义；不是 size_* 提示、试听大小、短 URL 或将来才能兑现的描述。来源未知时省略整个字段，不填零或虚构内容版本。核心校验后随有序目录页持久化，完整目录成功才发布，失败不覆盖旧内容。QQ 仍在有界小页内准备最终信息；网易云 alpha.13 默认先发布完整清单，再按需准备最终表示。
+
+0.1.8 的 `Entry.deferredInfo: true` 是插件主动选择两阶段准备的标记，仅在没有完整 `info` 时生效。普通 `list` 可以返回稳定 `fileRef`、名称和类型，单文件 `stat` 必须能按需取得准确的最终描述；首次 GET 也先走这一描述，再 `open`。核心保存待准备文件数，不把未准备误作无权限或空文件。未声明标记的旧插件继续实时 stat，不被改为后台准备。
+
+批量属性需要完整信息时，宿主通过既有持久刷新以 `file-info` 范围重新分页调用 `list`，并设置可选 `Context.fileInfo: 'required'`；此时每个文件都须提供准确 `info`，无法完成则返回明确故障，不能继续只给 deferredInfo。它使用原有游标、检查点、取消、重试、预算和完整目录原子发布；准备期间保留原清单，失败保留最近成功内容。该提示表达通用文件准备要求，不强制音乐字段或 tag API。
 
 0.1.7 可选 `FileInfo.modifiedAt` 是该实际字节表示的有效ISO时间。插件在内容不变时保持它，内容变化时更新；核心在list、stat及DAV属性中使用，避免目录刷新引起所有文件mtime变化。它不是专辑发行日期，也不参与内容身份计算；缺省仍回退最近成功目录时间。
 
-DAV的批量描述与单条stat/HEAD统一复用已发布的完整info，前后核对来源戳；缺少info的旧插件沿实时stat回退。GET/open仍核对期望内容身份、大小和实际范围，不因复用目录元数据而跳过真实字节核验。HEAD描述已发布文件，不额外探测平台或反复读取不可变标签计划；不能把旧插件回退路径当作大目录免费Worker已通过。条目信息不强制所有来源具备账号、歌曲或音质概念。
+DAV的批量描述与单条stat/HEAD统一复用已发布的完整info，前后核对来源戳；缺少info的旧插件沿实时stat回退。显式延迟准备的目录仍可列名称；批量 `allprop` 或请求大小、媒体类型、ETag 时安排文件准备，正式延迟执行宿主返回整次请求的503及 `Retry-After`、`X-MusicFS-Refresh`，完成后重试。单文件HEAD/GET只按需准备该文件，GET/open仍核对期望内容身份、大小和实际范围，不因复用目录元数据而跳过真实字节核验。条目信息不强制所有来源具备账号、歌曲或音质概念；此流程也不代表所有播放器会自动重试或免费Worker已通过验收。
 
 ## 描述、打开与范围读取
 

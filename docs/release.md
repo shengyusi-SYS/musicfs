@@ -1,5 +1,17 @@
 # MusicFS 当前交付物
 
+## dev.6 按需文件准备更新
+
+2026-10-21，应用`0.1.0-dev.6`、API`0.1.8`、schema9；网易云`alpha.13`、QQ`alpha.13`。提供[Windows x64](../dist/releases/musicfs-0.1.0-dev.6-windows-x64.zip)、[Linux x64](../dist/releases/musicfs-0.1.0-dev.6-linux-x64.zip)、[Worker](../dist/releases/musicfs-0.1.0-dev.6-worker.zip)、[作者包](../dist/releases/musicfs-0.1.0-dev.6-plugin-author-kit.zip)、[对应源码](../dist/releases/musicfs-0.1.0-dev.6-source.zip)与[本版校验和](../dist/releases/musicfs-0.1.0-dev.6-checksums.txt)。旧归档保留自身身份，本轮不重新打包macOS或部署云端。
+
+先正常退出旧后台，解压完整新目录启动，沿用原数据。随后在插件页安装随包网易云alpha.13，保留原实例与授权；仅更新核心不会自动替换现有插件。alpha.13要求新API，旧宿主会拒绝；插件修订更新会使派生缓存失效。schema9不变，没有额外迁移。
+
+网易云先发布完整清单，单文件首次读取按需补标签；需要App挂载或全库扫描时，先在内容源/已发布目录点击“准备文件”，完成后连接客户端。未完成的全属性请求快速503，复用现有持久后台任务，避免长同步请求和错误大小；客户端有限重试不保证等完大目录。旧插件的实时stat保持兼容，补标签仍由来源插件选择。
+
+真实本机空缓存4,159首在alpha.12的100首批次下，完整清单24.945秒、87次请求，上版同规模首次可见约13分钟；首曲HEAD约307ms，热HEAD约3ms。alpha.13随后验证200首真批量，离线4k为20页、43次基础调用，未为新耗时再重刷真实整库；MP3头尾合并、富详情减少专辑查询、共享封面继续保留。[范围与匿名证据](verification/deferred-catalogue.md)
+
+公共改动155项受影响回归通过，最终200首调整后网易云52项回归、三套类型与依赖边界通过；真实rclone离线小样本准备后准确大小/完整读取/Range通过。实际packed SDK的本地workerd/D1 200首最多38SQL/准备步，完整属性与标签/Range正确。这些不代表真实全库播放器入库、免费云端CPU或本版Windows原生运行通过；Windows为WSL交叉构建，历史VM验收范围保持原样。
+
 ## dev.5 性能优化更新
 
 2026-10-21，应用`0.1.0-dev.5`、API`0.1.7`、schema9；网易云仍`alpha.10`，QQ更新为`alpha.13`。提供[Windows x64](../dist/releases/musicfs-0.1.0-dev.5-windows-x64.zip)、[Worker构建包](../dist/releases/musicfs-0.1.0-dev.5-worker.zip)、[对应源码](../dist/releases/musicfs-0.1.0-dev.5-source.zip)与[校验和](../dist/releases/musicfs-0.1.0-dev.5-checksums.txt)。较早归档及其统一清单保留原样；本次没有云部署或Windows宿主操作。
