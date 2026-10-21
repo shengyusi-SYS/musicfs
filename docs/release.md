@@ -6,7 +6,7 @@
 
 定向回归15项/140断言、三套类型和依赖边界通过；实际FFprobe调查显示直接DAV开放GET仍重复读取源音频，因此本轮未新增覆盖不足的局部服务端缓存。[消费证据与限制](verification/cache-consumption-2026-10-21.md)。最终Windows包已在现有VM通过原生Shell/FileStream消费、正常重挂零GET、定向清理后重新取源和正常退出。原生占用采样会滞后；未重新测真实4000首GUI目录总耗时。不重建或部署Worker。
 
-产物位于`dist/releases/0.1.0-dev.10/`：[Windows x64](../dist/releases/0.1.0-dev.10/musicfs-0.1.0-dev.10-windows-x64.zip)、[对应源码](../dist/releases/0.1.0-dev.10/musicfs-0.1.0-dev.10-source.zip)、[版本清单](../dist/releases/0.1.0-dev.10/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.10/SHA256SUMS)。构建输入为干净提交`a69ffbf`，目标系统验收仅覆盖上述有界消费行为，不代表恢复历史全矩阵。
+产物位于`dist/releases/0.1.0-dev.10/`：[Windows x64](../dist/releases/0.1.0-dev.10/musicfs-0.1.0-dev.10-windows-x64.zip)、[对应源码](../dist/releases/0.1.0-dev.10/musicfs-0.1.0-dev.10-source.zip)、[版本清单](../dist/releases/0.1.0-dev.10/release-manifest.json)、[校验和](../dist/releases/0.1.0-dev.10/SHA256SUMS)。Windows、源码和清单三项摘要校验通过。构建输入为干净提交`a69ffbf`，目标系统验收仅覆盖上述有界消费行为，不代表恢复历史全矩阵。
 
 ## dev.9 App挂载读取缓存
 

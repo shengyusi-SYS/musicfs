@@ -1,6 +1,6 @@
 # MusicFS 缓存与重复读取优化规划
 
-日期：2026-10-21。状态：用户已授权实施A—D，dev.10实现及有界离线调查已完成，Windows消费端定向验收已通过，准备归档Windows更新与对应源码。未新增依赖或请求音乐平台。原评估基线为dev.9。事实见[现行缓存策略](../docs/architecture/cache-policy.md)、[挂载证据](../docs/architecture/desktop-mounts.md#文件头扫描与读取范围)，外部能力依据见[主源调查](../docs/research/shared-read-cache-options.md)。本文件持有本轮候选和实施顺序，主实施计划只保留入口。
+日期：2026-10-21。状态：用户已授权实施A—D，dev.10实现及有界离线调查已完成，Windows消费端定向验收已通过，Windows更新与对应源码已按dev.10归档并通过摘要校验。未新增依赖或请求音乐平台。原评估基线为dev.9。事实见[现行缓存策略](../docs/architecture/cache-policy.md)、[挂载证据](../docs/architecture/desktop-mounts.md#文件头扫描与读取范围)，外部能力依据见[主源调查](../docs/research/shared-read-cache-options.md)。本文件持有本轮候选和实施顺序，主实施计划只保留入口。
 
 ## 建议决定
 
