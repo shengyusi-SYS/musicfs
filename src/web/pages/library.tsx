@@ -1,103 +1,52 @@
-import { useState } from 'react';
-import type { ReactNode } from 'react';
-import { Alert, App, Breadcrumb, Button, Empty, Input, List, Modal, Select, Skeleton, Space, Tag, Tree, Typography } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, FileOutlined, FolderAddOutlined, FolderOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LayoutNode, SourceInstance } from '../../contracts/management';
+import { useMemo, useState } from 'react';
+import { Alert, Breadcrumb, Button, Empty, Input, List, Skeleton, Space, Typography } from 'antd';
+import { ArrowRightOutlined, FileOutlined, FolderOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import type { Api } from '../api';
-import { ApiError } from '../api';
 import { Failure } from '../components/feedback';
 import { pendingRefreshId, RefreshProgress, usePersistentRefresh } from '../components/refresh';
 import { RefreshPolicyControl } from '../components/refresh-policy';
-import { appendNode, canMove, editNode, findNode, moveNode } from './layout-draft';
+import { LayoutEditor, type LayoutDraft } from './layout-editor';
 
-type Draft = { base: number; nodes: LayoutNode[] | null };
-type TreeNode = { key: string; title: ReactNode; icon: ReactNode; children?: TreeNode[] };
-export default function Library({ api }: { api: Api }) {
-  const client = useQueryClient(); const { message } = App.useApp();
-  const layout = useQuery({ queryKey: ['layout'], queryFn: ({ signal }) => api.layout(signal) });
-  const instances = useQuery({ queryKey: ['instances'], queryFn: ({ signal }) => api.instances(signal) });
-  const [draft, setDraft] = useState<Draft | null>(null); const [selected, setSelected] = useState<string | null>(null);
-  const [adding, setAdding] = useState<'group' | 'source' | null>(null); const [groupName, setGroupName] = useState('');
-  const [expanded, setExpanded] = useState<string[]>([]);
-  const save = useMutation({ mutationFn: (value: Draft) => api.saveLayout(value.base, value.nodes), onSuccess: async value => {
-    client.setQueryData(['layout'], value); await client.invalidateQueries({ queryKey: ['library'] }); setDraft(null); message.success('目录布局已发布到 WebDAV');
-  }, onError: error => { if (error instanceof ApiError && error.status === 409) void client.invalidateQueries({ queryKey: ['layout'] }); } });
-  const nodes = draft ? draft.nodes : layout.data?.nodes;
-  const selectedNode = nodes && selected ? findNode(nodes, selected) : undefined;
-  const parentId = selectedNode?.kind === 'group' ? selectedNode.id : null;
-  function change(next: LayoutNode[] | null) { setDraft({ base: draft?.base ?? layout.data!.revision, nodes: next }); }
-  function add(node: LayoutNode) { change(appendNode(nodes ?? [], parentId, node)); if (parentId) setExpanded(value => [...new Set([...value, parentId])]); setAdding(null); setGroupName(''); setSelected(node.id); }
-  const tree = (items: LayoutNode[]): TreeNode[] => items.map(node => ({
-    key: node.id, title: <Space>{node.name}{node.kind === 'source' && !instances.data?.some(item => item.id === node.instanceId) && <Tag>实例缺失</Tag>}</Space>,
-    icon: node.kind === 'group' ? <FolderOutlined /> : <FileOutlined />,
-    ...(node.kind === 'group' ? { children: tree(node.children) } : {})
-  }));
-  return <>
-    <div className="page-actions"><span>{draft ? '有未发布的修改' : `已发布修订 ${layout.data?.revision ?? '—'}`}</span><Space wrap>
-      <Button disabled={!draft || save.isPending} onClick={() => { setDraft(null); setSelected(null); save.reset(); }}>放弃修改</Button>
-      <Button type="primary" icon={<SaveOutlined />} disabled={!draft} loading={save.isPending} onClick={() => draft && save.mutate(draft)}>保存并发布</Button>
-    </Space></div>
-    <Failure error={layout.error} retry={() => void layout.refetch()} /><Failure error={save.error} />
-    {draft && layout.data && draft.base !== layout.data.revision && <Alert type="warning" showIcon title="布局已被其他窗口修改。请复制需要保留的修改，重新载入后再保存。" action={<Button onClick={() => { setDraft(null); save.reset(); }}>载入最新布局</Button>} />}
-    {layout.isPending ? <Skeleton active /> : layout.data && <div className="library-columns"><section className="surface layout-editor"><div className="section-heading"><Typography.Title level={3}>目录草稿</Typography.Title>{nodes === null && <Tag>默认布局</Tag>}</div>
-      {nodes === null ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前按实例及内容源自动组织目录。"><Button onClick={() => change([])}>创建自定义布局</Button></Empty> : <>
-        <Space wrap className="tree-toolbar"><Button disabled={save.isPending} icon={<FolderAddOutlined />} onClick={() => setAdding('group')}>新建分组</Button><Button disabled={save.isPending} icon={<PlusOutlined />} onClick={() => setAdding('source')}>添加内容源</Button></Space>
-        <Typography.Paragraph type="secondary" className="tree-help">拖动可排序或移入分组。选中分组后，新内容会放入该分组。</Typography.Paragraph>
-        {nodes?.length ? <Tree showIcon blockNode draggable disabled={save.isPending} treeData={tree(nodes)} selectedKeys={selected ? [selected] : []}
-          expandedKeys={expanded} onExpand={keys => setExpanded(keys.map(String))}
-          onSelect={keys => setSelected(keys[0] ? String(keys[0]) : null)}
-          allowDrop={({ dragNode, dropNode, dropPosition }) => canMove(nodes, String(dragNode.key), String(dropNode.key), dropPosition === 0 ? 'inside' : dropPosition < 0 ? 'before' : 'after')}
-          onDrop={info => { const position = info.dropPosition - Number(info.node.pos.split('-').at(-1)); change(moveNode(nodes, String(info.dragNode.key), String(info.node.key), !info.dropToGap ? 'inside' : position < 0 ? 'before' : 'after')); if (!info.dropToGap) setExpanded(value => [...new Set([...value, String(info.node.key)])]); }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="添加分组或内容源。保存空布局会隐藏全部内容。" />}
-        {selectedNode && <div className="node-editor"><label htmlFor="layout-name">显示名称</label><Input id="layout-name" value={selectedNode.name} maxLength={500} disabled={save.isPending} onChange={event => change(editNode(nodes ?? [], selectedNode.id, node => ({ ...node, name: event.target.value })))} />
-          {selectedNode.kind === 'source' && <div className="secondary-id">{instances.data?.find(item => item.id === selectedNode.instanceId)?.name ?? '实例已删除'} / {selectedNode.sourceId}</div>}
-          <Button type="text" danger icon={<DeleteOutlined />} disabled={save.isPending} onClick={() => { change(editNode(nodes ?? [], selectedNode.id, () => null)); setSelected(null); }}>从布局移除</Button></div>}
-        <Button className="restore-default" type="link" disabled={save.isPending} onClick={() => { change(null); setSelected(null); }}>恢复按实例的默认布局</Button>
-      </>}
-    </section><section className="surface"><DirectoryBrowser api={api} /></section></div>}
-    <Modal title={`新建分组${parentId ? ' · 放入选中分组' : ' · 放在根目录'}`} open={adding === 'group'} onCancel={() => setAdding(null)} okText="添加到草稿" cancelText="取消" okButtonProps={{ disabled: !groupName.trim() }} onOk={() => add({ id: crypto.randomUUID(), kind: 'group', name: groupName.trim(), children: [] })}>
-      <label htmlFor="group-name">分组名称</label><Input id="group-name" value={groupName} onChange={event => setGroupName(event.target.value)} maxLength={500} />
-    </Modal>
-    {adding === 'source' && <SourcePicker api={api} instances={instances.data ?? []} close={() => setAdding(null)} add={add} />}
+export default function Library({ api, path, setPath, draft, setDraft, showSources, showConnection }: {
+  api: Api; path: string; setPath: (value: string) => void; draft: LayoutDraft | null; setDraft: (value: LayoutDraft | null) => void; showSources: () => void; showConnection: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  return <><div className="page-actions"><Typography.Text type="secondary">{draft ? '有未保存的目录修改' : '播放器看到的音乐文件夹'}</Typography.Text><Space wrap>
+    <Button icon={<SettingOutlined aria-hidden="true" />} onClick={() => setEditing(true)}>整理目录{draft && <span className="unsaved-dot" />}</Button>
+    <Button type="primary" icon={<ArrowRightOutlined aria-hidden="true" />} onClick={showConnection}>连接播放器</Button>
+  </Space></div><section className="surface directory-surface"><DirectoryBrowser api={api} path={path} setPath={setPath} showSources={showSources} /></section>
+    {editing && <LayoutEditor api={api} draft={draft} setDraft={setDraft} close={() => setEditing(false)} />}
   </>;
 }
 
-function SourcePicker({ api, instances, close, add }: { api: Api; instances: SourceInstance[]; close: () => void; add: (node: LayoutNode) => void }) {
-  const [instanceId, setInstanceId] = useState(''); const [sourceId, setSourceId] = useState('');
-  const roots = useQuery({ queryKey: ['roots', instanceId, instances.find(value => value.id === instanceId)?.epoch], queryFn: ({ signal }) => api.roots(instanceId, signal), enabled: !!instanceId, retry: false });
-  const pending = pendingRefreshId(roots.error);
-  const refresh = usePersistentRefresh(api, { instanceId: instanceId || undefined, operationId: pending });
-  const root = roots.data?.find(value => value.sourceId === sourceId);
-  return <Modal title="添加内容源到草稿" open onCancel={close} okText="添加到草稿" cancelText="取消" okButtonProps={{ disabled: !root }} onOk={() => { if (root) add({ id: crypto.randomUUID(), name: root.name, kind: 'source', instanceId, sourceId }); }}>
-    <div className="field-block"><label htmlFor="layout-instance">数据源实例</label><Select<string> id="layout-instance" placeholder="选择实例" value={instanceId || null} onChange={value => { setInstanceId(value); setSourceId(''); }} options={instances.map(value => ({ value: value.id, label: value.name }))} /></div>
-    <div className="field-block"><label htmlFor="layout-source">内容入口</label><Select<string> id="layout-source" placeholder="选择内容源" loading={roots.isFetching || refresh.active || refresh.preparing} value={sourceId || null} disabled={!instanceId || roots.isError} onChange={value => setSourceId(value)} options={roots.data?.map(value => ({ value: value.sourceId, label: value.name })) ?? []} /></div>
-    <Failure error={pending ? null : roots.error} retry={() => void roots.refetch()} /><RefreshProgress operation={refresh} reload={() => void roots.refetch()} />
-  </Modal>;
-}
-
-function DirectoryBrowser({ api }: { api: Api }) {
-  const [path, setPath] = useState('/');
-  const directory = useQuery({ queryKey: ['library', 'directory', path], queryFn: ({ signal }) => api.browseDirectory(path, signal), retry: false });
-  const pending = pendingRefreshId(directory.error);
-  const source = directory.data?.source;
+function DirectoryBrowser({ api, path, setPath, showSources }: { api: Api; path: string; setPath: (value: string) => void; showSources: () => void }) {
+  const [filter, setFilter] = useState('');
+  const directory = useQuery({ queryKey: ['library', 'directory', path], queryFn: ({ signal }) => api.browseDirectory(path, signal) });
+  const pending = pendingRefreshId(directory.error); const source = directory.data?.source;
   const refresh = usePersistentRefresh(api, { instanceId: source?.instanceId, operationId: pending });
   const busy = refresh.active || refresh.starting || refresh.preparing;
-  const parent = path.slice(0, path.lastIndexOf('/')) || '/';
-  return <><div className="section-heading"><Typography.Title level={3}>已发布目录</Typography.Title><Button disabled={path === '/'} type="text" icon={<ArrowLeftOutlined />} onClick={() => setPath(parent)}>上一级</Button></div>
-    <Breadcrumb items={[{ title: <button className="text-button" onClick={() => setPath('/')}>根目录</button> }, ...(path === '/' ? [] : [{ title: path }])]} />
-    {source && <Space wrap><Button disabled={busy} onClick={() => refresh.start({ kind: 'directory', directoryRef: source.directoryRef })}>刷新目录</Button>
-      <RefreshPolicyControl key={`${source.instanceId}:${source.directoryRef}`} api={api} instanceId={source.instanceId} directoryRef={source.directoryRef} disabled={busy} /></Space>}
-    <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh}
-      reload={() => refresh.view?.scope.kind === 'file-info' ? refresh.start(refresh.view.scope) : void directory.refetch()} />
-    {directory.data?.status?.error && <Alert type="warning" showIcon title="刷新失败，保留最近成功内容"
-      description={`最近成功：${new Date(directory.data.status.completedAt).toLocaleString()}`} />}
-    {(directory.data?.status?.pendingFileInfo ?? 0) > 0 && <Alert type="info" showIcon title="目录清单已就绪"
-      description="可按需读取单个文件。使用 App 挂载或全库扫描前，请先准备此目录的文件，完成后再连接客户端。"
-      action={source && <Button size="small" disabled={busy} loading={refresh.starting || refresh.active && refresh.view?.scope.kind === 'file-info' && refresh.view.scope.directoryRef === source.directoryRef}
-        onClick={() => refresh.start({ kind: 'file-info', directoryRef: source.directoryRef })}>准备文件</Button>} />}
-    {directory.isPending ? <Skeleton active /> : directory.data?.entries.length ? <List key={path} className="directory-list" dataSource={directory.data.entries} rowKey="path"
-      pagination={{ position: 'top', pageSize: 50, hideOnSinglePage: true, showSizeChanger: false, simple: true, showTotal: total => `共 ${total} 项` }}
-      renderItem={entry => <List.Item><button className="directory-entry" disabled={entry.kind === 'file'} onClick={() => setPath(entry.path)}>{entry.kind === 'directory' ? <FolderOutlined /> : <FileOutlined />}<span>{entry.name}</span>{entry.kind === 'file' && <Tag>音频文件</Tag>}</button></List.Item>} /> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这个目录暂时没有内容" />}
-    <p className="page-footnote">这里显示当前 WebDAV 目录。草稿保存成功后才对客户端生效。</p>
+  const segments = path.split('/').filter(Boolean);
+  const entries = useMemo(() => {
+    const needle = filter.trim().toLocaleLowerCase();
+    return needle ? directory.data?.entries.filter(entry => entry.name.toLocaleLowerCase().includes(needle)) : directory.data?.entries;
+  }, [directory.data?.entries, filter]);
+  function open(next: string) { setFilter(''); setPath(next); }
+  return <><div className="directory-toolbar"><Breadcrumb items={[{ title: <button className="text-button" onClick={() => open('/')}>全部音乐</button> }, ...segments.map((segment, index) => ({ title: <button className="text-button" onClick={() => open('/' + segments.slice(0, index + 1).join('/'))}>{segment}</button> }))]} />
+    {source && <Space wrap><RefreshPolicyControl key={source.instanceId + ':' + source.directoryRef} api={api} instanceId={source.instanceId} directoryRef={source.directoryRef} disabled={busy} />
+      <Button icon={<ReloadOutlined aria-hidden="true" />} disabled={busy} onClick={() => refresh.start({ kind: 'directory', directoryRef: source.directoryRef })}>更新</Button></Space>}
+  </div>
+    {((directory.data?.entries.length ?? 0) > 10 || !!filter) && <Input className="directory-search" prefix={<SearchOutlined aria-hidden="true" />} allowClear placeholder="搜索当前目录" aria-label="搜索当前目录" value={filter} onChange={event => setFilter(event.target.value)} />}
+    <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh} reload={() => refresh.view?.scope.kind === 'file-info' ? refresh.start(refresh.view.scope) : void directory.refetch()} />
+    {directory.data?.status?.error && <Alert className="feedback" type="warning" showIcon title="更新失败，仍显示上次内容" />}
+    {(directory.data?.status?.pendingFileInfo ?? 0) > 0 && <Alert className="feedback" type="info" showIcon title="首次挂载前，需要准备文件信息"
+      action={source && <Button size="small" disabled={busy} onClick={() => refresh.start({ kind: 'file-info', directoryRef: source.directoryRef })}>准备文件</Button>} />}
+    {directory.isPending ? <Skeleton active /> : entries?.length ? <List key={path + ':' + filter} className="directory-list" dataSource={entries} rowKey="path"
+      pagination={{ position: 'bottom', pageSize: 50, hideOnSinglePage: true, showSizeChanger: false, simple: true, showTotal: total => '共 ' + total.toLocaleString() + ' 项' }}
+      renderItem={entry => <List.Item>{entry.kind === 'directory'
+        ? <button className="directory-entry" onClick={() => open(entry.path)}><FolderOutlined aria-hidden="true" /><span>{entry.name}</span><ArrowRightOutlined aria-hidden="true" className="entry-arrow" /></button>
+        : <div className="directory-entry directory-file"><FileOutlined aria-hidden="true" /><span>{entry.name}</span><Typography.Text type="secondary">{entry.name.split('.').pop()?.toUpperCase()}</Typography.Text></div>}
+      </List.Item>} /> : !directory.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter ? '没有找到匹配的名称' : '这里还没有音乐'}>
+        {filter ? <Button onClick={() => setFilter('')}>清除搜索</Button> : <Button onClick={showSources}>添加音乐来源</Button>}</Empty>}
   </>;
 }

@@ -1,4 +1,4 @@
-import { Alert, App, Button, Descriptions, Space, Tag, Typography } from 'antd';
+import { Alert, App, Button, Collapse, Descriptions, Space, Tag, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, type Api } from '../api';
 import { Failure } from './feedback';
@@ -22,8 +22,8 @@ export default function DesktopHttps({ api }: { api: Api }) {
   if (query.data && query.data.platform !== 'win32') return null;
   const value = query.data; const ready = value?.trusted && value.webClient === 'running';
   const largeFiles = value?.fileSizeLimitBytes === WINDOWS_WEBDAV_FILE_LIMIT;
-  return <section className="surface"><Typography.Title level={3}>本机 HTTPS WebDAV</Typography.Title>
-    <Typography.Paragraph type="secondary">供 Windows 资源管理器原生映射使用。启用 HTTPS 后，App 可一次完成证书信任、启动现有 WebClient，并将单文件上限提高到 4GiB−1。Windows 会请求系统权限；下方“本机挂载”无需这些原生客户端设置。</Typography.Paragraph>
+  return <div className="settings-content">
+    <Typography.Paragraph type="secondary">使用 HTTPS 地址映射网络驱动器，账号密码与上方相同。</Typography.Paragraph>
     <Failure error={query.error} retry={() => void query.refetch()} /><Failure error={action.error} />
     {value && <><Typography.Paragraph><Tag color={value.davUrl ? 'success' : 'default'}>{value.davUrl ? 'HTTPS 已启用' : 'HTTPS 未运行'}</Tag>
       {value.davUrl && value.platform === 'win32' && <Tag color={ready ? 'success' : 'warning'}>{ready ? 'Windows 连接设置已就绪' : '需要完成 Windows 连接设置'}</Tag>}</Typography.Paragraph>
@@ -33,8 +33,6 @@ export default function DesktopHttps({ api }: { api: Api }) {
       ]} />
       {value.davUrl && <Descriptions column={1} layout="vertical" items={[
         { key: 'url', label: '本机 HTTPS WebDAV 地址', children: <Typography.Text copyable>{value.davUrl}</Typography.Text> },
-        { key: 'expiry', label: '证书到期时间', children: value.certificate ? new Date(value.certificate.expiresAt).toLocaleDateString() : '—' },
-        { key: 'fingerprint', label: '证书指纹（SHA-256）', children: <Typography.Text style={{ overflowWrap: 'anywhere' }}>{value.certificate?.fingerprintSha256}</Typography.Text> }
       ]} />}
       <Space wrap>
         {!value.davUrl && <Button type="primary" loading={action.isPending && action.variables === 'enable'} disabled={action.isPending} onClick={() => action.mutate('enable')}>启用本机 HTTPS</Button>}
@@ -45,9 +43,12 @@ export default function DesktopHttps({ api }: { api: Api }) {
         {value.enabled && <Button loading={action.isPending && action.variables === 'disable'} disabled={action.isPending} onClick={() => action.mutate('disable')}>停用 HTTPS</Button>}
         <Button loading={query.isFetching} disabled={action.isPending} onClick={() => void query.refetch()}>刷新状态</Button>
       </Space>
-      <Typography.Paragraph type="secondary">文件上限影响本机所有 Windows 原生 WebDAV 连接。修改或恢复上限需要重启正在运行的 WebClient，会短暂中断这些连接；请在方便重连时应用。App 退出后保持设置。</Typography.Paragraph>
-      {value.canRestoreFileSizeLimit && <Typography.Paragraph type="secondary">可恢复到原上限：{fileLimit(value.originalFileSizeLimitBytes)}。恢复只调整文件上限，保留 HTTPS 和证书信任。</Typography.Paragraph>}
-      {value.davUrl && <Typography.Paragraph type="secondary">此地址仅供运行 MusicFS 的这台电脑使用，账号密码与上方读取凭据相同。停用入口会断开此 HTTPS 连接；重新启用会复用同一证书。</Typography.Paragraph>}
+      {value.davUrl && <Typography.Paragraph className="muted-note">连接设置需要系统权限，会重连本机的原生 WebDAV 连接，并将单文件上限设为 4 GiB−1。</Typography.Paragraph>}
+      <Collapse ghost size="small" items={[{ key: 'certificate', label: '证书与恢复信息', children: <Descriptions column={1} size="small" items={[
+        { key: 'expiry', label: '证书到期', children: value.certificate ? new Date(value.certificate.expiresAt).toLocaleDateString() : '—' },
+        { key: 'fingerprint', label: 'SHA-256', children: <Typography.Text style={{ overflowWrap: 'anywhere' }}>{value.certificate?.fingerprintSha256}</Typography.Text> },
+        { key: 'original', label: '原文件上限', children: fileLimit(value.originalFileSizeLimitBytes) }
+      ]} /> }]} />
     </>}
-  </section>;
+  </div>;
 }

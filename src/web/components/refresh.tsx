@@ -128,20 +128,17 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
     : value.status === 'superseded' ? '准备任务已被较新的操作替代'
     : preparingFiles ? '文件准备失败，请重试' : '清单更新失败，已保留上次成功内容';
   return <>
-    {(value || operation.starting || operation.preparing) && <Alert className="feedback" showIcon
+    {(operation.active || operation.starting || operation.preparing || value?.status === 'failed' || !!value?.failures.length) && <Alert className="feedback" showIcon
       type={value?.status === 'failed' ? 'error' : value?.failures.length ? 'warning' : value?.status === 'completed' ? 'success' : 'info'}
-      title={operation.starting ? '正在提交准备任务' : title}
+      title={operation.starting ? '正在开始更新' : title}
       description={value && <>
-        <div>{preparingFiles ? value.status === 'completed' ? '已准备此目录中播放器读取所需的文件信息。' : '此任务准备播放器读取所需的文件信息，目录清单仍可浏览。'
-          : value.status === 'completed' && value.scope.kind === 'directory' && value.scope.directoryRef === undefined
-          ? '内容入口已更新' : <>已完成 {value.refreshedDirectories} 个目录的清单</>}</div>
-        {value.current && value.status !== 'completed' && <div>当前{value.current.kind === 'roots' ? '内容入口' : '目录'}已{preparingFiles ? '处理' : '读取'} {value.current.pages} 页，{preparingFiles ? '已处理' : '暂存'} {value.current.entries} 条目</div>}
+        {value.current && !progress && operation.active && <div>已处理 {value.current.entries.toLocaleString()} 项</div>}
         {progress && <div>已处理 {progress.completed.toLocaleString()} / {progress.total.toLocaleString()} {progress.unit}
           <Progress size="small" percent={progress.total ? Math.floor(progress.completed / progress.total * 100) : 100} status={waiting ? 'normal' : operation.active ? 'active' : 'normal'} />
         </div>}
         {waiting && <div>预计 {new Date(value.retryAt!).toLocaleTimeString()} 继续，可关闭页面。</div>}
         {value.current?.statistics && value.status !== 'completed' && <Space wrap>{Object.entries(labels ?? {}).flatMap(([key, label]) => {
-          const count = value.current?.statistics?.[key]; return count === undefined ? [] : [<Typography.Text key={key}>临时{label}：{count}</Typography.Text>];
+          const count = value.current?.statistics?.[key]; return count === undefined ? [] : [<Typography.Text key={key}>{label}：{count}</Typography.Text>];
         })}</Space>}
         {value.error && <div role="alert">{value.error.message}</div>}
         {value.failures.length > 0 && <div role="alert">{value.failures.length} 个目录失败：{[...new Set(value.failures.map(item => item.error.message))].join('；')}</div>}

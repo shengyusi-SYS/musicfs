@@ -1,22 +1,51 @@
-import { Alert, Descriptions, Input, Skeleton, Typography } from 'antd';
+import { useId, useState } from 'react';
+import { App, Button, Collapse, Input, Skeleton, Tabs, Typography } from 'antd';
+import { CopyOutlined, DesktopOutlined, LinkOutlined, SettingOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { Api } from '../api';
 import { Failure } from '../components/feedback';
-import Mounts from './mounts';
+import { SharedReadCacheDialog } from '../components/cache-settings';
 import DesktopNetwork from '../components/desktop-network';
 import DesktopHttps from '../components/desktop-https';
+import Mounts from './mounts';
 
-export default function Connection({ api, onStopped }: { api: Api; onStopped: () => void }) {
-  const connection = useQuery({ queryKey: ['connection'], queryFn: ({ signal }) => api.connection(signal) });
+export default function Connection({ api, tab, setTab }: { api: Api; tab: 'mount' | 'dav'; setTab: (value: 'mount' | 'dav') => void }) {
   const status = useQuery({ queryKey: ['status'], queryFn: ({ signal }) => api.status(signal) });
-  const value = connection.data; const url = value ? new URL(value.davPath, location.origin).href : '';
-  return <><section className="surface"><Typography.Title level={3}>WebDAV 读取连接</Typography.Title><Typography.Paragraph type="secondary">将以下地址和读取凭据填入 OpenList、支持 WebDAV 的播放器或其他客户端。</Typography.Paragraph>
-    <Typography.Paragraph>首次使用时，请先在“数据源 → 内容源”刷新需要的目录；新歌单可在“目录布局”的已发布目录中打开并准备。桌面后台会继续准备，Worker 在关闭页面后按定时步骤继续；重新打开页面可查看进度。显示完成后再连接客户端；若客户端提示服务暂不可用，请在准备完成后重试。</Typography.Paragraph>
-    <Failure error={connection.error} retry={() => void connection.refetch()} />{connection.isPending ? <Skeleton active /> : value && <Descriptions column={1} layout="vertical" items={[
-      { key: 'url', label: 'WebDAV 地址', children: <Typography.Text copyable={{ text: url }} className="connection-url">{url}</Typography.Text> },
-      { key: 'username', label: '用户名', children: <Typography.Text copyable>{value.username}</Typography.Text> },
-      { key: 'password', label: '读取密码', children: <Input.Password value={value.password} readOnly autoComplete="off" aria-label="WebDAV 读取密码" /> }
+  const desktop = status.data?.host === 'desktop';
+  return <Tabs className="connection-tabs" activeKey={desktop ? tab : 'dav'} onChange={key => setTab(key as 'mount' | 'dav')} destroyOnHidden items={[
+    ...(desktop ? [{ key: 'mount', label: <><DesktopOutlined aria-hidden="true" /> 挂载到电脑</>, children: <Mounts api={api} /> }] : []),
+    { key: 'dav', label: <><LinkOutlined aria-hidden="true" /> WebDAV 播放器</>, children: <DavConnection api={api} desktop={desktop} /> }
+  ]} />;
+}
+
+function CopyField({ label, value, secret = false }: { label: string; value: string; secret?: boolean }) {
+  const id = useId(); const { message } = App.useApp();
+  async function copy() {
+    try { await navigator.clipboard.writeText(value); message.success('已复制' + label); }
+    catch { message.error('复制失败，请手动选择并复制'); }
+  }
+  return <div className="copy-field"><label htmlFor={id}>{label}</label><div className="copy-field-input">{secret
+    ? <Input.Password id={id} value={value} readOnly autoComplete="off" />
+    : <Input id={id} value={value} readOnly />}
+    <Button icon={<CopyOutlined aria-hidden="true" />} aria-label={'复制' + label} onClick={() => void copy()}>复制</Button></div></div>;
+}
+
+function DavConnection({ api, desktop }: { api: Api; desktop: boolean }) {
+  const [cacheOpen, setCacheOpen] = useState(false);
+  const connection = useQuery({ queryKey: ['connection'], queryFn: ({ signal }) => api.connection(signal) });
+  const prerequisites = useQuery({ queryKey: ['mount-prerequisites'], queryFn: ({ signal }) => api.mountPrerequisites(signal), enabled: desktop });
+  const value = connection.data;
+  return <><section className="surface connection-card"><div className="section-heading"><Typography.Title level={3}>填入播放器，就能开始听</Typography.Title></div>
+    <Failure error={connection.error} retry={() => void connection.refetch()} />{connection.isPending ? <Skeleton active /> : value && <>
+      <CopyField label="WebDAV 地址" value={new URL(value.davPath, location.origin).href} />
+      <div className="credential-grid"><CopyField label="用户名" value={value.username} /><CopyField label="密码" value={value.password} secret /></div>
+    </>}
+    {desktop && <Collapse className="connection-options" ghost items={[
+      { key: 'lan', label: '局域网连接 · 在手机或其他电脑上使用', children: <DesktopNetwork api={api} /> },
+      ...(prerequisites.data?.kind === 'winfsp' ? [{ key: 'https', label: 'Windows 资源管理器原生映射', children: <DesktopHttps api={api} /> }] : [])
     ]} />}
-    <Alert type="info" showIcon title="目录以只读方式提供" description="读取凭据只用于访问文件。管理令牌用于当前管理页面，请分别保管。" />
-  </section>{status.data?.host === 'desktop' && <><DesktopNetwork api={api} /><DesktopHttps api={api} /><Mounts api={api} onStopped={onStopped} /></>}</>;
+  </section>
+    {desktop && <div className="secondary-toolbar"><Button type="text" icon={<SettingOutlined aria-hidden="true" />} onClick={() => setCacheOpen(true)}>WebDAV 读取缓存</Button></div>}
+    {cacheOpen && <SharedReadCacheDialog api={api} onClose={() => setCacheOpen(false)} />}
+  </>;
 }

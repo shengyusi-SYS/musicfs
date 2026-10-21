@@ -1,93 +1,21 @@
-import { useEffect, useState } from 'react';
-import { Alert, App, Button, Form, Input, InputNumber, Modal, Radio, Space, Table, Tag, Typography } from 'antd';
-import { PlusOutlined, PoweroffOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Alert, App, Button, Collapse, Dropdown, Empty, Form, Input, Modal, Radio, Skeleton, Space, Tag, Typography } from 'antd';
+import { MoreOutlined, PlusOutlined, FolderOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, type Api } from '../api';
 import type { MountCacheSettings, MountInput, MountView } from '../../contracts/mounts';
-import type { ReadCacheSettings, ReadCacheStatus } from '../../contracts/read-cache';
 import { Failure } from '../components/feedback';
+import { CacheSummary, MountCacheFields } from '../components/cache-settings';
 
 const labels: Record<MountView['state'], string> = { starting: '正在挂载', mounted: '已挂载', unmounting: '正在卸载', stopped: '已卸载', error: '挂载失败' };
-const cacheModes = { off: '关闭（off）', minimal: '最少缓存（minimal）', writes: '写入缓存（writes）', full: '片段读缓存（full）' };
-type Fields = { name?: string; mountPoint: string; directoryCacheSeconds: number; fileCacheMaxMiB: number; fileCacheMaxAgeHours: number;
-  url?: string; username?: string; password?: string };
-function MountCacheFields() {
-  return <><Form.Item label="目录缓存（秒）" name="directoryCacheSeconds"
-    extra="默认 300 秒。0 表示不自动过期；只影响目录清单。"
-    rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483_647, message: '请输入非负整数秒数' }]}>
-    <InputNumber min={0} max={2_147_483_647} precision={0} style={{ width: '100%' }} />
-  </Form.Item>
-    <Typography.Paragraph type="secondary">读取缓存只保留按需读取的音频片段，重复打开时可以复用，不预先下载整曲。</Typography.Paragraph>
-    <Form.Item label="读取缓存容量（MiB）" name="fileCacheMaxMiB"
-      extra="默认 8192 MiB（8 GiB），为每个挂载的软上限。0 表示关闭读取缓存；关闭不会清理已存片段。"
-      rules={[{ required: true, type: 'integer', min: 0, max: 1_048_576, message: '请输入 0 至 1048576 的整数' }]}>
-      <InputNumber min={0} max={1_048_576} precision={0} style={{ width: '100%' }} />
-    </Form.Item>
-    <Form.Item label="未访问缓存保留时间（小时）" name="fileCacheMaxAgeHours"
-      extra="默认 168 小时（7 天），按未访问时长淘汰。0 表示不按时间淘汰。"
-      rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483, message: '请输入 0 至 2147483 的整数' }]}>
-      <InputNumber min={0} max={2_147_483} precision={0} style={{ width: '100%' }} />
-    </Form.Item></>;
-}
+type Fields = { name?: string; mountPoint?: string; directoryCacheSeconds: number; fileCacheMaxMiB: number; fileCacheMaxAgeHours: number; url?: string; username?: string; password?: string };
 
-function SharedReadCacheDialog({ api, onClose }: { api: Api; onClose: () => void }) {
-  const client = useQueryClient(); const { message } = App.useApp(); const [form] = Form.useForm<ReadCacheSettings>();
-  const status = useQuery({ queryKey: ['desktop-read-cache'], queryFn: ({ signal }) => api.desktopReadCache(signal),
-    refetchOnWindowFocus: false, refetchOnReconnect: false, retry: false });
-  useEffect(() => { if (status.data) form.setFieldsValue(status.data.settings); }, [form, status.data]);
-  function update(value: ReadCacheStatus) {
-    client.setQueryData(['desktop-read-cache'], value); form.setFieldsValue(value.settings);
-  }
-  const configure = useMutation({ mutationFn: (settings: ReadCacheSettings) => api.configureDesktopReadCache(settings),
-    onSuccess: value => { update(value); message.success('WebDAV 共享读取缓存设置已保存'); } });
-  const clear = useMutation({ mutationFn: () => api.clearDesktopReadCache(),
-    onSuccess: value => { update(value); message.success('WebDAV 共享读取缓存已清理'); } });
-  const changing = configure.isPending || clear.isPending;
-  async function sample() {
-    const result = await status.refetch(); if (result.data) form.setFieldsValue(result.data.settings);
-  }
-  const value = status.data;
-  return <Modal title="WebDAV 共享读取缓存" open onCancel={() => { if (!changing) onClose(); }} footer={null}
-    destroyOnHidden closable={!changing} mask={{ closable: !changing }}>
-    <Typography.Paragraph>此缓存供直接连接本机 WebDAV 的播放器等客户端共用，保留已按需读取的文件片段，独立于下方每个 App 挂载的缓存。本机 App 挂载使用自己的缓存，不会把同一次读取在这里再存一份。</Typography.Paragraph>
-    <div className="page-actions"><Typography.Text strong>共享缓存状态</Typography.Text>
-      <Button loading={status.isFetching} disabled={changing} onClick={() => void sample()}>查询状态</Button></div>
-    <Failure error={status.error} retry={() => void sample()} />
-    {value && <>
-      <Typography.Paragraph>配置：{value.settings.maxMiB === 0 ? '关闭（off）' : '片段读缓存（full）'}；实际：{value.actualMode ? cacheModes[value.actualMode] : value.state === 'inactive' ? '未运行' : '暂不可用'}</Typography.Paragraph>
-      <Typography.Paragraph>原生已用空间：{value.bytesUsed === null ? '—' : `${(value.bytesUsed / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 })} MiB`}；文件条目：{value.files ?? '—'}</Typography.Paragraph>
-      <Typography.Paragraph type="secondary">共享读取缓存目录：</Typography.Paragraph>
-      <Typography.Paragraph copyable style={{ wordBreak: 'break-all' }}>{value.directory}</Typography.Paragraph>
-      <Typography.Paragraph type="secondary">采样时间：{new Date(value.sampledAt).toLocaleString()}。统计来自原生 VFS，可能滞后，不表示整曲已完整缓存；未运行时不统计磁盘占用。</Typography.Paragraph>
-      {value.message && <Alert type="warning" showIcon title={value.message} />}
-      <Typography.Paragraph>清理只删除共享读取片段，不删除音乐资料、不刷新平台内容，也不清理 App 挂载缓存。当前有活动读取时，设置或清理可能失败，请稍后重试。</Typography.Paragraph>
-      <Button danger loading={clear.isPending} disabled={changing || status.isFetching} onClick={() => clear.mutate()}>清理共享读取缓存</Button>
-      <Failure error={clear.error} />
-      <Form form={form} layout="vertical" initialValues={value.settings} onFinish={settings => configure.mutate(settings)}>
-        <Form.Item label="共享读取缓存容量（MiB）" name="maxMiB"
-          extra="默认 16384 MiB（16 GiB），为共享缓存的软上限。0 表示关闭；关闭不会清理已存片段。"
-          rules={[{ required: true, type: 'integer', min: 0, max: 1_048_576, message: '请输入 0 至 1048576 的整数' }]}>
-          <InputNumber min={0} max={1_048_576} precision={0} style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item label="未访问缓存保留时间（小时）" name="maxAgeHours"
-          extra="默认 168 小时（7 天）。0 表示不按时间淘汰。"
-          rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483, message: '请输入 0 至 2147483 的整数' }]}>
-          <InputNumber min={0} max={2_147_483} precision={0} style={{ width: '100%' }} />
-        </Form.Item>
-        <Failure error={configure.error} />
-        <Space><Button type="primary" htmlType="submit" loading={configure.isPending} disabled={changing && !configure.isPending || status.isFetching}>保存设置</Button>
-          <Button disabled={changing} onClick={onClose}>关闭</Button></Space>
-      </Form>
-    </>}
-  </Modal>;
-}
-export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => void }) {
+export default function Mounts({ api }: { api: Api }) {
   const client = useQueryClient(); const { message } = App.useApp();
   const [open, setOpen] = useState(false); const [kind, setKind] = useState<'local' | 'remote'>('local'); const [form] = Form.useForm<Fields>();
   const [mountError, setMountError] = useState('');
   const [cacheTarget, setCacheTarget] = useState<MountView | null>(null); const [cacheForm] = Form.useForm<MountCacheSettings>();
   const [cacheError, setCacheError] = useState('');
-  const [sharedCacheOpen, setSharedCacheOpen] = useState(false);
   const cacheStatus = useQuery({ queryKey: ['mount-cache', cacheTarget?.id],
     queryFn: ({ signal }) => api.mountCacheStatus(cacheTarget!.id, signal), enabled: cacheTarget !== null,
     refetchOnWindowFocus: false, refetchOnReconnect: false, retry: false });
@@ -132,89 +60,66 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
   const refresh = useMutation({ mutationFn: (id: string) => api.refreshMount(id), onSuccess: () => {
     message.success('已清除挂载目录缓存，下次打开目录时重新读取');
   } });
-  const quit = useMutation({ mutationFn: () => api.quitDesktop(), onSuccess: async () => {
-    await client.cancelQueries(); onStopped();
-  } });
-  const changing = mount.isPending || unmount.isPending || remount.isPending || remove.isPending || quit.isPending || install.isPending || configureCache.isPending || clearCache.isPending || refresh.isPending;
+  const changing = mount.isPending || unmount.isPending || remount.isPending || remove.isPending || install.isPending || configureCache.isPending || clearCache.isPending || refresh.isPending;
   async function submit(values: Fields) {
     setMountError('');
     const source: MountInput['source'] = kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: values.url!, username: values.username!, password: values.password! };
-    await mount.mutateAsync({ mountPoint: values.mountPoint, source, directoryCacheSeconds: values.directoryCacheSeconds,
+    await mount.mutateAsync({ mountPoint: values.mountPoint?.trim() || (prerequisites.data?.kind === 'winfsp' ? '*' : ''), source, directoryCacheSeconds: values.directoryCacheSeconds,
       fileCacheMaxMiB: values.fileCacheMaxMiB, fileCacheMaxAgeHours: values.fileCacheMaxAgeHours,
       ...(values.name?.trim() ? { name: values.name.trim() } : {}) });
   }
-  if (mounts.error && 'status' in mounts.error && mounts.error.status === 404) return <Alert type="info" showIcon title="从桌面启动器打开即可管理挂载" description="当前开发服务只提供 WebDAV 连接。桌面发行程序会管理随包 rclone 和本机挂载。" />;
-  return <section className="surface"><div className="page-actions"><Typography.Title level={3}>本机挂载</Typography.Title>
-    <Space wrap><Button disabled={!mounts.isSuccess || changing} onClick={() => setSharedCacheOpen(true)}>WebDAV 共享读取缓存</Button>
-      <Button type="primary" icon={<PlusOutlined />} disabled={!mounts.isSuccess || changing} onClick={() => { mount.reset(); setMountError(''); setOpen(true); }}>添加挂载</Button></Space></div>
-    <Typography.Paragraph type="secondary">将本机音乐目录或远程 WebDAV 挂载到盘符或目录。关闭网页后，后台与挂载继续运行。</Typography.Paragraph>
-    {prerequisites.data?.kind === 'winfsp' && <Alert showIcon type={prerequisites.data.state === 'ready' ? 'success' : 'warning'}
-      title={prerequisites.data.state === 'ready' ? `Windows 挂载组件已就绪${prerequisites.data.version ? ` · ${prerequisites.data.version}` : ''}` : '首次挂载需要 WinFsp 组件'}
-      description={<><Typography.Paragraph>{prerequisites.data.message}</Typography.Paragraph><Space wrap>
-        {prerequisites.data.state !== 'ready' && prerequisites.data.canInstall && <Button type="primary" loading={install.isPending} disabled={changing && !install.isPending} onClick={() => install.mutate()}>安装挂载组件</Button>}
-        <Button loading={prerequisites.isFetching} disabled={changing} onClick={() => void prerequisites.refetch()}>重新检测</Button>
-      </Space></>} />}
+  if (mounts.error instanceof ApiError && mounts.error.status === 404) return <Empty description="请从桌面程序打开本机挂载" />;
+  function editCache(item: MountView) {
+    configureCache.reset(); clearCache.reset(); setCacheError(''); setCacheTarget(item);
+    cacheForm.setFieldsValue({ directoryCacheSeconds: item.directoryCacheSeconds, fileCacheMaxMiB: item.fileCacheMaxMiB, fileCacheMaxAgeHours: item.fileCacheMaxAgeHours });
+  }
+  return <><div className="page-actions"><Typography.Text type="secondary">像本地文件一样，在播放器中打开音乐</Typography.Text>
+    <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} disabled={!mounts.isSuccess || changing} onClick={() => { mount.reset(); setMountError(''); setOpen(true); }}>添加挂载</Button></div>
+    {prerequisites.data?.kind === 'winfsp' && prerequisites.data.state !== 'ready' && <Alert className="feedback" showIcon type="info" title="首次挂载需要安装 WinFsp" action={prerequisites.data.canInstall
+      ? <Button loading={install.isPending} disabled={changing && !install.isPending} onClick={() => install.mutate()}>安装挂载组件</Button>
+      : <Button loading={prerequisites.isFetching} onClick={() => void prerequisites.refetch()}>重新检测</Button>} />}
     {prerequisites.error && !(prerequisites.error instanceof ApiError && prerequisites.error.status === 404) && <Failure error={prerequisites.error} retry={() => void prerequisites.refetch()} />}
-    <Failure error={install.error} />
-    <Typography.Paragraph type="secondary">“卸载”保留连接以便再次挂载；“移除”会断开挂载并删除保存的连接配置。“刷新挂载目录”只清除挂载端清单，不刷新音乐平台内容；本机 MusicFS 发布新目录时也会自动清除对应缓存。</Typography.Paragraph>
-    <Failure error={mounts.error} retry={() => void mounts.refetch()} /><Failure error={unmount.error} /><Failure error={remount.error} /><Failure error={remove.error} /><Failure error={refresh.error} />
-    <Table rowKey="id" loading={mounts.isPending} dataSource={mounts.data} pagination={false} locale={{ emptyText: '尚无挂载，添加一个本机或远程连接即可开始。' }} columns={[
-      { title: '名称 / 位置', key: 'name', render: (_, item) => <><Typography.Text strong>{item.name}</Typography.Text><div>{item.mountPoint}</div>
-        <Typography.Text type="secondary">目录缓存：{item.directoryCacheSeconds === 0 ? '手动刷新' : `${item.directoryCacheSeconds ?? 300} 秒`}</Typography.Text>
-        <div><Typography.Text type="secondary">读取缓存：{(item.fileCacheMaxMiB ?? 8192) === 0 ? '已关闭' : `${item.fileCacheMaxMiB ?? 8192} MiB`}</Typography.Text></div></> },
-      { title: '来源', key: 'source', render: (_, item) => item.source.kind === 'local' ? '本机 MusicFS' : item.source.url },
-      { title: '状态', key: 'state', render: (_, item) => <><Tag color={item.state === 'mounted' ? 'success' : item.state === 'error' ? 'error' : 'default'}>{labels[item.state]}</Tag>{item.error && <div role="alert">{item.error.message}</div>}</> },
-      { title: '操作', key: 'action', render: (_, item) => <Space wrap>
-        <Button loading={remount.isPending && remount.variables === item.id} disabled={changing || ['starting', 'unmounting'].includes(item.state)} onClick={() => remount.mutate(item.id)}>重新挂载</Button>
-        {['mounted', 'starting', 'unmounting', 'error'].includes(item.state) && <Button loading={unmount.isPending && unmount.variables === item.id} disabled={changing} onClick={() => unmount.mutate(item.id)}>卸载</Button>}
-        <Button disabled={changing} onClick={() => { configureCache.reset(); clearCache.reset(); setCacheError(''); setCacheTarget(item); cacheForm.setFieldsValue({
-          directoryCacheSeconds: item.directoryCacheSeconds ?? 300, fileCacheMaxMiB: item.fileCacheMaxMiB ?? 8192,
-          fileCacheMaxAgeHours: item.fileCacheMaxAgeHours ?? 168 }); }}>缓存管理</Button>
-        <Button loading={refresh.isPending && refresh.variables === item.id} disabled={changing || item.state !== 'mounted'} onClick={() => refresh.mutate(item.id)}>刷新挂载目录</Button>
-        <Button danger loading={remove.isPending && remove.variables === item.id} disabled={changing} onClick={() => remove.mutate(item.id)}>移除</Button>
-      </Space> }
-    ]} />
-    <div className="page-actions"><Typography.Text type="secondary">退出时会先正常卸载；文件仍被占用时，后台会保留运行并提示原因。</Typography.Text>
-      <Button icon={<PoweroffOutlined />} loading={quit.isPending} disabled={!mounts.isSuccess || changing} onClick={() => quit.mutate()}>退出 MusicFS 后台</Button></div>
-    <Failure error={quit.error} />
-    {sharedCacheOpen && <SharedReadCacheDialog api={api} onClose={() => setSharedCacheOpen(false)} />}
-    <Modal title="添加挂载" open={open} onCancel={() => { if (!mount.isPending) setOpen(false); }} footer={null} destroyOnHidden closable={!mount.isPending} mask={{ closable: !mount.isPending }}>
+    <Failure error={install.error} /><Failure error={mounts.error} retry={() => void mounts.refetch()} /><Failure error={unmount.error} /><Failure error={remount.error} /><Failure error={remove.error} /><Failure error={refresh.error} />
+    <section className="surface mount-list">{mounts.isPending ? <div className="loading-surface"><Skeleton active /></div> : !mounts.isError && !mounts.data?.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="给音乐一个盘符，或挂载到文件夹" /> : mounts.data?.map(item => <article className="mount-row" key={item.id}>
+      <div className="source-avatar"><FolderOutlined aria-hidden="true" /></div><div className="instance-identity"><Typography.Text strong>{item.name}</Typography.Text><div className="mount-location">{item.mountPoint}</div><div className="secondary-id">{item.source.kind === 'local' ? '本机音乐目录' : item.source.url}</div>
+        {item.error && <div role="alert" className="inline-error">{item.error.message}</div>}</div>
+      <div className="instance-actions"><Tag color={item.state === 'mounted' ? 'success' : item.state === 'error' ? 'error' : 'default'}>{labels[item.state]}</Tag>
+        {item.state === 'mounted' ? <Button loading={unmount.isPending && unmount.variables === item.id} disabled={changing} onClick={() => unmount.mutate(item.id)}>卸载</Button>
+          : <Button loading={remount.isPending && remount.variables === item.id} disabled={changing || ['starting', 'unmounting'].includes(item.state)} onClick={() => remount.mutate(item.id)}>挂载</Button>}
+        <Dropdown trigger={['click']} menu={{ items: [
+          { key: 'remount', label: '重新挂载', disabled: changing, onClick: () => remount.mutate(item.id) },
+          { key: 'refresh', label: '刷新目录缓存', disabled: changing || item.state !== 'mounted', onClick: () => refresh.mutate(item.id) },
+          { key: 'cache', label: '缓存设置', disabled: changing, onClick: () => editCache(item) },
+          { type: 'divider' }, { key: 'remove', label: '移除挂载', danger: true, disabled: changing, onClick: () => remove.mutate(item.id) }
+        ] }}><Button type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label={item.name + '的更多操作'} /></Dropdown>
+      </div></article>)}</section>
+    <Modal title="添加挂载" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
       <Form form={form} layout="vertical" onFinish={submit} preserve={false} initialValues={{ directoryCacheSeconds: 300, fileCacheMaxMiB: 8192, fileCacheMaxAgeHours: 168 }}>
-        <Form.Item label="来源"><Radio.Group value={kind} onChange={event => setKind(event.target.value)} options={[{ label: '本机 MusicFS', value: 'local' }, { label: '远程 WebDAV', value: 'remote' }]} disabled={mount.isPending} /></Form.Item>
-        <Form.Item label="名称（可选）" name="name"><Input maxLength={120} /></Form.Item>
-        <Form.Item label="盘符或挂载目录" name="mountPoint" rules={[{ required: true, whitespace: true, message: '请输入本机挂载位置' }]}><Input placeholder="例如 M: 或 /home/me/MusicFS" /></Form.Item>
-        <MountCacheFields />
+        <Form.Item label="音乐目录"><Radio.Group value={kind} onChange={event => setKind(event.target.value)} options={[{ label: '本机 MusicFS', value: 'local' }, { label: '远程 WebDAV', value: 'remote' }]} disabled={mount.isPending} /></Form.Item>
         {kind === 'remote' && <><Form.Item label="WebDAV 地址" name="url" rules={[{ required: true, type: 'url', message: '请输入完整 WebDAV 地址' }]}><Input placeholder="https://music.example.com/dav" /></Form.Item>
-          <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入读取用户名' }]}><Input autoComplete="off" /></Form.Item>
-          <Form.Item label="读取密码" name="password" rules={[{ required: true, message: '请输入读取密码' }]}><Input.Password autoComplete="off" /></Form.Item></>}
-        <Failure error={mount.error} />{mountError && <Alert type="error" showIcon title={mountError} />}<Space><Button type="primary" htmlType="submit" loading={mount.isPending}>挂载</Button><Button disabled={mount.isPending} onClick={() => setOpen(false)}>取消</Button></Space>
+          <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input autoComplete="off" /></Form.Item>
+          <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]}><Input.Password autoComplete="off" /></Form.Item></>}
+        <Form.Item label={prerequisites.data?.kind === 'winfsp' ? '盘符或挂载目录（可选）' : '挂载目录'} name="mountPoint"
+          extra={prerequisites.data?.kind === 'winfsp' ? '留空时自动分配盘符。' : undefined}
+          rules={prerequisites.data?.kind === 'winfsp' ? [] : [{ required: true, whitespace: true, message: '请输入挂载目录' }]}>
+          <Input placeholder={prerequisites.data?.kind === 'winfsp' ? 'M:，或留空自动选择' : '/home/me/MusicFS'} />
+        </Form.Item>
+        <Collapse ghost items={[{ key: 'options', label: '更多设置', forceRender: true, children: <><Form.Item label="名称" name="name"><Input maxLength={120} placeholder="可选" /></Form.Item><MountCacheFields /></> }]} />
+        <Failure error={mount.error} />{mountError && <Alert className="feedback" type="error" showIcon title={mountError} />}
+        <Button type="primary" htmlType="submit" block loading={mount.isPending}>挂载</Button>
       </Form>
     </Modal>
-    <Modal title={`挂载缓存管理${cacheTarget ? ` · ${cacheTarget.name}` : ''}`} open={cacheTarget !== null}
-      onCancel={() => { if (!changing) setCacheTarget(null); }} footer={null} destroyOnHidden closable={!changing} mask={{ closable: !changing }}>
-      <div className="page-actions"><Typography.Text strong>读取缓存状态</Typography.Text>
-        <Button loading={cacheStatus.isFetching} disabled={changing} onClick={() => void cacheStatus.refetch()}>查询状态</Button></div>
+    <Modal title={cacheTarget?.name + ' · 缓存设置'} open={cacheTarget !== null} onCancel={() => setCacheTarget(null)} footer={null} destroyOnHidden>
       <Failure error={cacheStatus.error} retry={() => void cacheStatus.refetch()} />
-      {cacheStatus.data && <>
-        <Typography.Paragraph>配置：{cacheModes[cacheStatus.data.configuredMode]}；实际：{cacheStatus.data.actualMode ? cacheModes[cacheStatus.data.actualMode] : cacheStatus.data.state === 'inactive' ? '未运行' : '暂不可用'}</Typography.Paragraph>
-        {cacheStatus.data.actualMode && cacheStatus.data.actualMode !== cacheStatus.data.configuredMode && <Alert type="warning" showIcon title="实际缓存模式与配置不同，请重新挂载使配置生效。" />}
-        <Typography.Paragraph>原生已用空间：{cacheStatus.data.bytesUsed === null ? '—' : `${(cacheStatus.data.bytesUsed / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 })} MiB`}；文件条目：{cacheStatus.data.files ?? '—'}</Typography.Paragraph>
-        <Typography.Paragraph type="secondary">读取缓存目录：</Typography.Paragraph>
-        <Typography.Paragraph copyable style={{ wordBreak: 'break-all' }}>{cacheStatus.data.directory}</Typography.Paragraph>
-        <Typography.Paragraph type="secondary">采样时间：{new Date(cacheStatus.data.sampledAt).toLocaleString()}。统计来自原生 VFS，可能滞后，不表示整曲已完整缓存。未运行时不统计磁盘占用，已存片段仍可清理。</Typography.Paragraph>
-        {cacheStatus.data.message && <Alert type="warning" showIcon title={cacheStatus.data.message} />}
-      </>}
-      <Typography.Paragraph>清理只删除此挂载已存的读取片段及其索引，不刷新平台内容。活动挂载会先正常卸载，清理后按原设置重新挂载；占用导致卸载失败时保留缓存和设置。</Typography.Paragraph>
-      <Button danger loading={clearCache.isPending} disabled={!cacheStatus.data || changing} onClick={() => { if (cacheTarget) clearCache.mutate(cacheTarget.id); }}>清理读取缓存</Button>
-      <Failure error={clearCache.error} />
-      <Typography.Paragraph>已挂载的连接会在保存后正常卸载并重新挂载；文件占用导致卸载失败时，保留原设置和挂载。已卸载的连接只保存设置。</Typography.Paragraph>
-      <Form form={cacheForm} layout="vertical" preserve={false} onFinish={settings => {
-        if (cacheTarget) { setCacheError(''); configureCache.mutate({ id: cacheTarget.id, settings }); }
-      }}>
+      {cacheStatus.data && <CacheSummary value={cacheStatus.data} />}
+      {cacheStatus.data?.actualMode && cacheStatus.data.actualMode !== cacheStatus.data.configuredMode && <Alert className="feedback" type="warning" showIcon title="重新挂载后，缓存设置才会生效" />}
+      <Form form={cacheForm} layout="vertical" preserve={false} onFinish={settings => { if (cacheTarget) { setCacheError(''); configureCache.mutate({ id: cacheTarget.id, settings }); } }}>
         <MountCacheFields />
-        <Failure error={configureCache.error} />{cacheError && <Alert type="error" showIcon title={cacheError} />}
-        <Space><Button type="primary" htmlType="submit" loading={configureCache.isPending} disabled={changing && !configureCache.isPending}>保存设置</Button><Button disabled={changing} onClick={() => setCacheTarget(null)}>关闭</Button></Space>
+        {cacheTarget?.state === 'mounted' && <p className="muted-note">保存或清理缓存时会重新挂载。</p>}
+        <Failure error={configureCache.error} /><Failure error={clearCache.error} />{cacheError && <Alert className="feedback" type="error" showIcon title={cacheError} />}
+        <div className="dialog-actions"><Space><Button danger loading={clearCache.isPending} disabled={!cacheStatus.data || changing} onClick={() => { if (cacheTarget) clearCache.mutate(cacheTarget.id); }}>清理缓存</Button>
+          <Button loading={cacheStatus.isFetching} onClick={() => void cacheStatus.refetch()}>刷新统计</Button></Space><Button type="primary" htmlType="submit" loading={configureCache.isPending} disabled={changing}>保存</Button></div>
       </Form>
     </Modal>
-  </section>;
+  </>;
 }

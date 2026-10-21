@@ -44,6 +44,7 @@ export default function SchemaForm({ configuration, value, pending, error, onSub
     return errors;
   }, [error]);
   return <JsonForm schema={configuration.schema as RJSFSchema} uiSchema={ui} validator={validator} formData={value}
+    templates={{ DescriptionFieldTemplate: ({ id, description }) => description ? <details id={id} className="field-description"><summary>说明</summary><div>{description}</div></details> : null }}
     disabled={pending} extraErrors={extraErrors} extraErrorsBlockSubmit={false} omitExtraData={false} showErrorList={false}
     onSubmit={({ formData }) => onSubmit((formData ?? null) as Json)}>
     <Button type="primary" htmlType="submit" loading={pending}>{submitLabel}</Button>
