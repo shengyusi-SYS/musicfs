@@ -1,0 +1,597 @@
+{
+  "date": "2026-10-21",
+  "purpose": "Bounded feasibility evaluation only; no production behaviour, packages, music-platform content or cloud deployment changed.",
+  "unknownSizeHttpMount": {
+    "rclone": "rclone v1.75.2",
+    "platform": "Linux native FUSE in WSL; not Windows WinFsp",
+    "source_size": 524332,
+    "source_sha256": "8d7d1cb66475f3a50f63c947a4c2177705b6d0e9e8d2b45fea984aa6dcc04edc",
+    "command": [
+      "<project>/dist/tools/rclone-v1.75.2-linux-amd64/rclone",
+      "mount",
+      ":http:",
+      "<project>/.musicfs/lazy-mount-evaluation/http-nohead/mnt",
+      "--http-url",
+      "http://127.0.0.1:43948/",
+      "--http-no-head",
+      "--read-only",
+      "--vfs-cache-mode",
+      "off",
+      "--dir-cache-time",
+      "5s",
+      "--buffer-size",
+      "0",
+      "--config",
+      "<project>/.musicfs/lazy-mount-evaluation/http-nohead/rclone.conf",
+      "--log-file",
+      "<project>/.musicfs/lazy-mount-evaluation/http-nohead/rclone.log",
+      "-vv"
+    ],
+    "steps": {
+      "cold_names": {
+        "names": [
+          "track-1.wav",
+          "track-2.wav",
+          "track-3.wav",
+          "track-4.wav",
+          "track-5.wav",
+          "track-6.wav"
+        ],
+        "elapsed_ms": 2.4050680003711022,
+        "requests": [
+          {
+            "phase": "cold_names",
+            "method": "GET",
+            "path": "/",
+            "range": null,
+            "status": 200
+          }
+        ]
+      },
+      "cold_stat": {
+        "track-1.wav": 0,
+        "track-2.wav": 0,
+        "track-3.wav": 0,
+        "track-4.wav": 0,
+        "track-5.wav": 0,
+        "track-6.wav": 0
+      },
+      "open_without_read": {
+        "fstat_size": 0,
+        "seek_end": 0,
+        "file_requests": []
+      },
+      "first_read": {
+        "length": 64,
+        "matches_source": true,
+        "fstat_size_immediate": 0,
+        "fstat_size_after_attr_expiry": 524332
+      },
+      "same_fd_random_read": {
+        "length": 0,
+        "matches_source": false,
+        "seek_end": 524332
+      },
+      "reopen_random_read": {
+        "length": 64,
+        "matches_source": true,
+        "fstat_size": 524332
+      },
+      "ffprobe_cold_second_file": {
+        "returncode": 0,
+        "stdout": "{\n    \"programs\": [\n\n    ],\n    \"stream_groups\": [\n\n    ],\n    \"streams\": [\n        {\n            \"codec_name\": \"pcm_s16le\"\n        }\n    ],\n    \"format\": {\n        \"size\": \"0\"\n    }\n}\n",
+        "stderr": ""
+      },
+      "end_stat": {
+        "track-1.wav": 524332,
+        "track-2.wav": 0,
+        "track-3.wav": 0,
+        "track-4.wav": 0,
+        "track-5.wav": 0,
+        "track-6.wav": 0
+      }
+    },
+    "requests": [
+      {
+        "phase": "cold_names",
+        "method": "GET",
+        "path": "/",
+        "range": null,
+        "status": 200
+      },
+      {
+        "phase": "first_read",
+        "method": "GET",
+        "path": "/track-1.wav",
+        "range": "bytes=0-134217727",
+        "status": 206,
+        "response_length": 524332
+      },
+      {
+        "phase": "reopen_random_read",
+        "method": "GET",
+        "path": "/track-1.wav",
+        "range": "bytes=0-134217727",
+        "status": 206,
+        "response_length": 524332,
+        "body_connection_closed": true
+      },
+      {
+        "phase": "reopen_random_read",
+        "method": "GET",
+        "path": "/track-1.wav",
+        "range": "bytes=520192-134737919",
+        "status": 206,
+        "response_length": 4140
+      },
+      {
+        "phase": "ffprobe_cold_second_file",
+        "method": "GET",
+        "path": "/track-2.wav",
+        "range": "bytes=0-134217727",
+        "status": 206,
+        "response_length": 524332,
+        "body_connection_closed": true
+      }
+    ],
+    "unmount": 0,
+    "mounted_after_cleanup": false
+  },
+  "fixedSizeMusicFsFuseMount": {
+    "scope": "Linux native FUSE; real MusicFS Library/DAV; six immutable offline MP3 fixtures; no source-platform/cloud/Windows calls",
+    "client": "rclone v1.75.2",
+    "budget": 65536,
+    "sourceSize": 18895,
+    "listing": {
+      "milliseconds": 26.6,
+      "files": 6,
+      "sizes": [
+        84431,
+        84431,
+        84431,
+        84431,
+        84431,
+        84431
+      ],
+      "preparationCount": 0,
+      "sourceRangeCount": 0,
+      "coverCalls": 0,
+      "lyricCalls": 0,
+      "pluginStatCalls": 0
+    },
+    "firstFile": {
+      "samples": [
+        {
+          "offset": 0,
+          "bytes": 64,
+          "milliseconds": 14.6
+        },
+        {
+          "offset": 84367,
+          "bytes": 64,
+          "milliseconds": 2.9
+        },
+        {
+          "offset": 65568,
+          "bytes": 64,
+          "milliseconds": 10.7
+        },
+        {
+          "offset": 0,
+          "bytes": 64,
+          "milliseconds": 0.2
+        }
+      ],
+      "fullReadMatches": true,
+      "ffprobe": {
+        "duration": "1.000000",
+        "size": "84431",
+        "tags": {
+          "title": "按需挂载：中文标题",
+          "artist": "歌手甲/歌手乙",
+          "album": "离线专辑"
+        }
+      }
+    },
+    "preparationCount": 1,
+    "prepared": [
+      "0.mp3"
+    ],
+    "nonselectedPrepared": [],
+    "coverCalls": 1,
+    "lyricCalls": 1,
+    "pluginStatCalls": 0,
+    "transport": [
+      {
+        "method": "PROPFIND",
+        "path": "/dav/",
+        "range": null,
+        "status": 207
+      },
+      {
+        "method": "PROPFIND",
+        "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/",
+        "range": null,
+        "status": 207
+      },
+      {
+        "method": "PROPFIND",
+        "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/",
+        "range": null,
+        "status": 207
+      },
+      {
+        "method": "GET",
+        "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+        "range": "bytes=0-84430",
+        "status": 206
+      },
+      {
+        "method": "GET",
+        "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+        "range": "bytes=81920-84430",
+        "status": 206
+      },
+      {
+        "method": "GET",
+        "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+        "range": "bytes=65536-84430",
+        "status": 206
+      },
+      {
+        "method": "GET",
+        "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+        "range": "bytes=0-84430",
+        "status": 206
+      },
+      {
+        "method": "GET",
+        "path": "/dav/%E5%AE%9E%E4%BE%8B%20%26%20%23/%E6%9D%A5%E6%BA%90/0.mp3",
+        "range": "bytes=0-84430",
+        "status": 206
+      }
+    ],
+    "limits": [
+      "Not a production integration or Windows Explorer/WinFsp proof.",
+      "Catalogue identity is immutable by construction in this fixture; persistent lazy-plan identity is not solved by padding.",
+      "Inline padding is an experiment only: production needs compact generated padding and an explicit oversized-metadata policy."
+    ]
+  },
+  "formatPadding": {
+    "scope": "Offline valid synthesized fixtures; MP3 plan helper plus single-fixture FLAC/M4A padding experiments; optional loopback HTTP only. No external network, platform, cloud or Windows mount calls.",
+    "nodeTaglibSharp": "6.0.3",
+    "budget": 1048576,
+    "listing": {
+      "files": [
+        {
+          "format": "mp3",
+          "sourceSize": 18895,
+          "finalSize": 1067471
+        },
+        {
+          "format": "flac",
+          "sourceSize": 20639,
+          "finalSize": 1069215
+        },
+        {
+          "format": "m4a",
+          "sourceSize": 17336,
+          "finalSize": 1065912
+        }
+      ],
+      "sourceRequests": 0,
+      "lyricCalls": 0,
+      "coverCalls": 0
+    },
+    "selectedFirstRead": {
+      "lyricCalls": 1,
+      "coverCalls": 1,
+      "nonselectedSourceRequests": [
+        {
+          "format": "flac",
+          "sourceRequests": 0
+        },
+        {
+          "format": "m4a",
+          "sourceRequests": 0
+        }
+      ]
+    },
+    "mp3": {
+      "originalFixtureSize": 17179,
+      "enrichedSourceSize": 18895,
+      "oldId3Bytes": 1632,
+      "oldTailBytes": 128,
+      "variableSize": 18767,
+      "finalSize": 1067471,
+      "sourceAudioBytes": 17135,
+      "prefixBytes": 1050336,
+      "paddingAddedToLibraryOutput": 1048704,
+      "base64InlineBytesInPrototype": 1400448,
+      "preparationRequests": [
+        {
+          "start": 0,
+          "end": 4095
+        },
+        {
+          "start": 16384,
+          "end": 18894
+        }
+      ],
+      "preparationBytes": 6607,
+      "sourceAudioSha256": "5495b4f6afef271d4f8001934cf9dd85e8b3eccb2e1a9773f54670028a833cfa",
+      "finalAudioSha256": "5495b4f6afef271d4f8001934cf9dd85e8b3eccb2e1a9773f54670028a833cfa",
+      "tagChecks": {
+        "title": "按需准备：中文标题",
+        "artists": [
+          "歌手甲",
+          "歌手乙"
+        ],
+        "album": "离线原型专辑",
+        "track": {
+          "no": 3,
+          "of": 12
+        },
+        "disc": {
+          "no": 2,
+          "of": 2
+        },
+        "nativeYear": "2026",
+        "nativeDayMonth": "2110",
+        "albumartistsCommon": [
+          "专辑歌手甲/专辑歌手乙"
+        ],
+        "commonDate": null,
+        "sourceSubtitlePreserved": true,
+        "coverBytes": 225,
+        "lyricFrames": 3
+      },
+      "ranges": [
+        {
+          "range": {
+            "start": 0,
+            "end": 63
+          },
+          "sourceRequests": [],
+          "bytesReturned": 64
+        },
+        {
+          "range": {
+            "start": 1050334,
+            "end": 1050367
+          },
+          "sourceRequests": [
+            {
+              "start": 1632,
+              "end": 1663
+            }
+          ],
+          "bytesReturned": 34
+        },
+        {
+          "range": {
+            "start": 1051336,
+            "end": 1051399
+          },
+          "sourceRequests": [
+            {
+              "start": 2632,
+              "end": 2695
+            }
+          ],
+          "bytesReturned": 64
+        },
+        {
+          "range": {
+            "start": 1067407,
+            "end": 1067470
+          },
+          "sourceRequests": [
+            {
+              "start": 18703,
+              "end": 18766
+            }
+          ],
+          "bytesReturned": 64
+        }
+      ],
+      "httpRanges": [],
+      "overflow": "RangeError: Metadata exceeds fixed extra-byte budget: needs 2096998, budget 1048576",
+      "mediaValidation": {
+        "ffprobe": {
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "index": 0,
+              "codec_name": "mp3",
+              "codec_type": "audio",
+              "sample_rate": "44100",
+              "duration": "1.000000"
+            },
+            {
+              "index": 1,
+              "codec_name": "mjpeg",
+              "codec_type": "video",
+              "duration": "1.000000"
+            }
+          ],
+          "format": {
+            "duration": "1.000000",
+            "size": "1067471"
+          }
+        },
+        "sourcePcmHash": "SHA256=ed91c209df3e6e5fbe166dbd05fa2d47767e775332f66d0ad546588dfe8f0caa",
+        "fixedPcmHash": "SHA256=ed91c209df3e6e5fbe166dbd05fa2d47767e775332f66d0ad546588dfe8f0caa",
+        "sourceSeekPcmHash": "SHA256=6f7533d3eff6ecf36a5a520b1e34ac87c8e23d38e41b1b9eca7b4f31df63a66d",
+        "fixedSeekPcmHash": "SHA256=6f7533d3eff6ecf36a5a520b1e34ac87c8e23d38e41b1b9eca7b4f31df63a66d"
+      }
+    },
+    "otherFormatsExistingCode": [
+      {
+        "format": "flac",
+        "sourceSize": 20639,
+        "finalSize": 21316,
+        "sourceRequests": [
+          {
+            "start": 0,
+            "end": 4095
+          }
+        ],
+        "preparationBytes": 4096,
+        "segments": [
+          {
+            "kind": "bytes",
+            "bytes": 4
+          },
+          {
+            "kind": "source",
+            "start": 4,
+            "end": 41
+          },
+          {
+            "kind": "bytes",
+            "bytes": 1
+          },
+          {
+            "kind": "source",
+            "start": 91,
+            "end": 8285
+          },
+          {
+            "kind": "bytes",
+            "bytes": 454
+          },
+          {
+            "kind": "bytes",
+            "bytes": 271
+          },
+          {
+            "kind": "source",
+            "start": 8286,
+            "end": 20638
+          }
+        ],
+        "fixedFixture": {
+          "finalSize": 1069215,
+          "layout": {
+            "paddingBlockBytes": 1047899,
+            "originalAudioStart": 8286,
+            "fixedAudioStart": 1056862
+          },
+          "sourceAudioSha256": "1952e16f6ed8492144887e356586cc741176d5bbace3c317bec1d19b94596e71",
+          "finalAudioSha256": "1952e16f6ed8492144887e356586cc741176d5bbace3c317bec1d19b94596e71",
+          "sourcePcmHash": "SHA256=dd0f318ea31da92d3c138a52176a5c5b5239d9dfde28701e7ef950700817c718",
+          "fixedPcmHash": "SHA256=dd0f318ea31da92d3c138a52176a5c5b5239d9dfde28701e7ef950700817c718"
+        }
+      },
+      {
+        "format": "m4a",
+        "sourceSize": 17336,
+        "finalSize": 21200,
+        "sourceRequests": [
+          {
+            "start": 0,
+            "end": 7
+          },
+          {
+            "start": 28,
+            "end": 35
+          },
+          {
+            "start": 36,
+            "end": 43
+          },
+          {
+            "start": 16394,
+            "end": 16401
+          },
+          {
+            "start": 16394,
+            "end": 17335
+          },
+          {
+            "start": 0,
+            "end": 27
+          }
+        ],
+        "preparationBytes": 1002,
+        "segments": [
+          {
+            "kind": "source",
+            "start": 0,
+            "end": 16393
+          },
+          {
+            "kind": "bytes",
+            "bytes": 8
+          },
+          {
+            "kind": "source",
+            "start": 16402,
+            "end": 17335
+          },
+          {
+            "kind": "bytes",
+            "bytes": 3864
+          }
+        ],
+        "fixedFixture": {
+          "finalSize": 1065912,
+          "layout": {
+            "freeBoxBytes": 1044712,
+            "newMoovBytes": 3864,
+            "mdatStart": 36,
+            "mdatLength": 16358,
+            "mdatPositionUnchanged": true
+          },
+          "sourceAudioSha256": "6b0475f9c7deb78358d98e09b0489c1552f424f9406fef2db08ab17fc8fc6640",
+          "finalAudioSha256": "6b0475f9c7deb78358d98e09b0489c1552f424f9406fef2db08ab17fc8fc6640",
+          "sourcePcmHash": "SHA256=7426c5d28512d913585e8a965be903ff5491f0792949cb716191d01ffb35bc2e",
+          "fixedPcmHash": "SHA256=7426c5d28512d913585e8a965be903ff5491f0792949cb716191d01ffb35bc2e"
+        }
+      }
+    ]
+  },
+  "existingPreparedCacheBudget": {
+    "scope": "Existing on-disk prepared plans only, read-only SQL, no platform calls; historical cache is not a new random sample",
+    "plans": 1915,
+    "formats": {
+      "mp3": 1914,
+      "m4a": 1
+    },
+    "extraBytes": {
+      "min": 5320,
+      "p50": 136275,
+      "p95": 519441,
+      "p99": 612498,
+      "max": 671235
+    },
+    "budgets": [
+      {
+        "bytes": 65536,
+        "fits": 460,
+        "exceeds": 1455,
+        "logicalAddedBytes": 125501440
+      },
+      {
+        "bytes": 262144,
+        "fits": 1342,
+        "exceeds": 573,
+        "logicalAddedBytes": 502005760
+      },
+      {
+        "bytes": 524288,
+        "fits": 1821,
+        "exceeds": 94,
+        "logicalAddedBytes": 1004011520
+      },
+      {
+        "bytes": 1048576,
+        "fits": 1915,
+        "exceeds": 0,
+        "logicalAddedBytes": 2008023040
+      }
+    ]
+  }
+}
