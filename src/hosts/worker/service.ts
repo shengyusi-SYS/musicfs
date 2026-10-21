@@ -4,6 +4,7 @@ import type { PluginChange } from '../../contracts/plugin-changes';
 import { createSources } from '../../core/sources';
 import { createLibrary } from '../../core/library';
 import { createD1Store } from '../../infrastructure/persistence/d1';
+import { sha256 } from '../../infrastructure/sha256';
 import { DEFAULT_PACKAGE_LIMITS } from '../../infrastructure/archives';
 import { createManagementApi } from '../../transport/http';
 import { createDav, type DavOptions, type ReadCredentials } from '../../transport/dav';
@@ -23,7 +24,7 @@ export function createWorkerRuntime(db: D1Database, registrations: RegisteredPlu
   // A shared adaptive plugin algorithm can spend more items on cache hits.
   // Reserve room for source checks and the atomic refresh checkpoint under Free's 50-query ceiling.
   const sources = createSources(store, registry, fetch, Date.now, { cacheQueries: 32, requests: 50 });
-  const library = createLibrary(sources, store, undefined, { execution: 'deferred' });
+  const library = createLibrary(sources, store, undefined, { execution: 'deferred', sha256 });
   return { store, sources, library };
 }
 export type WorkerRuntime = ReturnType<typeof createWorkerRuntime>;

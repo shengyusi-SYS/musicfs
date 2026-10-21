@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import type { SourcePlugin } from '@musicfs/plugin-api';
 import { createLibrary, type LibraryStore, type Snapshot, type SnapshotKey } from '../src/core/library';
 import { createPublishedViews } from '../src/core/library/published-views';
@@ -17,13 +17,14 @@ const ensure = async (): Promise<Snapshot> => { throw new Error('Fixture snapsho
 
 test('4000-file HEAD, GET and Range requests share one published path index', async () => {
   const info = { contentId: 'fixed', size: 8, mediaType: 'audio/wav' };
+  let statCalls = 0;
   const source: SourcePlugin = {
     configuration: { schema: { type: 'object' } }, validateConfig: async (_ctx, value) => ({ ok: true, value }),
     roots: async () => ({ ok: true, value: { items: [{ sourceId: 'root', name: '音乐', directoryRef: 'root' }] } }),
     list: async () => ({ ok: true, value: { items: Array.from({ length: 4000 }, (_, index) => ({
       kind: 'file' as const, entryId: String(index), name: `${String(index).padStart(4, '0')}.wav`, fileRef: String(index), info
     })) } }),
-    stat: async () => ({ ok: true, value: info }),
+    stat: async () => { statCalls++; return { ok: true, value: info }; },
     open: async (_ctx, _file, request) => ({ ok: true, value: { content: info, servedRange: request.range ?? null,
       body: new Blob([request.range ? 'CD' : 'ABCDEFGH']).stream() } })
   };
@@ -53,7 +54,36 @@ test('4000-file HEAD, GET and Range requests share one published path index', as
     const cold = createLibrary(fixture.sources, fixture.store);
     expect(await cold.files.stat('/实例 & #/音乐/3999.wav', signal())).toMatchObject({ kind: 'file' });
     expect(reads).toBe(4); expect(loadedItems).toBe(8002);
+    expect(statCalls).toBe(0);
   } finally { fixture.close(); }
+});
+
+test('prepared ETags reuse weak targets across requests and layout aliases without retaining a Description', async () => {
+  const info = { contentId: 'fixed', size: 8, mediaType: 'audio/wav' };
+  const unused = async (): Promise<never> => { throw new Error('Prepared metadata must not invoke plugin stat/open'); };
+  const source: SourcePlugin = {
+    configuration: { schema: { type: 'object' } }, validateConfig: async (_ctx, value) => ({ ok: true, value }),
+    roots: async () => ({ ok: true, value: { items: [{ sourceId: 'root', name: '音乐', directoryRef: 'root' }] } }),
+    list: async () => ({ ok: true, value: { items: ['a', 'b'].map(id => ({ kind: 'file' as const, entryId: id, name: `${id}.wav`, fileRef: id, info })) } }),
+    stat: unused, open: unused
+  };
+  const fixture = await libraryFixture(source);
+  const hash = spyOn(crypto.subtle, 'digest');
+  try {
+    const { library } = fixture;
+    const entries = await library.files.list('/实例 & #/音乐', signal()); hash.mockClear();
+    const first = await library.files.statMany(entries, signal()); expect(hash).toHaveBeenCalledTimes(2);
+    hash.mockClear();
+    const next = await library.files.statMany(await library.files.list('/实例 & #/音乐', signal()), signal());
+    expect(hash).not.toHaveBeenCalled(); expect(next.get([...next.keys()][0]!)).toEqual(first.get(entries[0]!));
+    const direct = await library.files.stat('/实例 & #/音乐/a.wav', signal());
+    expect(hash).not.toHaveBeenCalled();
+    await library.saveLayout(0, [{ kind: 'source', id: 'alias', name: '另一入口', instanceId: fixture.id, sourceId: 'root' }]);
+    const alias = await library.files.stat('/另一入口/a.wav', signal());
+    expect(alias.path).toBe('/另一入口/a.wav'); expect(alias.etag).toBe(direct.etag); expect(hash).not.toHaveBeenCalled();
+    await fixture.sources.configure(fixture.id, { revision: 2 }, signal());
+    await expect(library.files.stat(entries[0]!, signal())).rejects.toMatchObject({ code: 'stale_call' });
+  } finally { hash.mockRestore(); fixture.close(); }
 });
 
 test('published view changes only after complete publication and failed refresh retains the old index', async () => {

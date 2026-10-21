@@ -6,6 +6,7 @@ import { createExtensions } from '../../core/extensions';
 import { createSources } from '../../core/sources';
 import { createLibrary } from '../../core/library';
 import { openSqlite } from '../../infrastructure/persistence/sqlite';
+import { sha256 } from '../../infrastructure/sha256';
 import { readPackage, DEFAULT_PACKAGE_LIMITS } from '../../infrastructure/archives';
 import { createManagementApi } from '../../transport/http';
 import { createDav, type ReadCredentials } from '../../transport/dav';
@@ -19,7 +20,7 @@ export async function createDesktopService(input: { directory: string; adminToke
   const store = openSqlite(join(input.directory, 'state.sqlite'));
   const host = createDesktopPlugins(join(input.directory, 'plugins'), store);
   const extensions = createExtensions(store, host.prepare);
-  const sources = createSources(store, host.registry); const library = createLibrary(sources, store, undefined, { execution: 'deferred' });
+  const sources = createSources(store, host.registry); const library = createLibrary(sources, store, undefined, { execution: 'deferred', sha256 });
   const changes = createDesktopChanges({ store, plugins: host, extensions });
   const background = createDesktopRunner(async signal => await changes.stepNext(signal) || Boolean(await library.refreshes.stepNext(signal)), store.nextBackgroundWorkAt);
   const app = new Hono();

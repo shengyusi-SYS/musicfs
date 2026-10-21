@@ -5,6 +5,7 @@ import { readPackage } from '../src/infrastructure/archives';
 import { workerModuleType } from '../src/hosts/worker/publisher';
 import { createReleaseIdentity, type ReleaseIdentity } from './helpers/release-identity';
 import { writeBundleLicenses } from './helpers/bundle-licenses';
+import { workerCrypto } from './helpers/worker-crypto';
 
 export type WorkerBundle = {
   formatVersion: 1; mainModule: string; entrypoint: string; identity: ReleaseIdentity;
@@ -23,7 +24,7 @@ export async function buildWorker(input: { directory?: string; pluginArchives?: 
   await mkdir(directory, { recursive: true });
   const entrypoint = input.entrypoint ?? 'src/worker.ts';
   const build = await Bun.build({ entrypoints: [entrypoint], target: 'browser', format: 'esm', metafile: true,
-    outdir: directory, naming: 'core.mjs' });
+    outdir: directory, naming: 'core.mjs', plugins: [workerCrypto] });
   if (!build.success) throw new AggregateError(build.logs, 'Worker core build failed');
   const bundle: WorkerBundle = { formatVersion: 1, mainModule: 'worker.mjs', entrypoint,
     identity: await createReleaseIdentity(prepared, await Bun.file('dist/web/index.html').exists() ? 'dist/web' : undefined),

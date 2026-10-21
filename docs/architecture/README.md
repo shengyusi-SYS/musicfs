@@ -138,13 +138,13 @@ tests/                       # 最小插件、协议样本、接口/集成与真
 
 ## 音频与 DAV
 
-目录条目提供稳定出现身份，实际文件另有内容身份；同曲重复位置不因音频去重丢失。列表可携带 `Entry.info`，其内容身份、大小和类型必须完整且对应确切字节，不是大小提示或临时地址；未知值不能伪造为 0。旧插件可省略 info 并保留实时 stat，不新增核心元数据准备阶段。单文件 HEAD/GET 的 stat 仍获取当前实际描述，GET 随后继续核对期望内容身份和真实字节。
+目录条目提供稳定出现身份，实际文件另有内容身份；同曲重复位置不因音频去重丢失。列表可携带 `Entry.info`，其内容身份、大小和类型必须完整且对应确切字节，不是大小提示或临时地址；未知值不能伪造为 0。旧插件可省略 info 并保留实时 stat，不新增核心元数据准备阶段。单文件HEAD/GET的stat与批量属性共用完整已发布info和来源戳守卫；缺info才调用插件stat。GET随后继续核对期望内容身份和真实字节。
 
 插件负责来源定位、必要请求头、临时 URL 续期和范围取流。核心检验内容身份、总长度和实际返回范围，使用 Web Streams 的背压与取消，不缓冲完整歌曲。上游返回完整文件时不得伪装部分响应；DAV 库必须能接收该事实或返回明确结果。
 
 音乐资料补全归来源插件，是可选能力。透传、自带补标签和选用共用工具的插件使用同一个最终文件 Interface，核心不插入强制标签流程，不新增歌曲模型或格式白名单。工具依赖只进入选择它的插件包；QQ、网易云已接入，模块边界见[可选补标签设计](audio-tags.md)，当前证据见[实现记录](../verification/metadata-implementation.md)。
 
-Nephele 的固定版本 PoC 已执行：Bun 基础读取可用，本地 Worker 的 Node 桥接完整取流失败。按原备选收敛为一套共用 Fetch 只读 DAV，复用 xmldom 和 range-parser，不复制完整 DAV/文件系统。标准属性、HTTP 输入和错误映射留在 Adapter；PROPFIND 的子项只在实际请求 etag、大小、类型或 allprop 时懒调用一次 `statMany`，名称/类型标记/日期和 propname 直接使用目录视图。批量复用本次已列对象的私有解析目标和快照 info，缺 info 的旧条目才逐项回退实时 stat；全部描述完成后再核对各来源代际，变化的来源整组返回错误。父项仍先 stat；单文件 HEAD/GET 不走该批量捷径。本次不声称已解决所有大目录云端预算。Worker 使用官方 FixedLengthStream，Bun 可采用合法 chunked framing。具体方法范围、候选证据及取舍见 [ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)。来源插件不导入任何 DAV 框架。
+Nephele 的固定版本 PoC 已执行：Bun 基础读取可用，本地 Worker 的 Node 桥接完整取流失败。按原备选收敛为一套共用 Fetch 只读 DAV，复用 xmldom 和 range-parser，不复制完整 DAV/文件系统。标准属性、HTTP 输入和错误映射留在 Adapter；PROPFIND 的子项只在实际请求 etag、大小、类型或 allprop 时懒调用一次 `statMany`，名称/类型标记/日期和 propname 直接使用目录视图。批量复用本次已列对象的私有解析目标和快照 info，缺 info 的旧条目才逐项回退实时 stat；全部描述完成后再核对各来源代际，变化的来源整组返回错误。父项仍先stat；单文件HEAD/GET也复用已发布完整info，避免再加载同一标签计划。本次不声称已解决所有大目录云端预算。Worker 使用官方 FixedLengthStream，Bun 可采用合法 chunked framing。具体方法范围、候选证据及取舍见 [ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)。来源插件不导入任何 DAV 框架。
 
 ## 第三方机制与自有领域代码
 

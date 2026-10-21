@@ -44,7 +44,7 @@ test('listed entries retain resolved targets without rereading parent directorie
   await expect(library.files.stat(entry, signal())).rejects.toMatchObject({ code: 'stale_call' });
 });
 
-test('prepared metadata batches use two source checks regardless of file count while single stat remains live', async () => {
+test('prepared metadata batches and single-file requests reuse published info with source checks', async () => {
   let count = 1; let metadataCalls = 0;
   const source = plugin({ list: async () => ({ ok: true, value: { items: Array.from({ length: count }, (_, index) => ({
     kind: 'file' as const, entryId: `entry-${index}`, name: `${index}.wav`, fileRef: `file-${index}`,
@@ -63,8 +63,8 @@ test('prepared metadata batches use two source checks regardless of file count w
       handle: { content: { contentId: `prepared-${index}`, size: index + 10, mediaType: 'audio/wav' } } });
   }
   const [entry] = await library.files.list('/实例 & #/来源', signal());
-  expect(await library.files.stat(entry!, signal())).toMatchObject({ handle: { content: { contentId: 'live', size: 8 } } });
-  expect(metadataCalls).toBe(1);
+  expect(await library.files.stat(entry!, signal())).toMatchObject({ handle: { content: { contentId: 'prepared-0', size: 10 } } });
+  expect(metadataCalls).toBe(0);
 });
 
 test('a source change during batch description rejects every entry from that source', async () => {
@@ -88,7 +88,7 @@ test('a source change during batch description rejects every entry from that sou
   await expect(library.files.stat(entries[0]!, signal())).rejects.toMatchObject({ code: 'stale_call' });
 });
 
-test('prepared and live metadata use the same validator despite object property order', async () => {
+test('prepared single and batch metadata use the same validator despite object property order', async () => {
   const { library } = await setup(plugin({ list: async () => ({ ok: true, value: { items: [{ kind: 'file', entryId: 'one', name: '音频.wav',
     fileRef: 'audio', info: { mediaType: 'audio/wav', size: 8, contentId: 'fixed' } }] } }) }));
   const entries = await library.files.list('/实例 & #/来源', signal()); const entry = entries[0]!;
@@ -141,6 +141,19 @@ test('metadata batches preserve live per-file stat for plugins without prepared 
   const values = await library.files.statMany(entries, signal());
   expect(calls).toEqual(['one', 'two']);
   for (const entry of entries) expect(values.get(entry)).toMatchObject({ kind: 'file', handle: { content: { size: 8, mediaType: 'audio/wav' } } });
+});
+
+test('single-file metadata for legacy plugins stays live and notices changed representations', async () => {
+  let calls = 0; let version = 1;
+  const { library } = await setup(plugin({ stat: async () => {
+    calls++; return { ok: true, value: { contentId: `bytes-${version}`, size: version + 7, mediaType: 'audio/wav' } };
+  } }));
+  const before = await library.files.stat(filePath, signal());
+  expect((await library.files.stat(filePath, signal())).etag).toBe(before.etag);
+  version = 2;
+  const after = await library.files.stat(filePath, signal());
+  expect(after).toMatchObject({ handle: { content: { contentId: 'bytes-2', size: 9 } } });
+  expect(after.etag).not.toBe(before.etag); expect(calls).toBe(3);
 });
 
 test('invalid prepared info on a later page cannot replace the complete previous snapshot', async () => {
@@ -232,7 +245,9 @@ test('range bytes are exact and an upstream full response is cancelled and rejec
   expect(cancelled).toBe(true);
 });
 test('a changed representation is cancelled rather than returned under old metadata', async () => {
-  const source = plugin(); const { library } = await setup(source);
+  const source = plugin({ list: async () => ({ ok: true, value: { items: [{ kind: 'file', entryId: 'one', name: '音频.wav', fileRef: 'audio',
+    info: { contentId: 'fixed', size: 8, mediaType: 'audio/wav' } }] } }) });
+  const { library } = await setup(source);
   const file = await library.files.stat(filePath, signal()); if (file.kind !== 'file') throw new Error('Missing fixture');
   let cancelled = false;
   source.open = async () => ({ ok: true, value: { content: { ...file.handle.content, contentId: 'different-bytes' }, servedRange: null,

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Miniflare, Log, LogLevel } from 'miniflare';
 import { buildNetease } from './build-netease';
+import { workerCrypto } from './helpers/worker-crypto';
 import { encrypt } from '../plugins/netease/generated-upstream.mjs';
 import type { RefreshView } from '../src/contracts/refreshes';
 import { cover } from '../packages/audio-tags/test-fixtures';
@@ -20,7 +21,7 @@ let requests = 0;
 const calls: Record<string, number> = {};
 await Bun.write(join(root, 'netease.mjs'), Bun.file('dist/netease/org.musicfs.netease/index.mjs'));
 const build = await Bun.build({ entrypoints: ['tests/probes/worker-netease-refresh.ts'], target: 'browser', format: 'esm', outdir: root, naming: 'worker.mjs',
-  plugins: [{ name: 'packed-netease', setup(builder) { builder.onResolve({ filter: /^musicfs-netease-artifact$/ }, () => ({ path: './netease.mjs', external: true })); } }] });
+  plugins: [workerCrypto, { name: 'packed-netease', setup(builder) { builder.onResolve({ filter: /^musicfs-netease-artifact$/ }, () => ({ path: './netease.mjs', external: true })); } }] });
 if (!build.success) throw new AggregateError(build.logs, 'Offline Worker refresh build failed');
 // The packed artifact is an explicit module; no plugin or platform code is downloaded.
 const mf = new Miniflare({ modulesRoot: root, modules: [{ type: 'ESModule', path: join(root, 'worker.mjs') }, { type: 'ESModule', path: join(root, 'netease.mjs') }],

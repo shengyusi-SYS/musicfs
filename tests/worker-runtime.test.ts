@@ -8,11 +8,13 @@ import { Log, LogLevel, Miniflare } from 'miniflare';
 import { createD1Store } from '../src/infrastructure/persistence/d1';
 import type { RefreshRecord } from '../src/core/library/refresh-types';
 import type { SnapshotKey } from '../src/core/library/types';
+import { workerCrypto } from '../scripts/helpers/worker-crypto';
 
 test('the production Worker factory reuses completed directory views across HTTP while request context stays current', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-worker-runtime-'));
-  const build = await Bun.build({ entrypoints: ['tests/probes/worker-runtime.ts'], target: 'browser', format: 'esm', outdir: directory, naming: 'worker.mjs' });
+  const build = await Bun.build({ entrypoints: ['tests/probes/worker-runtime.ts'], target: 'browser', format: 'esm', outdir: directory, naming: 'worker.mjs', plugins: [workerCrypto] });
   if (!build.success) throw new AggregateError(build.logs, 'Worker runtime fixture build failed');
+  expect(await build.outputs[0]!.text()).toMatch(/from ["']node:crypto["']/);
   const options = { modulesRoot: directory, modules: [{ type: 'ESModule' as const, path: join(directory, 'worker.mjs') }],
     compatibilityDate: '2026-07-30', compatibilityFlags: ['nodejs_compat'],
     d1Databases: { DB: 'worker-runtime-tests' }, d1Persist: join(directory, 'd1'), log: new Log(LogLevel.ERROR) };
@@ -44,10 +46,12 @@ test('the production Worker factory reuses completed directory views across HTTP
     };
     await seed({ kind: 'roots', ref: '' }, [{ sourceId: 'music', name: '音乐', directoryRef: 'music' }]);
     await seed({ kind: 'directory', ref: 'music' }, Array.from({ length: 4000 }, (_, index) => ({ kind: 'file' as const, entryId: String(index),
-      name: `${String(index).padStart(4, '0')}.wav`, fileRef: String(index), info: { contentId: 'fixture-fixed', size: 8, mediaType: 'audio/wav' } })));
+      name: `${String(index).padStart(4, '0')}.wav`, fileRef: `曲目:${index}`, info: { contentId: 'fixture-fixed', size: 8, mediaType: 'audio/wav' } })));
 
     const first = await mf.dispatchFetch(file(0), { method: 'HEAD', headers: auth });
     expect(first.status).toBe(200); expect(first.headers.get('Content-Length')).toBe('8');
+    const expected = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['instance', '曲目:0', 'fixture-fixed', 8, 'audio/wav'])));
+    expect(first.headers.get('ETag')).toBe('"' + Array.from(new Uint8Array(expected), byte => byte.toString(16).padStart(2, '0')).join('') + '"');
     expect(first.headers.get('X-Probe-Snapshot-Reads')).toBe('2'); expect(first.headers.get('X-Probe-Snapshot-Rows')).toBe('4001');
     for (const index of [100, 999, 2000, 3999]) {
       const next = await mf.dispatchFetch(file(index), { method: 'HEAD', headers: auth });

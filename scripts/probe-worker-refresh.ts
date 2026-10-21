@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { Log, LogLevel, Miniflare } from 'miniflare';
 import { parseArgs } from 'node:util';
 import { profileWorker } from './helpers/worker-profile';
+import { workerCrypto } from './helpers/worker-crypto';
 import type { RefreshView } from '../src/contracts/refreshes';
 
 type ProbeResponse = Awaited<ReturnType<Miniflare['dispatchFetch']>>;
@@ -21,10 +22,10 @@ let mf: Miniflare | undefined;
 const measurements: { path: string; sql: number; pages: number; roots: number; subrequests: number; backgroundTasks: number }[] = [];
 try {
   const build = await Bun.build({ entrypoints: ['tests/probes/worker-refresh.ts'], target: 'browser', format: 'esm',
-    outdir: directory, naming: 'worker.mjs' });
+    outdir: directory, naming: 'worker.mjs', plugins: [workerCrypto] });
   if (!build.success) throw new AggregateError(build.logs, 'Refresh Worker probe build failed');
   const options = { modulesRoot: directory, modules: [{ type: 'ESModule' as const, path: resolve(directory, 'worker.mjs') }],
-    compatibilityDate: '2026-07-30', ...(values['cpu-profile'] ? { inspectorPort: 0 } : {}),
+    compatibilityDate: '2026-07-30', compatibilityFlags: ['nodejs_compat'], ...(values['cpu-profile'] ? { inspectorPort: 0 } : {}),
     d1Databases: { DB: 'musicfs-refresh-probe' }, d1Persist: join(directory, 'd1'),
     bindings: { PAGE_URL: new URL('/page', upstream.url).href }, log: new Log(LogLevel.ERROR) };
   mf = new Miniflare(options);

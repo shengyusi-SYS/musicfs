@@ -49,8 +49,9 @@ function unwrap<T>(outcome: Outcome<T>): T {
   if (!outcome.ok) throw new LibraryError('source_failed', outcome.error.message, outcome.error);
   return outcome.value;
 }
-async function digest(value: unknown): Promise<string> {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
+async function webSha256(input: Uint8Array): Promise<string> {
+  // The caller creates these bytes with TextEncoder, never shared memory.
+  const bytes = await crypto.subtle.digest('SHA-256', input as Uint8Array<ArrayBuffer>);
   return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
@@ -96,7 +97,9 @@ type MetadataGroup = { stamp: SourceStamp; entries: [ViewEntry, Resolved][] };
 
 export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore,
   budgets: { pages: number; entries: number; directories?: number } = { pages: 10_000, entries: 100_000 },
-  options: { execution?: 'inline' | 'deferred' } = {}) {
+  options: { execution?: 'inline' | 'deferred'; sha256?: (bytes: Uint8Array) => string | Promise<string> } = {}) {
+  const hash = options.sha256 ?? webSha256;
+  const digest = (value: unknown) => hash(new TextEncoder().encode(JSON.stringify(value)));
   const refreshes = createRefreshes(sources, store, budgets);
   async function drain(initial: RefreshView, signal: AbortSignal): Promise<RefreshView> {
     let progress = initial;
@@ -216,11 +219,18 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     if (!cached || !sameStamp(cached.stamp, stamp) || !await sources.current(stamp)) return null;
     return { completedAt: cached.completedAt, statistics: cached.statistics ?? null, error: cached.error };
   }
+  const preparedEtags = new WeakMap<Extract<Target, { kind: 'file' }>, string>();
   async function describe(resolved: Resolved, content?: FileInfo): Promise<Description> {
     const { target, ...base } = resolved;
     if (target.kind !== 'file') return { ...base, kind: 'directory', etag: await digest([base.path, target]) };
     if (!content) throw new LibraryError('invalid_source', 'Source returned no file metadata');
-    return { ...base, modifiedAt: content.modifiedAt ?? base.modifiedAt, kind: 'file', etag: await digest([target.stamp.id, target.ref, content.contentId, content.size, content.mediaType]),
+    const prepared = target.info?.contentId === content.contentId && target.info.size === content.size && target.info.mediaType === content.mediaType;
+    let etag = prepared ? preparedEtags.get(target) : undefined;
+    if (etag === undefined) {
+      etag = await digest([target.stamp.id, target.ref, content.contentId, content.size, content.mediaType]);
+      if (prepared) preparedEtags.set(target, etag);
+    }
+    return { ...base, modifiedAt: content.modifiedAt ?? base.modifiedAt, kind: 'file', etag,
       handle: { stamp: target.stamp, fileRef: target.ref, content } };
   }
   const metadataError = (error: unknown) => error instanceof Error ? error : new Error('File metadata is unavailable');
@@ -235,9 +245,13 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
         throw new LibraryError('stale_call', 'Source changed before metadata request');
       }
       if (target.kind !== 'file') return describe(resolved);
-      const content = unwrap(await sources.stat(target.stamp.id, target.ref, signal)); assertInfo(content);
+      let content = target.info;
+      if (content === undefined) {
+        content = unwrap(await sources.stat(target.stamp.id, target.ref, signal)); assertInfo(content);
+      }
+      const description = await describe(resolved, content);
       if (!await sources.current(target.stamp)) throw new LibraryError('stale_call', 'Source changed during metadata request');
-      return describe(resolved, content);
+      signal.throwIfAborted(); return description;
     },
     async statMany(entries, signal) {
       signal.throwIfAborted();

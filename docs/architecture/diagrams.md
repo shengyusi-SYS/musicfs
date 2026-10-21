@@ -185,11 +185,17 @@ sequenceDiagram
   opt 单文件 HEAD / GET
     C->>D: HEAD / GET 文件
     D->>L: stat 路径
-    L->>S: 实时 stat，不使用批量快照捷径
-    S->>P: 获取当前文件描述
-    P-->>S: 内容身份、大小和类型
-    S-->>L: 当前文件描述
-    L-->>D: 实时描述
+    L->>S: 检查来源戳
+    alt 已发布文件有完整 info
+      L->>L: 复用描述与该精确表示的 ETag
+    else 旧插件缺少 info
+      L->>S: 实时 stat
+      S->>P: 获取当前文件描述
+      P-->>S: 内容身份、大小和类型
+      S-->>L: 当前文件描述
+    end
+    L->>S: 描述完成后再核对来源戳
+    L-->>D: 文件描述
     Note over D,L: HEAD 返回描述；GET 继续 open 与字节核验
   end
 ```
