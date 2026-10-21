@@ -55,7 +55,13 @@ export async function createMountManager(options: {
   const serialize = <T>(action: () => Promise<T>): Promise<T> => {
     const result = pending.then(action); pending = result.then(() => {}, () => {}); return result;
   };
-  const persist = () => writePrivateJson(statePath, records);
+  let savedRecords = JSON.stringify(records);
+  const persist = async () => {
+    const next = JSON.stringify(records);
+    if (next === savedRecords) return;
+    await writePrivateJson(statePath, records);
+    savedRecords = next;
+  };
   const view = (record: RecordEntry): MountView => structuredClone(record.view);
   const remoteName = (record: RecordEntry) => `musicfs_${record.view.id.replaceAll('-', '')}`;
   const cachePath = (record: RecordEntry, kind: 'vfs' | 'vfsMeta') => join(options.directory, 'cache', kind, remoteName(record));

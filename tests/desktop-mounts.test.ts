@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, utimes } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createMountManager, MountError } from '../src/hosts/desktop/mounts';
@@ -34,9 +34,33 @@ function fakeControl() {
     async close() { closed = true; }
   };
   return { control, remotes, calls, mountCalls: () => mountCalls, closed: () => closed,
+    clearMounts() { mounted.clear(); },
     setStatistics(value: unknown) { statistics = value; },
     setBusy(value: boolean) { busy = value; }, setListFailure(value: boolean) { listFailure = value; } };
 }
+
+test('unchanged and recovered mount status leaves the saved file untouched; a disappeared mount is persisted', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-status-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const options = { directory: join(directory, 'state'), binary: 'unused', localConnection,
+    control: fake.control, checkDependencies: async () => {} };
+  const manager = await createMountManager(options);
+  cleanup.push(() => manager.close());
+  const mount = await manager.mount({ mountPoint: join(directory, 'music'), source: { kind: 'local' } });
+  const statePath = join(options.directory, 'mounts.json');
+  const previousTime = new Date('2000-01-01T00:00:00Z');
+  await utimes(statePath, previousTime, previousTime);
+  const recovered = await createMountManager(options);
+  for (const current of [manager, manager, recovered]) {
+    expect((await current.list())[0]?.state).toBe('mounted');
+    expect((await stat(statePath)).mtimeMs).toBe(previousTime.getTime());
+  }
+  fake.clearMounts();
+  expect((await recovered.list())[0]).toMatchObject({ id: mount.id, state: 'stopped' });
+  const [saved] = JSON.parse(await readFile(statePath, 'utf8'));
+  expect(saved).toMatchObject({ mayBeMounted: false, view: { id: mount.id, state: 'stopped' } });
+});
 
 test('cache status separates configured and native modes, samples only the selected VFS, and stays inactive without rclone', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-cache-status-'));

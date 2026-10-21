@@ -98,7 +98,11 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
     if (value.state === 'ready') message.success('挂载组件已就绪，可继续挂载');
   }, onError: () => { void prerequisites.refetch(); } });
   const mounts = useQuery({ queryKey: ['mounts'], queryFn: ({ signal }) => api.mounts(signal),
-    refetchInterval: query => query.state.data?.some(item => ['starting', 'mounted', 'unmounting'].includes(item.state)) ? 3000 : false });
+    refetchInterval: query => {
+      const items = query.state.data ?? [];
+      if (items.some(item => ['starting', 'unmounting'].includes(item.state))) return 3000;
+      return items.some(item => item.state === 'mounted') ? 15000 : false;
+    } });
   const mount = useMutation({ mutationFn: (input: MountInput) => api.mount(input), onSuccess: async result => {
     await client.invalidateQueries({ queryKey: ['mounts'] });
     if (result.state !== 'mounted') { setMountError(result.error?.message ?? '挂载尚未就绪，请检查状态后重试。'); return; }
