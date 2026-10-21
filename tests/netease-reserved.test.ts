@@ -54,6 +54,7 @@ function fixture(format: Format) {
       } },
     state: { accountId: '42' }, requireSession() {},
     async call(endpoint: unknown, params: Record<string, Json> = {}) {
+      if (endpoint === endpoints.daily) { hit('daily'); return { data: { dailySongs: playlist.map(song) } }; }
       if (endpoint === endpoints.userPlaylists) { hit('user'); return { playlist: [{ id: 900, userId: 42, specialType: 5, name: '喜欢的音乐' }], more: false }; }
       if (endpoint === endpoints.playlist) { hit('playlist'); return { playlist: { trackIds: playlist.map(id => ({ id })), trackCount: playlist.length, tracks: [] } }; }
       if (endpoint === endpoints.songs) { hit('details'); return { songs: String(params.ids).split(',').map(id => song(Number(id))) }; }
@@ -110,6 +111,14 @@ test('permanent metadata policy also retains unopened reservation identities wit
   expect(reservations).toHaveLength(2); expect(reservations.every(([, value]) => value.expiresAt === undefined)).toBe(true);
   expect((await list(f.client, 'liked')).items).toEqual(first);
   expect(f.reservations).toBe(0);
+});
+
+test('NetEase daily recommendations and a playlist share equal music facts despite SDK completeness markers', async () => {
+  const f = fixture('mp3'); const liked = (await list(f.reopen(), 'liked')).items.map(file);
+  const daily = (await list(f.reopen(), 'daily')).items.map(file);
+  expect(daily.map(item => item.fileRef)).toEqual(liked.map(item => item.fileRef));
+  expect(daily.map(item => item.info)).toEqual(liked.map(item => item.info));
+  expect(f.calls.lyrics ?? 0).toBe(0); expect(f.calls.range ?? 0).toBe(0);
 });
 
 for (const format of ['mp3', 'flac', 'm4a'] as const) {

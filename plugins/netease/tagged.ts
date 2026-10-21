@@ -74,7 +74,11 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
 }
 
 export type PreparedFile = { fileRef: string; info: FileInfo };
-export const songKey = (source: MediaReference, sourceInfo: FileInfo, song: Record<string, unknown>) => hash([source, sourceInfo, song]).then(value => `ready:${value}`);
+export const songKey = (source: MediaReference, sourceInfo: FileInfo, song: Record<string, unknown>) => {
+  // SDK completeness bookkeeping does not change the recording's exported tags.
+  const { richDetail: _richDetail, ...facts } = song;
+  return hash([source, sourceInfo, facts]).then(value => `ready:${value}`);
+};
 export const descriptorKey = (key: string) => key.replace(/^ready:/, 'tag-seed:');
 export const reservationKey = (key: string) => key.replace(/^ready:/, 'reservation:');
 export type ReservedGeneration = { id: string; modifiedAt: string };
