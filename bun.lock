@@ -19,7 +19,9 @@
         "cloudflare": "7.3.0",
         "dayjs": "1.11.23",
         "env-paths": "4.0.0",
+        "fast-deep-equal": "3.1.3",
         "hono": "4.13.13",
+        "lru-cache": "11.5.3",
         "open": "11.0.4",
         "proper-lockfile": "4.1.2",
         "range-parser": "1.3.0",
@@ -85,6 +87,7 @@
       "dependencies": {
         "@musicfs/audio-tags": "workspace:*",
         "@yakult-green-tea/qq-music-api": "3.3.3",
+        "p-limit": "7.3.3",
         "zod": "4.6.7",
       },
       "devDependencies": {
@@ -759,6 +762,8 @@
     "locate-path": ["locate-path@5.0.0", "", { "dependencies": { "p-locate": "^4.1.0" } }, "sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g=="],
 
     "lodash.get": ["lodash.get@4.4.2", "", {}, "sha512-z+Uw/vLuy6gQe8cfaFWD7p0wVv8fJl3mbzXh33RS+0oW2wvUqiRXiQ69gLWSLpgB5/6sU+r6BlQR0MBILadqTQ=="],
+
+    "lru-cache": ["lru-cache@11.5.3", "", {}, "sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg=="],
 
     "markdown-to-jsx": ["markdown-to-jsx@9.10.3", "", { "peerDependencies": { "react": ">= 16.0.0", "react-native": "*", "solid-js": ">=1.0.0", "vue": ">=3.0.0" }, "optionalPeers": ["react", "react-native", "solid-js", "vue"] }, "sha512-J5/NCmNYQ0ExsnThzvF3F1fSzNYLgROcW2diUqRqoIoiyhoy8DSI06jLuMYk0c86SQd/FiVYJrV6tIgci9S2tQ=="],
 

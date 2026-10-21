@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@musicfs/audio-tags": "workspace:*",
     "@yakult-green-tea/qq-music-api": "3.3.3",
-    "zod": "4.6.7",
-    "@musicfs/audio-tags": "workspace:*"
+    "p-limit": "7.3.3",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@musicfs/plugin-api": "workspace:*",
