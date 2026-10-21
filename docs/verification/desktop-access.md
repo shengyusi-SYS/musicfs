@@ -21,8 +21,10 @@ Windows VM 192.0.2.74 的 SSH 本次返回 No route to host，未调用 Windows 
 
 Worker 使用依赖的原生 scrypt 条件导出并在本地 workerd 运行；免费版真实计费 CPU 未测量。当前仅提供离线 Worker 归档，没有升级现有云端。音乐库 schema10、公开插件 API0.1.9 和两个平台插件版本保持；Worker 增加认证迁移 0011.sql。
 
-最终二进制与归档核对在发行后补记于下节，不复跑历史平台矩阵。
+最终二进制使用独立临时数据核对，不复跑历史平台矩阵。
 
 ## 正式产物
 
-待本轮集中构建完成后记录。
+Linux、Windows 桌面、含三个示例插件的离线 Worker 与作者包均从干净提交 `bb8f6e1` 构建，版本 `0.1.0-dev.14`。Linux 正式二进制已走通后台分离、重复启动复用、ticket 兑换、Cookie 访问桌面偏好、退出后旧 Cookie 401、插件安装与目录/DAV 读取，并正常退出；没有在此次冒烟注册系统自启或进行 FUSE 挂载。
+
+最终页面确认 dev.14、默认五项偏好和手动开启 LAN 的设置；截图位于 `dist/dev14-settings.png`。版本清单与校验和见[发行页](../release.md)。
