@@ -4,15 +4,38 @@ import { AudioTagError, type PrepareOptions, type ReadRange } from './types';
 /** Preparation-local header/tail windows. Open streams keep their original exact reader. */
 export function bufferedRanges(options: PrepareOptions): ReadRange {
   const windows: { start: number; end: number; bytes: Uint8Array }[] = [];
+  let initial: Promise<void> | undefined;
+  const remember = (range: ByteRange, bytes: Uint8Array) => {
+    const window = { ...range, bytes };
+    if (bytes.length <= 65_536) { windows.push(window); if (windows.length > 2) windows.shift(); }
+    return window;
+  };
+  async function readEnds() {
+    const last = options.sourceInfo.size - 1;
+    const ranges = [{ start: 0, end: Math.min(last, 4095) }, { start: Math.max(0, last - 4095), end: last }];
+    // Small files need only one ordinary read, rather than overlapping multipart parts.
+    if (ranges[0]!.end + 1 >= ranges[1]!.start) {
+      const range = { start: 0, end: last };
+      remember(range, await readBytes(options, range.start, range.end)); return;
+    }
+    const results = await options.readRange.readMany!(ranges, options.signal);
+    try {
+      if (results.length !== ranges.length) throw new AudioTagError('temporary', 'The source returned an incomplete set of audio metadata ranges.');
+      for (const [index, range] of ranges.entries()) remember(range, await resultBytes(options, range, results[index]!));
+    } catch (error) {
+      await Promise.all(results.map(result => result.body.cancel().catch(() => {})));
+      throw error;
+    }
+  }
   return async (range, signal) => {
     signal.throwIfAborted();
+    if (options.readRange.readMany && (options.format === 'mp3' || options.format === 'ape')) await (initial ??= readEnds());
     let window = windows.find(value => value.start <= range.start && value.end >= range.end);
     if (!window) {
       // MP4 boxes declare exact boundaries; never prefetch through an mdat payload.
       const start = options.format === 'm4a' ? range.start : Math.floor(range.start / 4096) * 4096;
       const end = options.format === 'm4a' ? range.end : Math.min(options.sourceInfo.size - 1, Math.max(range.end, start + 4095));
-      window = { start, end, bytes: await readBytes(options, start, end) };
-      if (window.bytes.length <= 65_536) { windows.push(window); if (windows.length > 2) windows.shift(); }
+      window = remember({ start, end }, await readBytes(options, start, end));
     }
     signal.throwIfAborted();
     return { content: options.sourceInfo, servedRange: range,
@@ -35,6 +58,10 @@ export async function readBytes(options: PrepareOptions, start: number, end: num
   }
   const range = { start, end };
   const result = await options.readRange(range, options.signal);
+  return resultBytes(options, range, result);
+}
+
+async function resultBytes(options: PrepareOptions, range: ByteRange, result: ReadResult): Promise<Uint8Array> {
   await verifyRead(result, options.sourceInfo, range);
   const reader = result.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -48,10 +75,10 @@ export async function readBytes(options: PrepareOptions, start: number, end: num
       options.signal.throwIfAborted();
       if (part.done) break;
       length += part.value.length;
-      if (length > end - start + 1) throw new AudioTagError('content_changed', 'The source returned bytes outside the requested range.');
+      if (length > range.end - range.start + 1) throw new AudioTagError('content_changed', 'The source returned bytes outside the requested range.');
       chunks.push(part.value);
     }
-    if (length !== end - start + 1) throw new AudioTagError('temporary', 'The source audio metadata read ended early.');
+    if (length !== range.end - range.start + 1) throw new AudioTagError('temporary', 'The source audio metadata read ended early.');
     const output = new Uint8Array(length);
     let offset = 0;
     for (const chunk of chunks) { output.set(chunk, offset); offset += chunk.length; }

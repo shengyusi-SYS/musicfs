@@ -12,7 +12,10 @@ export type AudioTags = {
   cover?: { mimeType: string; data: Uint8Array; description?: string };
   lyrics?: { original?: string; translation?: string; romanization?: string };
 };
-export type ReadRange = (range: ByteRange, signal: AbortSignal) => Promise<ReadResult>;
+export type ReadRange = ((range: ByteRange, signal: AbortSignal) => Promise<ReadResult>) & {
+  /** Optional preparation optimization. Results correspond to the requested closed ranges in order. */
+  readMany?: (ranges: readonly ByteRange[], signal: AbortSignal) => Promise<ReadResult[]>;
+};
 export type TagSegment =
   | { kind: 'bytes'; base64: string }
   | { kind: 'source'; start: number; end: number };

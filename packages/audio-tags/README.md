@@ -10,6 +10,8 @@ const result = await open(plan, readRange, requestedRange, signal);
 
 `readRange(range, signal)` returns a normal plugin `ReadResult` for the original source. Ranges are inclusive. Its `content` must match the supplied `sourceInfo`; its `servedRange` and stream must contain exactly the requested bytes. The callback must use the provided cancellation signal. Plans contain source identity, final `FileInfo`, inline base64 tag segments and original source intervals. They never contain credentials or temporary media URLs.
 
+An optional `readRange.readMany(ranges, signal)` can return matching results in input order. MP3/APE preparation then fetches head/tail 4 KiB windows together; overlapping windows use a single ordinary read. The source adapter owns transport batching and unsupported-server fallback. FLAC/M4A preparation and `open` do not prefetch unrelated tails. The same identity/range/length checks apply; the callback is optional and does not change the final plan.
+
 `prepare` reads the source metadata needed for that format. `open` maps the requested range of the final file onto the plan and streams original audio; it does not download the whole song. Changing the source identity or generated metadata changes the final content identity. The first original-source response is checked before returning the tagged result; later stream failure or source change terminates that read. Cancelling the response aborts and cancels its current original-source read.
 
 ## Fields
