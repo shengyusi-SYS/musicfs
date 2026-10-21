@@ -1,28 +1,61 @@
 # MusicFS
 
-通过可安装的数据源插件，把音乐服务或音频来源呈现为只读音乐目录，以 WebDAV 接入播放器和 OpenList，并由桌面内置 rclone 挂载。Windows、Linux、macOS 桌面与 Cloudflare Worker 共用核心和 WebUI，独立部署。
+**让在线音乐，像本地文件一样使用。**
 
-Windows 最新更新为 `0.1.0-dev.11` 开发预览，增加直接 DAV 的共享片段缓存，并保留 App 挂载自身缓存；其他目标按各自已生成版本交付。现行代码包含分层缓存、可选目录定时更新，以及网易云 MP3/FLAC/M4A 的按需补标签：刷新清单后即可挂载，读取时只准备所选歌曲。实际版本、升级方式和限制见[交付说明](docs/release.md)，文件按 `dist/releases/<版本号>/` 保存。来源认证、分类和音质归插件，核心管理插件、实例、布局和文件访问。
+MusicFS 把不同音乐来源的歌单和歌曲整理成只读文件夹。你可以把它挂成电脑上的磁盘，交给常用的本地播放器；也可以通过 WebDAV，连接手机播放器、OpenList 或自己的音乐库。
 
-| 阅读目的 | 入口 |
-|---|---|
-| 选择当前归档、启动与部署 | [交付物与使用入口](docs/release.md) |
-| 接续 Codex 主线与判断全部完成 | [执行目标](docs/codex-goal.md) |
-| 查看实现、验收证据与剩余缺口 | [验收台账](docs/verification.md) |
-| 理解产品范围与验收 | [统一需求](outputs/musicfs-requirements-and-technical-design.md) |
-| 理解领域、模块和依赖方向 | [架构设计](docs/architecture/README.md) |
-| 理解插件公开 Interface | [插件合同草案](docs/architecture/plugin-interface.md) |
-| 查看架构与流程图 | [图表](docs/architecture/diagrams.md) |
-| 了解当前和后续工作 | [实施计划](outputs/musicfs-implementation-plan.md) |
-| 复用近期工程经验与教训 | [MusicFS 工程经验](docs/engineering-lessons.md) |
-| 查找决策、调研与历史资料 | [文档索引](docs/README.md) |
-| 连接 OpenList 与播放器 | [客户端说明](docs/clients.md) |
-| 运行开发检查与 P0 探针 | [开发说明](docs/development.md) |
+[下载桌面版](docs/release.md) · [使用指南](docs/user-guide.md) · [连接播放器](docs/clients.md)
 
-开发入口和当前证据见[开发说明](docs/development.md)、[P0 目录/DAV 记录](docs/verification/p0-library-dav.md)、[WebUI 首轮记录](docs/verification/p1-webui.md)与[通用认证记录](docs/verification/p1-authentication.md)。历史检查点与本次跳过的验证均保留在验收台账中。
+## 你可以这样用
 
-QQ开发预览支持手机QQ/微信扫码、会话保存、分类、实例音质和缺失策略；[本地音质/字节](docs/verification/p2-qq-quality.md)与[真实云端](docs/verification/p4-worker-cloud.md)均有有限证据。[会话记录](docs/verification/p2-session-lifecycle.md)包含SQLite/D1续期回归及本地/真云真实退出重登；QQ正常窗口内的真实续期本次跳过，详见[插件说明](plugins/qq/README.md)。
+- **继续用喜欢的播放器。** 在 MusicFS 里挂载音乐目录，再把盘符或文件夹添加到播放器。只认本地路径的播放器也有了入口。
+- **在手机上听。** 将 MusicFS 的 WebDAV 地址填进播放器，浏览歌单、播放歌曲。
+- **交给自己的音乐库。** 扫描挂载目录，读取歌曲标签，用熟悉的方式整理和刮削。
+- **把歌曲留下来。** 从挂载盘复制文件，或通过 WebDAV 下载到本地，再加入自己的收藏。
 
-网易云已完成真实授权、每日推荐、4,158 曲喜欢列表的完整刷新和 MP3 读取，详见[真实来源记录](docs/verification/p2-netease-source.md)。桌面和 Worker 的构建、运行及未验边界分别见[桌面说明](docs/desktop.md)与[Worker 说明](docs/worker.md)。
+## 几步开始
 
-本项目自行编写的代码、公开插件接口、构建工具和示例插件采用 **GPL-3.0-only**，Copyright (c) 2026 MusicFS contributors，正文见[LICENSE](LICENSE)。第三方组件、引用或另行标注的文件保留原许可和署名；随包资料见[第三方说明](third-party/README.md)。发行时提供同版本项目源码归档与构建说明，公开API尚未发布到npm。
+1. **打开 MusicFS。** 下载并解压对应系统的完整桌面包，Windows 打开 `MusicFS.exe`，Linux 运行 `musicfs`，管理页面会在浏览器中打开。
+2. **装一个来源插件。** 在「插件」页安装随包 `plugins/` 目录中的网易云音乐或 QQ 音乐 ZIP。
+3. **连接自己的账号。** 在「数据源」添加来源，选择音质并扫码授权。
+4. **挑选要听的内容。** 刷新「喜欢的音乐」、歌单等内容源，在「目录布局」安排好文件夹，点击「保存并发布」。
+5. **接上播放器。** 在「本机挂载」创建挂载；使用 WebDAV 的播放器，则从「服务连接」复制地址、读取用户名和密码。
+
+Windows 首次挂载时，可按页面提示安装 WinFsp；Linux 挂载需要 FUSE。
+
+关闭管理网页后，服务和挂载会继续运行。要停止时，在「本机挂载」页面点击「退出 MusicFS 后台」。
+
+## 音乐从哪里来？
+
+音乐来源通过插件接入，按需安装。目前提供两个示例插件：
+
+| 插件 | 登录方式 | 可浏览的内容 |
+|---|---|---|
+| 网易云音乐 | 网易云音乐 App 扫码 | 喜欢的歌曲、自建与收藏歌单、每日推荐歌曲和歌单 |
+| QQ 音乐 | QQ 或微信扫码 | 喜欢的音乐、自建与收藏歌单、每日推荐、推荐歌单 |
+
+同一个插件可以添加多个账号，各自设置音质。可读取的歌曲和音质取决于来源账号的权限。
+
+想接入别的来源？可以安装其他作者的插件，也可以从[插件作者指南](docs/plugin-authoring.md)开始，做一个自己的来源插件。
+
+## 听歌之外，也省点心
+
+**歌曲信息一起带上。** 网易云和 QQ 音乐插件支持补充歌名、歌手、专辑、封面和歌词，保留来源提供的歌词时间轴、译文与罗马音。这些信息会写进支持补标签的音频文件，复制到本地后仍然保留。
+
+**读过的内容留着复用。** 音频按需读取，桌面版会缓存已读取的片段，供重复播放和扫描使用。缓存空间和保留时间都能调整。
+
+**让歌单定时更新。** 可以手动刷新，也可以设置更新周期。更新时继续使用已有目录，完成后换成新内容。
+
+## 放在云端也可以
+
+除了桌面版，MusicFS 也可以独立部署到 Cloudflare Worker，通过 WebDAV 提供音乐目录。安装插件、管理来源和整理目录，使用的是同一套页面。
+
+→ [Worker 部署指南](docs/worker.md)
+
+## 继续了解
+
+[开发说明](docs/development.md) · [架构设计](docs/architecture/README.md) · [全部文档](docs/README.md)
+
+## 开源许可
+
+[GPL-3.0-only](LICENSE)
