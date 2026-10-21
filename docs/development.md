@@ -113,6 +113,8 @@ bun scripts/probe-player.ts --url-file /tmp/selected-audio-url.txt --output /tmp
 
 ## 实现入口
 
+本仓库的六领域顾问配置保存在 `advisor.project.json` 与各领域的 `.advisor.json`，已确认使用 `gpt-6-luna / high`。职责与读取范围分开配置，咨询时只给整体目标与操作边界，由顾问自主选择场景和重点；主代理核查建议，不把缺少上下文当成缺实现。运行快照与讨论状态在 `.advisor-state/`，不进入版本控制或发行物。最近结论见[跨领域复评](../outputs/musicfs-performance-review.md)。
+
 | 职责 | 源码 |
 |---|---|
 | 独立公开类型 | [plugin-api](../packages/plugin-api/src/index.ts) |

@@ -12,6 +12,7 @@ Windows 最新更新为 dev.11，直接 DAV 共享读取已完成正式模块和
 | 真正按需挂载与格式 | [Windows / WSL 可行性及生产接线](verification/lazy-mount-feasibility.md) | MP3/FLAC/M4A 的具体预留方案；APE 与容器/播放器限制分别记录 |
 | 挂载缓存与播放成本 | [dev.9—dev.10 消费记录](verification/cache-consumption-2026-10-21.md) | WSL/FUSE、有效生成音频、Windows Shell/FileStream；非真实整库 GUI 计时 |
 | 直接 DAV 共享读取 | [dev.11 验证](verification/shared-read-cache.md) | 相同范围、重启、清理、更新身份与本机挂载绕过；未重跑平台或云端 |
+| 大目录索引保留预算 | [场景复评](../outputs/musicfs-performance-review.md#有界核对与证据等级)、[匿名结果](verification/data/published-view-budget-2026-10-22.json) | 正式Module与合成条目，证明超预算大项不保留；不是实际用户目录、SQL或GUI计时 |
 | 补标签 | [原文件标签检查](verification/metadata-current-file-tags.md)、[格式可行性](verification/metadata-tagging-feasibility.md)、[实现](verification/metadata-implementation.md) | 工具格式支持与真实来源样本覆盖分别说明 |
 | 桌面与 Windows 连接 | [桌面](verification/p2-desktop-host.md)、[Windows](verification/p2-windows-mount.md) | 实际 WinFsp、本机 HTTPS、跨原生上限读取/恢复已有记录；不等于全部 GUI/恢复通过 |
 | 云端部署、升级与有限来源 | [真实 Worker](verification/p4-worker-cloud.md) | 已用付费账号；不代替免费 CPU/配额证据 |

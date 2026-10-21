@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-22",
+  "productCodeInput": "8d3882c",
+  "module": "src/core/library/published-views.ts",
+  "scope": "Production createPublishedViews with synthetic NetEase v4 entries and a counting in-memory store. Two consecutive lookups for one published identity. No SDK, platform, database, filesystem mount, player, cloud or heap measurement.",
+  "budgetBytes": 8388608,
+  "entryShape": {
+    "source": "synthetic standard MP3 media reference",
+    "reference": "v4 with 64-character descriptor hash and UUID generation",
+    "name": "numbered Chinese song and two artists",
+    "projection": "same Child projection structure as core/library/index.ts"
+  },
+  "results": [
+    {
+      "entries": 1000,
+      "estimatedBytes": 1732586,
+      "snapshotLoads": 1,
+      "sameView": true
+    },
+    {
+      "entries": 4000,
+      "estimatedBytes": 6934586,
+      "snapshotLoads": 1,
+      "sameView": true
+    },
+    {
+      "entries": 6000,
+      "estimatedBytes": 10402586,
+      "snapshotLoads": 2,
+      "sameView": false
+    }
+  ],
+  "conclusion": "Oversized views remain readable but are not retained by the current LRU. This shape does not exceed the budget at 4000 entries and does not establish the cause of the real user directory delay."
+}
