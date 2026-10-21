@@ -42,6 +42,7 @@ bun install --frozen-lockfile --ignore-scripts
 | `bun run probe:worker:dav` | 同一 Fetch DAV 在本地 workerd/D1 读取真实样本字节，验证 XML、HEAD、固定长度及范围 |
 | `bun run probe:worker:authentication` | 同一正式管理路由在本地 workerd/D1 验证认证恢复、实例隔离、输入失败和真实延迟上游在取消后的旧结果拒绝 |
 | `bun run fetch:rclone:linux` | 从官方地址取得固定 Linux 探针版本并核对已固定 SHA-256，仅写入 dist/tools，需要网络 |
+| `bun scripts/probe-mount-cache.ts` | WSL/Linux原生FUSE的4k离线目录首次/立即/跨旧5秒边界重进；也验证手动保留/刷新后看到新条目，不读真实平台 |
 | `bun run probe:rclone` | 已核验 rclone 经临时真实 HTTP 服务列目录、完整/随机读取；可用 MUSICFS_RCLONE 指定其他已验证二进制 |
 
 `dev:service` 需要开发者显式设置 `MUSICFS_ADMIN_TOKEN` 和 `MUSICFS_DAV_PASSWORD`，开发 DAV 用户名为 `musicfs`；不能把测试凭据当作发行默认值。构建前端后可直接打开 8787 服务，或用 Vite 开发；页面手动输入管理令牌，也可由启动入口经 fragment 传入并立即移除。[正式桌面启动器](desktop.md)另行生成私有凭据、持有后台并管理挂载；开发服务不装配本机挂载或退出接口。

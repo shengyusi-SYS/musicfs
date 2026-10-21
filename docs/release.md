@@ -1,5 +1,19 @@
 # MusicFS 当前交付物
 
+## dev.8 缓存策略与目录自动更新
+
+应用`0.1.0-dev.8`、API`0.1.9`、schema10，网易云与QQ均`alpha.15`。产物位于`dist/releases/0.1.0-dev.8/`：[Windows x64](../dist/releases/0.1.0-dev.8/musicfs-0.1.0-dev.8-windows-x64.zip)、[Linux x64](../dist/releases/0.1.0-dev.8/musicfs-0.1.0-dev.8-linux-x64.zip)、[Worker](../dist/releases/0.1.0-dev.8/musicfs-0.1.0-dev.8-worker.zip)、[源码](../dist/releases/0.1.0-dev.8/musicfs-0.1.0-dev.8-source.zip)、[校验和](../dist/releases/0.1.0-dev.8/SHA256SUMS)。
+
+- 挂载目录缓存从5秒改为默认5分钟，每挂载可配置秒数，0不自动过期；支持设置/正常重挂及“刷新挂载目录”。本机目录完整发布、来源/布局/插件成功变化后主动通知rclone失效，远程挂载仍按期限或手动刷新。
+- 网易云/QQ实例可设置稳定音乐资料缓存天数，0长期保留。旧配置默认7天/1天，空或缺失结果仍1天后重试；既有歌曲详情、播放地址和授权机制不被全局延长。
+- 内容源与已发布目录的“更新策略”可选择手动、15分钟、小时、6小时、每天或每周；默认手动。更新只处理指定目录，后台分页更新期间继续使用上次成功快照，失败保留；桌面网页关闭后继续，Worker沿用已有Cron，不保证准点完成大目录。
+- rclone子进程增加`windowsHide: true`，日志仍写入文件。未为此新建启动包装脚本或后台程序。
+
+正常退出旧后台，解压完整新版启动；已有挂载重新挂载后采用新设置。安装随包alpha.15可获得实例资料保留配置。SQLite自动升级schema10，已有数据/授权保持；部署Worker先应用新增0010迁移。本轮不部署云端，不重刷真实歌单，不重复原生格式全矩阵。
+
+真实WSL/FUSE离线4k目录跨6秒再入从3次PROPFIND变0次，约119ms降至8ms；手动保留模式刷新后能读到新发布的第4001项。它不是Windows资源管理器十多秒等待的完整实测，尚不能排除资源管理器额外读取标签。现有Windows VM SSH本轮超时，窗口隐藏尚无新VM运行回执。缓存、定时器、重启与旧快照的必要离线回归、类型和依赖边界通过；归档校验待收口。[设计与流程](architecture/cache-policy.md)
+
+
 ## dev.7 真正按需挂载更新
 
 2026-10-21，应用 `0.1.0-dev.7`、API `0.1.9`、schema9；网易云与 QQ 均为 `0.1.0-alpha.14`。本版按版本建立发行目录 `dist/releases/0.1.0-dev.7/`，包含 [Windows x64](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-windows-x64.zip)、[Linux x64](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-linux-x64.zip)、[Worker](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-worker.zip)、[作者包](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-plugin-author-kit.zip)、[对应源码](../dist/releases/0.1.0-dev.7/musicfs-0.1.0-dev.7-source.zip)、`plugins/` 中的三个独立插件，以及 [版本清单](../dist/releases/0.1.0-dev.7/release-manifest.json)和 [SHA256SUMS](../dist/releases/0.1.0-dev.7/SHA256SUMS)。历史归档保持原链接；重新打包仅替换同版本目录，不覆盖其它版本。
