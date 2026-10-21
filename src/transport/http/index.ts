@@ -199,6 +199,7 @@ export function createManagementApi(input: {
     return operation ? c.json(operation satisfies RefreshView) : c.json({ error: 'not_found', message: 'Refresh operation was not found' }, 404);
   });
   app.get('/api/layout', async c => c.json((await library.layout()) satisfies Layout));
+  app.get('/api/layout/default', async c => c.json(await library.defaultLayout(c.req.raw.signal)));
   app.put('/api/layout', async c => {
     const value = layoutInput.parse(await json(c)); return c.json(await library.saveLayout(value.expectedRevision, value.nodes));
   });

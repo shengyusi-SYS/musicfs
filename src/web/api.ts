@@ -93,6 +93,7 @@ export function createApi(token: string, fetcher: typeof fetch = fetch) {
     stepRefresh: (id: string, signal?: AbortSignal) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}/step`, { method: 'POST', ...(signal ? { signal } : {}) }),
     cancelRefresh: (id: string) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     layout: (signal: AbortSignal) => request<Layout>('/layout', { signal }),
+    defaultLayout: (signal: AbortSignal) => request<LayoutNode[]>('/layout/default', { signal }),
     saveLayout: (expectedRevision: number, nodes: LayoutNode[] | null) => request<Layout>('/layout', json('PUT', { expectedRevision, nodes })),
     library: (path: string, signal: AbortSignal) => request<ViewEntry[]>(`/library?path=${encodeURIComponent(path)}`, { signal }),
     browseDirectory: (path: string, signal: AbortSignal) => request<DirectoryListing>(`/library/directory?path=${encodeURIComponent(path)}`, { signal }),

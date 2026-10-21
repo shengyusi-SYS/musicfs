@@ -359,6 +359,17 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       });
     },
     layout: () => store.layout(),
+    async defaultLayout(signal: AbortSignal): Promise<LayoutNode[]> {
+      const instances = await children({ kind: 'instances' }, signal);
+      const nodes: LayoutNode[] = [];
+      for (const instance of instances.entries) {
+        const roots = await children(instance.target, signal);
+        nodes.push({ kind: 'group', id: crypto.randomUUID(), name: instance.pathName,
+          children: roots.entries.map(root => ({ kind: 'source', id: crypto.randomUUID(), name: root.pathName,
+            instanceId: instance.id, sourceId: root.id })) });
+      }
+      return nodes;
+    },
     async saveLayout(expectedRevision: number, nodes: unknown) {
       const value = parseLayout(nodes);
       if (!await store.saveLayout(expectedRevision, value)) throw new LibraryError('conflict', 'Layout changed in another operation');

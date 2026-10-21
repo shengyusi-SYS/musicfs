@@ -12,11 +12,11 @@ export default function Library({ api, path, setPath, draft, setDraft, showSourc
   api: Api; path: string; setPath: (value: string) => void; draft: LayoutDraft | null; setDraft: (value: LayoutDraft | null) => void; showSources: () => void; showConnection: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  if (editing) return <LayoutEditor api={api} draft={draft} setDraft={setDraft} close={() => setEditing(false)} saved={() => { setPath('/'); setEditing(false); }} showSources={showSources} />;
   return <><div className="page-actions"><Typography.Text type="secondary">{draft ? '有未保存的目录修改' : '播放器看到的音乐文件夹'}</Typography.Text><Space wrap>
     <Button icon={<SettingOutlined aria-hidden="true" />} onClick={() => setEditing(true)}>整理目录{draft && <span className="unsaved-dot" />}</Button>
     <Button type="primary" icon={<ArrowRightOutlined aria-hidden="true" />} onClick={showConnection}>连接播放器</Button>
   </Space></div><section className="surface directory-surface"><DirectoryBrowser api={api} path={path} setPath={setPath} showSources={showSources} /></section>
-    {editing && <LayoutEditor api={api} draft={draft} setDraft={setDraft} close={() => setEditing(false)} />}
   </>;
 }
 

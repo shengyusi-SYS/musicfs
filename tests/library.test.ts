@@ -226,6 +226,28 @@ test('portable duplicate names remain deterministic after reorder and fit UTF-8 
   expect(first.find(entry => entry.id === 'c')?.pathName.endsWith('.flac')).toBe(true);
 });
 
+test('editable default layout retains exported paths and reads roots without scanning music', async () => {
+  let scans = 0; let roots = 0;
+  const { library, sources } = await setup(plugin({
+    roots: async () => { roots++; return { ok: true, value: { items: ['first', 'second'].map(sourceId => ({ sourceId, name: '相同/名称', directoryRef: sourceId })) } }; },
+    list: async () => { scans++; return { ok: true, value: { items: [] } }; }
+  }));
+  const created = await sources.create('org.musicfs.sample', '实例 & #', {}, signal());
+  expect(created.ok).toBe(true);
+  const before = await library.files.list('/', signal());
+  const children = await Promise.all(before.map(entry => library.files.list(entry.path, signal())));
+  const template = await library.defaultLayout(signal());
+  expect(template.map(node => node.name)).toEqual(before.map(entry => entry.name));
+  expect(template.map(node => node.kind === 'group' ? node.children.map(child => child.name) : [])).toEqual(children.map(entries => entries.map(entry => entry.name)));
+  expect(await library.layout()).toEqual({ revision: 0, nodes: null });
+  const ids = template.flatMap(node => [node.id, ...(node.kind === 'group' ? node.children.map(child => child.id) : [])]);
+  expect(new Set(ids).size).toBe(ids.length);
+  await library.saveLayout(0, template);
+  expect((await library.files.list('/', signal())).map(entry => entry.path)).toEqual(before.map(entry => entry.path));
+  for (const [index, entry] of before.entries()) expect((await library.files.list(entry.path, signal())).map(child => child.path)).toEqual(children[index]!.map(child => child.path));
+  expect(roots).toBe(2); expect(scans).toBe(0);
+});
+
 test('layout uses revision checks and supports missing-plugin references', async () => {
   const { library } = await setup();
   await library.saveLayout(0, [{ kind: 'source', id: 'missing', name: '保留', instanceId: 'missing-instance', sourceId: 'missing-source' }]);

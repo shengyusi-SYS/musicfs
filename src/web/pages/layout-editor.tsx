@@ -1,63 +1,90 @@
-import { useState, type ReactNode } from 'react';
-import { Alert, App, Button, Drawer, Empty, Input, Modal, Select, Skeleton, Space, Tag, Tree } from 'antd';
-import { DeleteOutlined, FileOutlined, FolderAddOutlined, FolderOutlined, PlusOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Alert, App, Button, Dropdown, Segmented, Skeleton, Space, Tag } from 'antd';
+import { ArrowLeftOutlined, FolderAddOutlined, MoreOutlined, RedoOutlined, UndoOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LayoutNode, SourceInstance } from '../../contracts/management';
+import equal from 'fast-deep-equal';
+import type { LayoutNode } from '../../contracts/management';
 import { ApiError, type Api } from '../api';
 import { Failure } from '../components/feedback';
-import { pendingRefreshId, RefreshProgress, usePersistentRefresh } from '../components/refresh';
-import { appendNode, canMove, editNode, findNode, moveNode } from './layout-draft';
+import { appendNodes, findNode, groupIds, locateNode } from './layout-draft';
+import { LayoutRootsFeedback, LayoutSources } from './layout-sources';
+import { LayoutTree } from './layout-tree';
 
 export type LayoutDraft = { base: number; nodes: LayoutNode[] | null };
-type TreeNode = { key: string; title: ReactNode; icon: ReactNode; children?: TreeNode[] };
+type Nodes = LayoutNode[] | null;
 
-export function LayoutEditor({ api, draft, setDraft, close }: { api: Api; draft: LayoutDraft | null; setDraft: (value: LayoutDraft | null) => void; close: () => void }) {
+export function LayoutEditor({ api, draft, setDraft, close, saved, showSources }: {
+  api: Api; draft: LayoutDraft | null; setDraft: (value: LayoutDraft | null) => void; close: () => void; saved: () => void; showSources: () => void;
+}) {
   const client = useQueryClient(); const { message } = App.useApp();
   const layout = useQuery({ queryKey: ['layout'], queryFn: ({ signal }) => api.layout(signal) });
   const instances = useQuery({ queryKey: ['instances'], queryFn: ({ signal }) => api.instances(signal) });
-  const [selected, setSelected] = useState<string | null>(null); const [adding, setAdding] = useState<'group' | 'source' | null>(null);
-  const [groupName, setGroupName] = useState(''); const [expanded, setExpanded] = useState<string[]>([]);
-  const save = useMutation({ mutationFn: (value: LayoutDraft) => api.saveLayout(value.base, value.nodes), onSuccess: async value => {
-    client.setQueryData(['layout'], value); await client.invalidateQueries({ queryKey: ['library'] }); setDraft(null); message.success('目录已保存'); close();
-  }, onError: error => { if (error instanceof ApiError && error.status === 409) void client.invalidateQueries({ queryKey: ['layout'] }); } });
+  const [selected, setSelected] = useState(''); const [expanded, setExpanded] = useState<string[] | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null); const [panel, setPanel] = useState<'tree' | 'sources'>('tree');
+  const [history, setHistory] = useState<{ past: Nodes[]; future: Nodes[] }>({ past: [], future: [] });
   const nodes = draft ? draft.nodes : layout.data?.nodes;
-  const selectedNode = nodes && selected ? findNode(nodes, selected) : undefined;
-  const parentId = selectedNode?.kind === 'group' ? selectedNode.id : null;
-  function change(next: LayoutNode[] | null) { setDraft({ base: draft?.base ?? layout.data!.revision, nodes: next }); }
-  function add(node: LayoutNode) { change(appendNode(nodes ?? [], parentId, node)); if (parentId) setExpanded(value => [...new Set([...value, parentId])]); setAdding(null); setGroupName(''); setSelected(node.id); }
-  const tree = (items: LayoutNode[]): TreeNode[] => items.map(node => ({ key: node.id,
-    title: <Space>{node.name}{node.kind === 'source' && instances.isSuccess && !instances.data.some(item => item.id === node.instanceId) && <Tag>来源已删除</Tag>}</Space>,
-    icon: node.kind === 'group' ? <FolderOutlined aria-hidden="true" /> : <FileOutlined aria-hidden="true" />, ...(node.kind === 'group' ? { children: tree(node.children) } : {}) }));
-  return <Drawer title="整理目录" open onClose={() => { if (!save.isPending) close(); }} closable={!save.isPending} mask={{ closable: !save.isPending }} size="large" footer={<div className="dialog-actions"><Button disabled={!draft || save.isPending} onClick={() => { setDraft(null); setSelected(null); save.reset(); }}>放弃修改</Button>
-    <Button type="primary" disabled={!draft} loading={save.isPending} onClick={() => draft && save.mutate(draft)}>保存目录</Button></div>}>
-    <Failure error={layout.error} retry={() => void layout.refetch()} /><Failure error={instances.error} /><Failure error={save.error} />
-    {draft && layout.data && draft.base !== layout.data.revision && <Alert className="feedback" type="warning" showIcon title="目录已在其他窗口更新" action={<Button onClick={() => { setDraft(null); save.reset(); }}>载入最新目录</Button>} />}
-    {layout.isPending ? <Skeleton active /> : layout.data && <>
-      {nodes === null ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="按音乐来源自动排列"><Button onClick={() => change([])}>自定义目录</Button></Empty> : <>
-        <div className="page-actions"><Space wrap><Button disabled={save.isPending} icon={<FolderAddOutlined aria-hidden="true" />} onClick={() => setAdding('group')}>新建文件夹</Button><Button disabled={save.isPending} icon={<PlusOutlined aria-hidden="true" />} onClick={() => setAdding('source')}>添加内容</Button></Space></div>
-        {nodes?.length ? <><div className="muted-note">拖动排序，或选中目录修改名称。</div><Tree showIcon blockNode draggable disabled={save.isPending} treeData={tree(nodes)} selectedKeys={selected ? [selected] : []} expandedKeys={expanded} onExpand={keys => setExpanded(keys.map(String))} onSelect={keys => setSelected(keys[0] ? String(keys[0]) : null)}
-          allowDrop={({ dragNode, dropNode, dropPosition }) => canMove(nodes, String(dragNode.key), String(dropNode.key), dropPosition === 0 ? 'inside' : dropPosition < 0 ? 'before' : 'after')}
-          onDrop={info => { const position = info.dropPosition - Number(info.node.pos.split('-').at(-1)); change(moveNode(nodes, String(info.dragNode.key), String(info.node.key), !info.dropToGap ? 'inside' : position < 0 ? 'before' : 'after')); if (!info.dropToGap) setExpanded(value => [...new Set([...value, String(info.node.key)])]); }} /></> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="添加想在播放器中看到的内容" />}
-        {selectedNode && <div className="node-editor"><label htmlFor="layout-name">显示名称</label><Input id="layout-name" value={selectedNode.name} maxLength={500} disabled={save.isPending} onChange={event => change(editNode(nodes ?? [], selectedNode.id, node => ({ ...node, name: event.target.value })))} />
-          <Button type="text" danger icon={<DeleteOutlined aria-hidden="true" />} disabled={save.isPending} onClick={() => { change(editNode(nodes ?? [], selectedNode.id, () => null)); setSelected(null); }}>从目录移除</Button></div>}
-        <Button className="restore-default" type="link" disabled={save.isPending} onClick={() => { change(null); setSelected(null); }}>使用自动布局</Button>
-      </>}
-    </>}
-    <Modal title={parentId ? '在选中文件夹中新建' : '新建文件夹'} open={adding === 'group'} onCancel={() => setAdding(null)} okText="添加" cancelText="取消" okButtonProps={{ disabled: !groupName.trim() }} onOk={() => add({ id: crypto.randomUUID(), kind: 'group', name: groupName.trim(), children: [] })}>
-      <div className="field-block"><label htmlFor="group-name">文件夹名称</label><Input id="group-name" value={groupName} onChange={event => setGroupName(event.target.value)} maxLength={500} autoFocus /></div>
-    </Modal>
-    {adding === 'source' && <SourcePicker api={api} instances={instances.data ?? []} close={() => setAdding(null)} add={add} />}
-  </Drawer>;
-}
-
-function SourcePicker({ api, instances, close, add }: { api: Api; instances: SourceInstance[]; close: () => void; add: (node: LayoutNode) => void }) {
-  const [instanceId, setInstanceId] = useState(instances.length === 1 ? instances[0]!.id : ''); const [sourceId, setSourceId] = useState('');
-  const roots = useQuery({ queryKey: ['roots', instanceId, instances.find(value => value.id === instanceId)?.epoch], queryFn: ({ signal }) => api.roots(instanceId, signal), enabled: !!instanceId });
-  const pending = pendingRefreshId(roots.error); const refresh = usePersistentRefresh(api, { instanceId: instanceId || undefined, operationId: pending });
-  const selected = sourceId || (roots.data?.length === 1 ? roots.data[0]!.sourceId : ''); const root = roots.data?.find(value => value.sourceId === selected);
-  return <Modal title="添加音乐内容" open onCancel={close} okText="添加" cancelText="取消" okButtonProps={{ disabled: !root }} onOk={() => { if (root) add({ id: crypto.randomUUID(), name: root.name, kind: 'source', instanceId, sourceId: root.sourceId }); }}>
-    <div className="field-block"><label htmlFor="layout-instance">音乐来源</label><Select<string> id="layout-instance" placeholder="选择来源" value={instanceId || null} onChange={value => { setInstanceId(value); setSourceId(''); }} options={instances.map(value => ({ value: value.id, label: value.name }))} /></div>
-    <div className="field-block"><label htmlFor="layout-source">音乐内容</label><Select<string> id="layout-source" placeholder="选择歌单或内容" loading={roots.isFetching || refresh.active || refresh.preparing} value={selected || null} disabled={!instanceId || roots.isError} onChange={setSourceId} options={roots.data?.map(value => ({ value: value.sourceId, label: value.name })) ?? []} /></div>
-    <Failure error={pending ? null : roots.error} retry={() => void roots.refetch()} /><RefreshProgress operation={refresh} reload={() => void roots.refetch()} />
-  </Modal>;
+  const defaults = useQuery({ queryKey: ['layout-default', instances.data?.map(instance => [instance.id, instance.epoch, instance.name])],
+    queryFn: ({ signal }) => api.defaultLayout(signal), enabled: layout.isSuccess && instances.isSuccess && nodes === null, staleTime: 0 });
+  const displayed = nodes === null ? defaults.data : nodes;
+  const location = selected && displayed ? locateNode(displayed, selected) : undefined;
+  const parentId = location ? location.node.kind === 'group' ? location.node.id : location.parentId : null;
+  const save = useMutation({ mutationFn: (value: LayoutDraft) => api.saveLayout(value.base, value.nodes), onSuccess: async value => {
+    client.setQueryData(['layout'], value); await client.invalidateQueries({ queryKey: ['library'] }); setDraft(null); message.success('目录已保存'); saved();
+  }, onError: error => { if (error instanceof ApiError && error.status === 409) void client.invalidateQueries({ queryKey: ['layout'] }); } });
+  const conflicted = !!draft && !!layout.data && draft.base !== layout.data.revision;
+  const disabled = save.isPending || !displayed || conflicted || nodes === null && (defaults.isFetching || defaults.isError);
+  function apply(next: Nodes) {
+    if (!layout.data) return;
+    setDraft(equal(next, layout.data.nodes) ? null : { base: draft?.base ?? layout.data.revision, nodes: next });
+    save.reset();
+  }
+  function change(next: Nodes) {
+    if (nodes === undefined || equal(next, nodes)) return;
+    setHistory(previous => ({ past: [...previous.past.slice(-49), nodes], future: [] })); apply(next);
+  }
+  function travel(direction: 'undo' | 'redo') {
+    if (nodes === undefined) return;
+    const list = direction === 'undo' ? history.past : history.future;
+    if (!list.length) return;
+    const next = list[list.length - 1]!;
+    setHistory(direction === 'undo' ? { past: history.past.slice(0, -1), future: [...history.future, nodes] }
+      : { past: [...history.past, nodes], future: history.future.slice(0, -1) });
+    apply(next); setRenaming(null); setSelected(previous => findNode(next ?? defaults.data ?? [], previous) ? previous : '');
+  }
+  function discard() { setDraft(null); setHistory({ past: [], future: [] }); setSelected(''); setRenaming(null); save.reset(); }
+  function expand(id: string | null) { if (displayed) setExpanded([...new Set(['', ...(expanded ?? groupIds(displayed)), id ?? ''])]); }
+  function createFolder(parent: string | null) {
+    if (!displayed) return;
+    const siblings = parent ? locateNode(displayed, parent)?.node : undefined;
+    const names = (siblings?.kind === 'group' ? siblings.children : displayed).map(node => node.name);
+    let name = '新建文件夹'; let suffix = 2; while (names.includes(name)) name = '新建文件夹 ' + suffix++;
+    const node: LayoutNode = { id: crypto.randomUUID(), kind: 'group', name, children: [] };
+    change(appendNodes(displayed, parent, [node])); expand(parent); setSelected(node.id); setRenaming(node.id); setPanel('tree');
+  }
+  return <div className="layout-editor">
+    <div className="layout-editor-toolbar"><Button type="text" icon={<ArrowLeftOutlined aria-hidden="true" />} disabled={save.isPending} onClick={close}>返回浏览</Button>
+      <Space wrap><Button icon={<UndoOutlined aria-hidden="true" />} disabled={save.isPending || conflicted || !history.past.length} onClick={() => travel('undo')}>撤销</Button>
+        <Button icon={<RedoOutlined aria-hidden="true" />} disabled={save.isPending || conflicted || !history.future.length} onClick={() => travel('redo')}>重做</Button>
+        <Dropdown trigger={['click']} menu={{ items: [
+          { key: 'automatic', label: '恢复按来源自动排列', disabled: nodes === null || save.isPending || conflicted, onClick: () => { change(null); setSelected(''); setRenaming(null); } },
+          { key: 'discard', label: '放弃本次修改', disabled: !draft || save.isPending, onClick: discard }
+        ] }}><Button aria-label="目录整理选项" icon={<MoreOutlined aria-hidden="true" />} /></Dropdown>
+        <Button type="primary" disabled={!draft || conflicted} loading={save.isPending} onClick={() => draft && save.mutate(draft)}>保存目录</Button>
+      </Space>
+    </div>
+    <Failure error={layout.error} retry={() => void layout.refetch()} /><Failure error={instances.error} retry={() => void instances.refetch()} /><Failure error={conflicted ? null : save.error} />
+    {conflicted && <Alert className="feedback" type="warning" showIcon title="目录已在其他窗口更新" action={<Button onClick={discard}>载入最新目录</Button>} />}
+    <Segmented className="layout-mobile-tabs" value={panel} onChange={setPanel} block options={[{ label: '播放器目录', value: 'tree' }, { label: '添加内容', value: 'sources' }]} />
+    <div className={'layout-workspace layout-show-' + panel}>
+      {instances.isPending ? <Skeleton className="layout-tree-loading" active /> : <LayoutSources api={api} instances={instances.data ?? []} nodes={displayed ?? []} parentId={parentId} setParentId={id => setSelected(id ?? '')} disabled={disabled}
+        showSources={showSources} add={items => { if (displayed) { change(appendNodes(displayed, parentId, items)); expand(parentId); setSelected(items.at(-1)!.id); setPanel('tree'); } }} />}
+      <section className="layout-target" aria-label="播放器目录">
+        <div className="layout-pane-heading"><div><h2>播放器目录</h2><Tag>{draft ? '未保存' : nodes === null ? '自动排列' : '自定义'}</Tag></div>
+          <Button icon={<FolderAddOutlined aria-hidden="true" />} disabled={disabled} onClick={() => createFolder(parentId)}>新建文件夹</Button></div>
+        {nodes === null && <LayoutRootsFeedback api={api} error={defaults.error} reload={() => void defaults.refetch()} />}
+        {!displayed && !defaults.isError && !layout.isError ? <Skeleton className="layout-tree-loading" active /> : displayed && <LayoutTree nodes={displayed} instances={instances.data ?? []} selected={selected} select={setSelected}
+          change={change} createFolder={createFolder} disabled={disabled} expanded={expanded} setExpanded={setExpanded} renaming={renaming} setRenaming={setRenaming} />}
+      </section>
+    </div>
+  </div>;
 }
