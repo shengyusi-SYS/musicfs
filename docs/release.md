@@ -12,6 +12,8 @@
 
 公共改动155项受影响回归通过，最终200首调整后网易云52项回归、三套类型与依赖边界通过；真实rclone离线小样本准备后准确大小/完整读取/Range通过。实际packed SDK的本地workerd/D1 200首最多38SQL/准备步，完整属性与标签/Range正确。这些不代表真实全库播放器入库、免费云端CPU或本版Windows原生运行通过；Windows为WSL交叉构建，历史VM验收范围保持原样。
 
+发行输入为干净源码`e2b36bb`，源码摘要`67f5b5f2557e8885cf2e15f1001ebf659847a58a01e4725bc330bead5ae4839d`；详细修订见[本版清单](../dist/releases/musicfs-0.1.0-dev.6-manifest.json)。五个归档、三个插件与版本清单校验均通过。Linux编译发行物另经启动、独立后台、安装外置sample、管理API、HEAD/Range及重复启动复用的离线冒烟。
+
 ## dev.5 性能优化更新
 
 2026-10-21，应用`0.1.0-dev.5`、API`0.1.7`、schema9；网易云仍`alpha.10`，QQ更新为`alpha.13`。提供[Windows x64](../dist/releases/musicfs-0.1.0-dev.5-windows-x64.zip)、[Worker构建包](../dist/releases/musicfs-0.1.0-dev.5-worker.zip)、[对应源码](../dist/releases/musicfs-0.1.0-dev.5-source.zip)与[校验和](../dist/releases/musicfs-0.1.0-dev.5-checksums.txt)。较早归档及其统一清单保留原样；本次没有云部署或Windows宿主操作。
@@ -49,7 +51,7 @@
 
 ## dev.3 整套发行包
 
-本仓库生成的文件位于`dist/releases/`。完整源码/页面/插件身份与摘要以[release-manifest.json](../dist/releases/release-manifest.json)为准，校验文件为[SHA256SUMS](../dist/releases/SHA256SUMS)。
+本仓库生成的文件位于`dist/releases/`。dev.3完整源码/页面/插件身份与摘要保存在[版本清单](../dist/releases/musicfs-0.1.0-dev.3-manifest.json)，校验文件为[版本校验和](../dist/releases/musicfs-0.1.0-dev.3-checksums.txt)；无版本前缀的清单现在指向最新发行。
 
 | 用途 | 归档 | 解压后的入口 |
 |---|---|---|
