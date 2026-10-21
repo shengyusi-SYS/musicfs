@@ -27,6 +27,7 @@
 | 各类缓存和目录周期更新 | [缓存策略](architecture/cache-policy.md) |
 | App 挂载和直接 DAV 的字节缓存 | [挂载设计](architecture/desktop-mounts.md)、[共享读取](architecture/shared-read-cache.md) |
 | 共用页面责任和视觉基线 | [WebUI 设计](architecture/web-ui.md) |
+| 使用流程、备选交互和取舍 | [UI / UX 决定](../outputs/musicfs-ui-ux-decisions.md) |
 | 性能主线执行与完成标准 | [Codex 目标](codex-goal.md) |
 | 当前进展、ROI 候选与重开条件 | [实施计划](../outputs/musicfs-implementation-plan.md)、[缓存决定](../outputs/musicfs-cache-optimization-plan.md) |
 | 跨领域、实际场景的优化空间复评 | [六领域评估与主代理核查](../outputs/musicfs-performance-review.md) |
