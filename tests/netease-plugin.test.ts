@@ -345,6 +345,7 @@ test('NetEase accepts native actual downgrades only under fallback and never cha
   expect(page.statistics).toMatchObject({ tracks: 1, files: 1, fallbackVersions: 1 }); expect(page.items[0]!.name).toContain('[极高].mp3');
   const file = page.items[0]!; if (file.kind !== 'file') throw new Error('Expected file');
   const content = value(await plugin.stat(f.ctx, file.fileRef)); f.available.delete('1:exhigh'); f.available.set('1:standard', { level: 'standard' });
+  for (const [key, saved] of (f.ctx.cache as ReturnType<typeof memoryCache>).values) if (key.startsWith('versions:')) saved.expiresAt = 0;
   const before = f.playbackCalls.length;
   expect(await plugin.open(f.ctx, file.fileRef, { expectedContentId: content.contentId })).toMatchObject({ ok: false, error: { kind: 'unavailable' } });
   expect(f.playbackCalls.slice(before)).toEqual([{ ids: [1], level: 'exhigh' }]);

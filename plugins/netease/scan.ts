@@ -1,7 +1,7 @@
 import type { Json } from '@musicfs/plugin-api';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
-import { resolveVariants, resolutionKey, type Resolution } from './media';
+import { resolveVariants, resolutionKey, type Resolution, type CachedResolution } from './media';
 
 export const batchSize = 200;
 const lifetime = 24 * 60 * 60_000;
@@ -109,10 +109,9 @@ export async function scanVersions(client: NeteaseClient, scan: SongScan, start:
   const saved = await client.ctx.cache!.get(key);
   if (Array.isArray(saved)) return new Map(saved as unknown as [string, Resolution][]);
   const cache = client.ctx.cache!; const unique = [...new Set(ids)];
-  type Cached = { value: Resolution; expiresAt: number };
   const reused = cache.getMany ? await cache.getMany(unique.map(id => resolutionKey(client, id))) : [];
   const versions = new Map<string, Resolution>(); const expiries: number[] = [];
-  reused.forEach((item, index) => { if (item) { const record = item as unknown as Cached; versions.set(unique[index]!, record.value); expiries.push(record.expiresAt); } });
+  reused.forEach((item, index) => { if (item) { const record = item as unknown as CachedResolution; versions.set(unique[index]!, record.value); expiries.push(record.expiresAt); } });
   const missing = unique.filter(id => !versions.has(id));
   const writes: { key: string; value: Json; expiresAt: number }[] = [];
   if (missing.length) for (const [id, value] of await resolveVariants(client, missing)) {

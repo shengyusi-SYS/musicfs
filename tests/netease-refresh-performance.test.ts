@@ -179,7 +179,7 @@ test('one lazy stat prepares only its persistent song descriptor and GET serves 
   f.reset();
   const info = await stat(f.client, entry.fileRef);
   expect(info.size).toBeGreaterThan(mediaBytes.mp3.length);
-  expect(f.calls).toEqual({ playback: 1, lyrics: 1, cover: 1, range: 1 });
+  expect(f.calls).toEqual({ lyrics: 1, cover: 1, range: 1 });
   expect([...f.cache.values.keys()].filter(key => key.startsWith('ready:'))).toHaveLength(1);
   f.reset(); expect(await stat(f.client, entry.fileRef)).toEqual(info); expect(f.calls).toEqual({});
   const result = await open(f.client, entry.fileRef, { expectedContentId: info.contentId });
@@ -187,7 +187,7 @@ test('one lazy stat prepares only its persistent song descriptor and GET serves 
   expect(bytes.length).toBe(info.size); expect(result.content).toEqual(info);
   const tag = parseId3(bytes); expect(tag.title).toBe('Song 1'); expect(tag.pictures).toHaveLength(1);
   expect(tag.getFramesByClassType<Id3v2UnsynchronizedLyricsFrame>(Id3v2FrameClassType.UnsynchronizedLyricsFrame).map(frame => frame.text)).toEqual(['[00:00.00]Lyrics 1']);
-  expect(f.calls).toEqual({ playback: 1, range: 1 });
+  expect(f.calls).toEqual({ range: 1 });
   const range = { start: info.size - 64, end: info.size - 1 };
   const partial = await open(f.client, entry.fileRef, { expectedContentId: info.contentId, range });
   expect(partial.servedRange).toEqual(range);
@@ -233,6 +233,8 @@ test('opening a changed representation evicts only its short-lived version cache
   const f = fixture(1, 1); f.client.ctx.fileInfo = 'required'; const page = await list(f.client, 'liked'); const entry = page.items[0]!;
   if (entry.kind !== 'file') throw new Error('Expected a prepared file');
   f.reset(); f.changeMedia();
+  // The same bounded freshness contract is shared with catalogue reads. Re-resolve after it expires.
+  for (const [key, value] of f.cache.values) if (key.startsWith('versions:')) value.expiresAt = 0;
   await expect(open(f.client, entry.fileRef, { expectedContentId: entry.info!.contentId })).rejects.toMatchObject({ fault: { kind: 'content_changed' } });
   expect([...f.cache.values.keys()].filter(key => key.startsWith('versions:'))).toHaveLength(1);
   f.reset(); const changed = await list(f.client, 'liked');

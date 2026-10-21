@@ -11,6 +11,7 @@ export { decodeFile, info, type MediaReference } from './reference';
 type Location = { reference: MediaReference; url: string; expiresAt?: number };
 type Variant = { reference: MediaReference; targets: Quality[]; location: Location };
 export type Resolution = { variants: Variant[]; missingVersions: number; fallbackVersions: number; deduplicatedVersions: number };
+export type CachedResolution = { value: Resolution; expiresAt: number };
 export function resolutionKey(client: NeteaseClient, id: string) {
   const policy = audioPolicy(client.ctx.config);
   return `versions:${policy.qualities.join(',')}:${policy.missingQuality}:${id}`;
@@ -92,8 +93,24 @@ export async function resolveVariants(client: NeteaseClient, input: string[]): P
   return resolved;
 }
 
+/** Reads may reuse scanVersions' live exact locator, without renewing or replacing its resolution. */
+async function locateMedia(client: NeteaseClient, ref: MediaReference): Promise<Location | undefined> {
+  client.ctx.signal.throwIfAborted(); client.requireSession();
+  const record = await client.ctx.cache?.get(resolutionKey(client, ref.id)) as unknown as CachedResolution | null | undefined;
+  client.ctx.signal.throwIfAborted();
+  const now = Date.now();
+  if (record && record.expiresAt > now) {
+    const expected = info(ref).contentId;
+    // scanVersions writes this private record only after normal SDK/URL validation.
+    const variant = record.value.variants.find(item => info(item.reference).contentId === expected
+      && info(item.location.reference).contentId === expected && (item.location.expiresAt ?? 0) > now);
+    if (variant) return variant.location;
+  }
+  return (await resolveMedia(client, [ref.id], ref.level)).get(ref.id);
+}
+
 async function request(client: NeteaseClient, ref: MediaReference, range?: ByteRange | readonly ByteRange[], location?: Location, signal = client.ctx.signal): Promise<Response> {
-  const current = location ?? (await resolveMedia(client, [ref.id], ref.level)).get(ref.id);
+  const current = location ?? await locateMedia(client, ref);
   if (!current) { await invalidateResolution(client, ref.id); fail('unavailable', '网易云当前未提供此完整音频版本。'); }
   if (info(current.reference).contentId !== info(ref).contentId) { await invalidateResolution(client, ref.id); fail('content_changed', '网易云音频版本已变化，请刷新目录。'); }
   const ranges = range && ('start' in range ? [range] : range);
@@ -134,7 +151,7 @@ export function sourceReader(client: NeteaseClient, ref: MediaReference, locatio
   let located: Promise<Location | undefined> | undefined = location && (location.expiresAt === undefined || location.expiresAt > Date.now()) ? Promise.resolve(location) : undefined;
   const locate = async (signal: AbortSignal) => {
     signal.throwIfAborted();
-    const current = await (located ??= resolveMedia(client, [ref.id], ref.level).then(values => values.get(ref.id)));
+    const current = await (located ??= locateMedia(client, ref));
     if (!current) { await invalidateResolution(client, ref.id); fail('unavailable', '网易云当前未提供此完整音频版本。'); }
     signal.throwIfAborted(); return current;
   };
