@@ -1,4 +1,4 @@
-import { access, lstat, mkdir, readFile, readdir } from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { join, posix, win32 } from 'node:path';
 import { z } from 'zod';
 import type { MountCacheSettings, MountInput, MountManager, MountView } from '../../contracts/mounts';
@@ -11,12 +11,16 @@ const sourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('remote'), url: z.url().max(4096), username: z.string().max(4096), password: z.string().max(4096) }).strict()
 ]);
 const directoryCacheSeconds = z.number().int().min(0).max(2_147_483_647);
-const cacheSchema = z.object({ directoryCacheSeconds }).strict();
+const fileCacheMaxMiB = z.number().int().min(0).max(1_048_576);
+const fileCacheMaxAgeHours = z.number().int().min(0).max(2_147_483);
+const cacheSchema = z.object({ directoryCacheSeconds, fileCacheMaxMiB: fileCacheMaxMiB.optional(), fileCacheMaxAgeHours: fileCacheMaxAgeHours.optional() }).strict();
 const inputSchema = z.object({ name: z.string().trim().min(1).max(120).optional(), mountPoint: z.string().min(1).max(4096),
-  directoryCacheSeconds: directoryCacheSeconds.default(300), source: sourceSchema }).strict();
+  directoryCacheSeconds: directoryCacheSeconds.default(300), fileCacheMaxMiB: fileCacheMaxMiB.default(8192),
+  fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(168), source: sourceSchema }).strict();
 const viewSchema = z.object({
   id: z.uuid(), name: z.string(), mountPoint: z.string(), source: z.union([z.object({ kind: z.literal('local') }), z.object({ kind: z.literal('remote'), url: z.string() })]),
   directoryCacheSeconds: directoryCacheSeconds.default(300),
+  fileCacheMaxMiB: fileCacheMaxMiB.default(8192), fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(168),
   state: z.enum(['starting', 'mounted', 'unmounting', 'stopped', 'error']), error: z.object({ code: z.string(), message: z.string() }).optional()
 });
 const recordsSchema = z.array(z.object({ input: inputSchema, view: viewSchema, mayBeMounted: z.boolean().default(false) }));
@@ -53,6 +57,7 @@ export async function createMountManager(options: {
     const parsed = inputSchema.safeParse(value);
     if (!parsed.success) throw new MountError('invalid_mount', '请填写有效的挂载位置与读取连接。');
     const input: MountInput = { mountPoint: parsed.data.mountPoint, source: parsed.data.source, directoryCacheSeconds: parsed.data.directoryCacheSeconds,
+      fileCacheMaxMiB: parsed.data.fileCacheMaxMiB, fileCacheMaxAgeHours: parsed.data.fileCacheMaxAgeHours,
       ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }) };
     if (/[\u0000\r\n]/.test(input.mountPoint) || input.mountPoint.startsWith('-')) throw new MountError('invalid_mount', '挂载路径包含无效字符。');
     const driveLetter = platform === 'win32' && /^[a-z]:$/i.test(input.mountPoint);
@@ -155,13 +160,17 @@ export async function createMountManager(options: {
     record.input = input; record.view.state = 'starting'; delete record.view.error;
     record.view.name = input.name ?? record.view.name;
     record.view.directoryCacheSeconds = input.directoryCacheSeconds ?? 300;
+    record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? 8192;
+    record.view.fileCacheMaxAgeHours = input.fileCacheMaxAgeHours ?? 168;
     record.view.source = input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url };
     await persist();
     try {
       await dependencies(); await preparePoint(input.mountPoint);
       const connection = input.source.kind === 'local' ? options.localConnection() : input.source;
       await control.call('config/create', { name: remoteName(record), type: 'webdav',
-        parameters: { url: connection.url, vendor: 'other', user: connection.username, pass: connection.password }, opt: { obscure: true, nonInteractive: true } });
+        // This read-only profile uses standard DAV properties and lets VFS fingerprint
+        // Last-Modified. v1.75.2's "other" profile ignores time and caches by size alone.
+        parameters: { url: connection.url, vendor: 'rclone', user: connection.username, pass: connection.password }, opt: { obscure: true, nonInteractive: true } });
       // Fail before creating a filesystem when the remote cannot be listed.
       await control.call('operations/list', { fs: `${remoteName(record)}:`, remote: '', opt: { maxDepth: 1 } });
       const types = await control.call<{ mountTypes: string[] }>('mount/types');
@@ -170,7 +179,16 @@ export async function createMountManager(options: {
       record.mayBeMounted = true;
       await persist();
       const result = await control.call<{ mountPoint: string }>('mount/mount', { fs: `${remoteName(record)}:`, mountPoint: input.mountPoint, mountType,
-        mountOpt: { AllowOther: false, AllowNonEmpty: false }, vfsOpt: { ReadOnly: true, CacheMode: 'off',
+        // Explorer/players open files just to inspect tags. The default 16MiB buffer + 128MiB
+        // initial range downloads audio even for tiny reads. Scope the buffer to this VFS
+        // (including a reused RC process); grow chunks normally during sequential playback.
+        _config: { BufferSize: 128 * 1024 },
+        mountOpt: { AllowOther: false, AllowNonEmpty: false }, vfsOpt: { ReadOnly: true, CacheMode: record.view.fileCacheMaxMiB === 0 ? 'off' : 'full',
+          CacheMaxSize: record.view.fileCacheMaxMiB * 1024 * 1024,
+          CacheMaxAge: record.view.fileCacheMaxAgeHours === 0 ? 'off' : `${record.view.fileCacheMaxAgeHours}h`, ReadAhead: 0,
+          // Persist downloaded-range metadata on close, before an immediate normal remount.
+          HandleCaching: '0s',
+          ChunkSize: 256 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0,
           DirCacheTime: record.view.directoryCacheSeconds === 0 ? 'off' : `${record.view.directoryCacheSeconds}s` } });
       record.view.mountPoint = result.mountPoint;
       const mounted = (await activePoints()).some(point => equalPoint(point.MountPoint, result.mountPoint));
@@ -204,7 +222,8 @@ export async function createMountManager(options: {
       const previous = records.find(record => equalPoint(record.view.mountPoint, input.mountPoint) || equalPoint(record.input.mountPoint, input.mountPoint));
       if (previous && previous.view.state === 'mounted') {
         if (JSON.stringify(previous.input.source) === JSON.stringify(input.source)) {
-          if (previous.view.directoryCacheSeconds !== input.directoryCacheSeconds) throw new MountError('mount_busy', '此位置已挂载；请通过缓存设置保存并重新挂载。');
+          if (previous.view.directoryCacheSeconds !== input.directoryCacheSeconds || previous.view.fileCacheMaxMiB !== input.fileCacheMaxMiB
+            || previous.view.fileCacheMaxAgeHours !== input.fileCacheMaxAgeHours) throw new MountError('mount_busy', '此位置已挂载；请通过缓存设置保存并重新挂载。');
           return view(previous);
         }
         throw new MountError('mount_busy', '此路径已挂载其他连接，请先卸载。');
@@ -213,6 +232,7 @@ export async function createMountManager(options: {
       const record: RecordEntry = previous ?? {
         input, mayBeMounted: false, view: { id: crypto.randomUUID(), name: input.name ?? (input.source.kind === 'local' ? '本地 MusicFS' : new URL(input.source.url).host), mountPoint: input.mountPoint,
           directoryCacheSeconds: input.directoryCacheSeconds ?? 300,
+          fileCacheMaxMiB: input.fileCacheMaxMiB ?? 8192, fileCacheMaxAgeHours: input.fileCacheMaxAgeHours ?? 168,
           source: input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url }, state: 'starting' }
       };
       if (!previous) records.push(record);
@@ -229,20 +249,27 @@ export async function createMountManager(options: {
     remove: id => serialize(async () => {
       const record = findRecord(id);
       await stop(record);
+      // rclone namespaces sparse data and metadata by this stable remote name.
+      // Unmount keeps them for reuse; removing the definition also releases its cache.
+      for (const kind of ['vfs', 'vfsMeta']) await rm(join(options.directory, 'cache', kind, remoteName(record)), { recursive: true, force: true });
       records.splice(records.indexOf(record), 1);
       await persist();
     }),
     configureCache: (id: string, settings: MountCacheSettings) => serialize(async () => {
       const parsed = cacheSchema.safeParse(settings);
-      if (!parsed.success) throw new MountError('invalid_mount', '目录缓存秒数必须为非负整数；0 表示不自动过期。');
+      if (!parsed.success) throw new MountError('invalid_mount', '请填写有效的目录缓存、文件缓存容量和保留时间。');
       const record = findRecord(id);
-      if (record.view.directoryCacheSeconds === parsed.data.directoryCacheSeconds) return view(record);
+      const input = normalizeInput({ ...record.input, directoryCacheSeconds: parsed.data.directoryCacheSeconds,
+        ...(parsed.data.fileCacheMaxMiB === undefined ? {} : { fileCacheMaxMiB: parsed.data.fileCacheMaxMiB }),
+        ...(parsed.data.fileCacheMaxAgeHours === undefined ? {} : { fileCacheMaxAgeHours: parsed.data.fileCacheMaxAgeHours }) });
+      if (record.view.directoryCacheSeconds === input.directoryCacheSeconds && record.view.fileCacheMaxMiB === input.fileCacheMaxMiB
+        && record.view.fileCacheMaxAgeHours === input.fileCacheMaxAgeHours) return view(record);
       const wasMounted = record.mayBeMounted;
       // Commit the new settings only after a normal unmount succeeds.
       if (wasMounted) await stop(record);
-      const input = normalizeInput({ ...record.input, ...parsed.data });
       if (wasMounted) return start(record, input);
       record.input = input; record.view.directoryCacheSeconds = parsed.data.directoryCacheSeconds;
+      record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? 8192; record.view.fileCacheMaxAgeHours = input.fileCacheMaxAgeHours ?? 168;
       await persist(); return view(record);
     }),
     refresh: id => serialize(async () => {

@@ -7,13 +7,25 @@ import type { MountCacheSettings, MountInput, MountView } from '../../contracts/
 import { Failure } from '../components/feedback';
 
 const labels: Record<MountView['state'], string> = { starting: '正在挂载', mounted: '已挂载', unmounting: '正在卸载', stopped: '已卸载', error: '挂载失败' };
-type Fields = { name?: string; mountPoint: string; directoryCacheSeconds: number; url?: string; username?: string; password?: string };
-function DirectoryCacheField() {
-  return <Form.Item label="目录缓存（秒）" name="directoryCacheSeconds"
-    extra="默认 300 秒。0 表示不自动过期；仅缓存目录清单，不缓存音频文件。"
+type Fields = { name?: string; mountPoint: string; directoryCacheSeconds: number; fileCacheMaxMiB: number; fileCacheMaxAgeHours: number;
+  url?: string; username?: string; password?: string };
+function MountCacheFields() {
+  return <><Form.Item label="目录缓存（秒）" name="directoryCacheSeconds"
+    extra="默认 300 秒。0 表示不自动过期；只影响目录清单。"
     rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483_647, message: '请输入非负整数秒数' }]}>
     <InputNumber min={0} max={2_147_483_647} precision={0} style={{ width: '100%' }} />
-  </Form.Item>;
+  </Form.Item>
+    <Typography.Paragraph type="secondary">读取缓存只保留按需读取的音频片段，重复打开时可以复用，不预先下载整曲。</Typography.Paragraph>
+    <Form.Item label="读取缓存容量（MiB）" name="fileCacheMaxMiB"
+      extra="默认 8192 MiB（8 GiB），为每个挂载的软上限。0 表示关闭读取缓存；关闭不会清理已存片段。"
+      rules={[{ required: true, type: 'integer', min: 0, max: 1_048_576, message: '请输入 0 至 1048576 的整数' }]}>
+      <InputNumber min={0} max={1_048_576} precision={0} style={{ width: '100%' }} />
+    </Form.Item>
+    <Form.Item label="未访问缓存保留时间（小时）" name="fileCacheMaxAgeHours"
+      extra="默认 168 小时（7 天），按未访问时长淘汰。0 表示不按时间淘汰。"
+      rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483, message: '请输入 0 至 2147483 的整数' }]}>
+      <InputNumber min={0} max={2_147_483} precision={0} style={{ width: '100%' }} />
+    </Form.Item></>;
 }
 export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => void }) {
   const client = useQueryClient(); const { message } = App.useApp();
@@ -47,7 +59,7 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
   const configureCache = useMutation({ mutationFn: ({ id, settings }: { id: string; settings: MountCacheSettings }) => api.configureMountCache(id, settings), onSuccess: async result => {
     await client.invalidateQueries({ queryKey: ['mounts'] });
     if (result.state === 'error') { setCacheError(result.error?.message ?? '设置已保存，重新挂载未完成，请检查后重试。'); return; }
-    setCacheTarget(null); message.success(result.state === 'mounted' ? '目录缓存设置已保存并重新挂载' : '目录缓存设置已保存');
+    setCacheTarget(null); message.success(result.state === 'mounted' ? '挂载缓存设置已保存并重新挂载' : '挂载缓存设置已保存');
   }, onError: () => { void client.invalidateQueries({ queryKey: ['mounts'] }); } });
   const refresh = useMutation({ mutationFn: (id: string) => api.refreshMount(id), onSuccess: () => {
     message.success('已清除挂载目录缓存，下次打开目录时重新读取');
@@ -60,6 +72,7 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
     setMountError('');
     const source: MountInput['source'] = kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: values.url!, username: values.username!, password: values.password! };
     await mount.mutateAsync({ mountPoint: values.mountPoint, source, directoryCacheSeconds: values.directoryCacheSeconds,
+      fileCacheMaxMiB: values.fileCacheMaxMiB, fileCacheMaxAgeHours: values.fileCacheMaxAgeHours,
       ...(values.name?.trim() ? { name: values.name.trim() } : {}) });
   }
   if (mounts.error && 'status' in mounts.error && mounts.error.status === 404) return <Alert type="info" showIcon title="从桌面启动器打开即可管理挂载" description="当前开发服务只提供 WebDAV 连接。桌面发行程序会管理随包 rclone 和本机挂载。" />;
@@ -78,13 +91,16 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
     <Failure error={mounts.error} retry={() => void mounts.refetch()} /><Failure error={unmount.error} /><Failure error={remount.error} /><Failure error={remove.error} /><Failure error={refresh.error} />
     <Table rowKey="id" loading={mounts.isPending} dataSource={mounts.data} pagination={false} locale={{ emptyText: '尚无挂载，添加一个本机或远程连接即可开始。' }} columns={[
       { title: '名称 / 位置', key: 'name', render: (_, item) => <><Typography.Text strong>{item.name}</Typography.Text><div>{item.mountPoint}</div>
-        <Typography.Text type="secondary">目录缓存：{item.directoryCacheSeconds === 0 ? '手动刷新' : `${item.directoryCacheSeconds} 秒`}</Typography.Text></> },
+        <Typography.Text type="secondary">目录缓存：{item.directoryCacheSeconds === 0 ? '手动刷新' : `${item.directoryCacheSeconds ?? 300} 秒`}</Typography.Text>
+        <div><Typography.Text type="secondary">读取缓存：{(item.fileCacheMaxMiB ?? 8192) === 0 ? '已关闭' : `${item.fileCacheMaxMiB ?? 8192} MiB`}</Typography.Text></div></> },
       { title: '来源', key: 'source', render: (_, item) => item.source.kind === 'local' ? '本机 MusicFS' : item.source.url },
       { title: '状态', key: 'state', render: (_, item) => <><Tag color={item.state === 'mounted' ? 'success' : item.state === 'error' ? 'error' : 'default'}>{labels[item.state]}</Tag>{item.error && <div role="alert">{item.error.message}</div>}</> },
       { title: '操作', key: 'action', render: (_, item) => <Space wrap>
         <Button loading={remount.isPending && remount.variables === item.id} disabled={changing || ['starting', 'unmounting'].includes(item.state)} onClick={() => remount.mutate(item.id)}>重新挂载</Button>
         {['mounted', 'starting', 'unmounting', 'error'].includes(item.state) && <Button loading={unmount.isPending && unmount.variables === item.id} disabled={changing} onClick={() => unmount.mutate(item.id)}>卸载</Button>}
-        <Button disabled={changing} onClick={() => { configureCache.reset(); setCacheError(''); setCacheTarget(item); cacheForm.setFieldsValue({ directoryCacheSeconds: item.directoryCacheSeconds }); }}>缓存设置</Button>
+        <Button disabled={changing} onClick={() => { configureCache.reset(); setCacheError(''); setCacheTarget(item); cacheForm.setFieldsValue({
+          directoryCacheSeconds: item.directoryCacheSeconds ?? 300, fileCacheMaxMiB: item.fileCacheMaxMiB ?? 8192,
+          fileCacheMaxAgeHours: item.fileCacheMaxAgeHours ?? 168 }); }}>缓存设置</Button>
         <Button loading={refresh.isPending && refresh.variables === item.id} disabled={changing || item.state !== 'mounted'} onClick={() => refresh.mutate(item.id)}>刷新挂载目录</Button>
         <Button danger loading={remove.isPending && remove.variables === item.id} disabled={changing} onClick={() => remove.mutate(item.id)}>移除</Button>
       </Space> }
@@ -93,24 +109,24 @@ export default function Mounts({ api, onStopped }: { api: Api; onStopped: () => 
       <Button icon={<PoweroffOutlined />} loading={quit.isPending} disabled={!mounts.isSuccess || changing} onClick={() => quit.mutate()}>退出 MusicFS 后台</Button></div>
     <Failure error={quit.error} />
     <Modal title="添加挂载" open={open} onCancel={() => { if (!mount.isPending) setOpen(false); }} footer={null} destroyOnHidden closable={!mount.isPending} mask={{ closable: !mount.isPending }}>
-      <Form form={form} layout="vertical" onFinish={submit} preserve={false} initialValues={{ directoryCacheSeconds: 300 }}>
+      <Form form={form} layout="vertical" onFinish={submit} preserve={false} initialValues={{ directoryCacheSeconds: 300, fileCacheMaxMiB: 8192, fileCacheMaxAgeHours: 168 }}>
         <Form.Item label="来源"><Radio.Group value={kind} onChange={event => setKind(event.target.value)} options={[{ label: '本机 MusicFS', value: 'local' }, { label: '远程 WebDAV', value: 'remote' }]} disabled={mount.isPending} /></Form.Item>
         <Form.Item label="名称（可选）" name="name"><Input maxLength={120} /></Form.Item>
         <Form.Item label="盘符或挂载目录" name="mountPoint" rules={[{ required: true, whitespace: true, message: '请输入本机挂载位置' }]}><Input placeholder="例如 M: 或 /home/me/MusicFS" /></Form.Item>
-        <DirectoryCacheField />
+        <MountCacheFields />
         {kind === 'remote' && <><Form.Item label="WebDAV 地址" name="url" rules={[{ required: true, type: 'url', message: '请输入完整 WebDAV 地址' }]}><Input placeholder="https://music.example.com/dav" /></Form.Item>
           <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入读取用户名' }]}><Input autoComplete="off" /></Form.Item>
           <Form.Item label="读取密码" name="password" rules={[{ required: true, message: '请输入读取密码' }]}><Input.Password autoComplete="off" /></Form.Item></>}
         <Failure error={mount.error} />{mountError && <Alert type="error" showIcon title={mountError} />}<Space><Button type="primary" htmlType="submit" loading={mount.isPending}>挂载</Button><Button disabled={mount.isPending} onClick={() => setOpen(false)}>取消</Button></Space>
       </Form>
     </Modal>
-    <Modal title={`目录缓存设置${cacheTarget ? ` · ${cacheTarget.name}` : ''}`} open={cacheTarget !== null}
+    <Modal title={`挂载缓存设置${cacheTarget ? ` · ${cacheTarget.name}` : ''}`} open={cacheTarget !== null}
       onCancel={() => { if (!configureCache.isPending) setCacheTarget(null); }} footer={null} destroyOnHidden closable={!configureCache.isPending} mask={{ closable: !configureCache.isPending }}>
       <Typography.Paragraph>已挂载的连接会在保存后正常卸载并重新挂载；文件占用导致卸载失败时，保留原设置和挂载。已卸载的连接只保存设置。</Typography.Paragraph>
       <Form form={cacheForm} layout="vertical" preserve={false} onFinish={settings => {
         if (cacheTarget) { setCacheError(''); configureCache.mutate({ id: cacheTarget.id, settings }); }
       }}>
-        <DirectoryCacheField />
+        <MountCacheFields />
         <Failure error={configureCache.error} />{cacheError && <Alert type="error" showIcon title={cacheError} />}
         <Space><Button type="primary" htmlType="submit" loading={configureCache.isPending}>保存</Button><Button disabled={configureCache.isPending} onClick={() => setCacheTarget(null)}>取消</Button></Space>
       </Form>

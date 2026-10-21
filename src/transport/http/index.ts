@@ -126,8 +126,12 @@ export function createManagementApi(input: {
   });
   app.put('/api/mounts/:id/cache', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);
-    const settings = z.object({ directoryCacheSeconds: z.number().int().min(0).max(2_147_483_647) }).strict().parse(await json(c));
-    return c.json(await input.mounts.configureCache(c.req.param('id'), settings));
+    const settings = z.object({ directoryCacheSeconds: z.number().int().min(0).max(2_147_483_647),
+      fileCacheMaxMiB: z.number().int().min(0).max(1_048_576).optional(),
+      fileCacheMaxAgeHours: z.number().int().min(0).max(2_147_483).optional() }).strict().parse(await json(c));
+    return c.json(await input.mounts.configureCache(c.req.param('id'), { directoryCacheSeconds: settings.directoryCacheSeconds,
+      ...(settings.fileCacheMaxMiB === undefined ? {} : { fileCacheMaxMiB: settings.fileCacheMaxMiB }),
+      ...(settings.fileCacheMaxAgeHours === undefined ? {} : { fileCacheMaxAgeHours: settings.fileCacheMaxAgeHours }) }));
   });
   app.post('/api/mounts/:id/cache/refresh', async c => {
     if (!input.mounts) return c.json({ error: 'not_supported', message: 'Mounts are available on a desktop host' }, 404);

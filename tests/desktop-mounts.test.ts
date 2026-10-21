@@ -49,20 +49,26 @@ test('directory cache settings default to five minutes and change only after a n
   expect((await manager.list())[0]?.directoryCacheSeconds).toBe(300); expect(fake.calls).toHaveLength(0);
   const mounted = await manager.mount(legacyInput);
   expect(mounted.directoryCacheSeconds).toBe(300);
-  expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '300s', CacheMode: 'off' });
+  expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '300s', CacheMode: 'full', CacheMaxSize: 8192 * 1024 * 1024, CacheMaxAge: '168h', ReadAhead: 0 });
+  expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters).toMatchObject({
+    _config: { BufferSize: 128 * 1024 }, vfsOpt: { ChunkSize: 256 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0 }
+  });
   const updated = await manager.configureCache(mounted.id, { directoryCacheSeconds: 0 });
   expect(updated).toMatchObject({ id: mounted.id, directoryCacheSeconds: 0, state: 'mounted' });
-  expect(fake.calls.filter(call => call.method === 'mount/mount').at(-1)?.parameters.vfsOpt).toMatchObject({ DirCacheTime: 'off', CacheMode: 'off' });
+  expect(fake.calls.filter(call => call.method === 'mount/mount').at(-1)?.parameters.vfsOpt).toMatchObject({ DirCacheTime: 'off', CacheMode: 'full' });
   fake.setBusy(true);
   await expect(manager.configureCache(mounted.id, { directoryCacheSeconds: 900 })).rejects.toMatchObject({ code: 'mount_busy' });
   expect((await manager.list())[0]?.directoryCacheSeconds).toBe(0);
   const persisted = JSON.parse(await readFile(join(directory, 'state', 'mounts.json'), 'utf8'));
   expect(persisted[0].input.directoryCacheSeconds).toBe(0); expect(fake.mountCalls()).toBe(2);
   fake.setBusy(false); await manager.unmount(mounted.id);
-  expect(await manager.configureCache(mounted.id, { directoryCacheSeconds: 1200 })).toMatchObject({ state: 'stopped', directoryCacheSeconds: 1200 });
+  expect(await manager.configureCache(mounted.id, { directoryCacheSeconds: 1200, fileCacheMaxMiB: 64, fileCacheMaxAgeHours: 0 }))
+    .toMatchObject({ state: 'stopped', directoryCacheSeconds: 1200, fileCacheMaxMiB: 64, fileCacheMaxAgeHours: 0 });
   expect(fake.mountCalls()).toBe(2);
   expect(await manager.remount(mounted.id)).toMatchObject({ state: 'mounted', directoryCacheSeconds: 1200 });
-  expect(fake.calls.filter(call => call.method === 'mount/mount').at(-1)?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '1200s' });
+  expect(fake.calls.filter(call => call.method === 'mount/mount').at(-1)?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '1200s', CacheMaxSize: 64 * 1024 * 1024, CacheMaxAge: 'off' });
+  expect(await manager.configureCache(mounted.id, { directoryCacheSeconds: 1200, fileCacheMaxMiB: 0 })).toMatchObject({ fileCacheMaxMiB: 0, fileCacheMaxAgeHours: 0 });
+  expect(fake.calls.filter(call => call.method === 'mount/mount').at(-1)?.parameters.vfsOpt).toMatchObject({ CacheMode: 'off' });
 });
 
 test('mount directory refresh forgets only its VFS and local publishing does not start inactive rclone', async () => {
@@ -146,7 +152,7 @@ test('saved remote mounts reconnect with the same identity and private credentia
   const recovered = await createMountManager(options);
   const restarted = await recovered.remount(first.id);
   expect(restarted).toMatchObject({ id: first.id, name: 'My remote', mountPoint: input.mountPoint, state: 'mounted' });
-  expect([...fake.remotes.values()]).toEqual([{ url: input.source.url, vendor: 'other', user: 'saved-user', pass: 'saved-password' }]);
+  expect([...fake.remotes.values()]).toEqual([{ url: input.source.url, vendor: 'rclone', user: 'saved-user', pass: 'saved-password' }]);
   expect(JSON.stringify(restarted)).not.toContain('saved-user'); expect(JSON.stringify(restarted)).not.toContain('saved-password');
   await recovered.remove(first.id);
   expect(fake.remotes.size).toBe(0); expect(await recovered.list()).toEqual([]);

@@ -4,6 +4,10 @@ export type MountInput = {
   mountPoint: string;
   /** Directory listing lifetime; zero keeps listings until explicitly refreshed. */
   directoryCacheSeconds?: number;
+  /** Per-mount soft disk limit for read fragments; zero disables new caching. */
+  fileCacheMaxMiB?: number;
+  /** Evict cache entries after this many hours without access; zero disables age eviction. */
+  fileCacheMaxAgeHours?: number;
   source: { kind: 'local' } | { kind: 'remote'; url: string; username: string; password: string };
 };
 
@@ -12,12 +16,14 @@ export type MountView = {
   name: string;
   mountPoint: string;
   directoryCacheSeconds: number;
+  fileCacheMaxMiB: number;
+  fileCacheMaxAgeHours: number;
   source: { kind: 'local' } | { kind: 'remote'; url: string };
   state: 'starting' | 'mounted' | 'unmounting' | 'stopped' | 'error';
   error?: { code: string; message: string };
 };
 
-export type MountCacheSettings = { directoryCacheSeconds: number };
+export type MountCacheSettings = { directoryCacheSeconds: number; fileCacheMaxMiB?: number; fileCacheMaxAgeHours?: number };
 
 export interface MountManager {
   list(): Promise<MountView[]>;
