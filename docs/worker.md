@@ -55,12 +55,12 @@ bunx wrangler deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 
 | 配置 | 方式 | 用途 |
 |---|---|---|
-| `DB` | D1 binding | 实例、布局、快照、分页刷新、插件变更、续期租约与可选插件缓存；需要包含 `0008.sql` 的全部迁移 |
+| `DB` | D1 binding | 实例、布局、快照、后台操作、管理认证及自定义 DAV 凭据；需要按顺序应用至 `0012.sql` 的全部迁移 |
 | `ASSETS` | 静态资源 binding | 根页面和 `/assets/*`，与管理 API/DAV 共用一个 Worker |
 | `CF_ACCOUNT_ID`、`CF_WORKER_NAME` | 模板 vars | 定位当前部署；Worker 名称必须与实际目标一致 |
 | `CF_API_TOKEN` | Secret | 后台读取当前代码集合、发布替换代码；仅宿主使用 |
 | `ADMIN_TOKEN` | Secret | 用户访问受保护管理 API，WebUI 使用用户输入的该令牌 |
-| `DAV_USERNAME`、`DAV_PASSWORD` | Secrets | DAV 读取凭据；受保护的连接信息 API 会向管理用户提供连接信息 |
+| `DAV_USERNAME`、`DAV_PASSWORD` | Secrets | 初始 DAV 读取凭据；管理页保存自定义账号密码后，以 D1 中的设置为准 |
 
 发布Token需要有权读取目标Worker的当前模块及写入代码，可使用目标账号的Workers Scripts Edit权限；不是每次安装插件都重新申请。此配置方式已由本轮真实部署和后台发布验证。官方Content API列出接受的写权限。[Cloudflare Content API 权限与合同](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/)
 

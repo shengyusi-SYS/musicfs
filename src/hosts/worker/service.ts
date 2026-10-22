@@ -10,6 +10,7 @@ import { createManagementAuth, type ManagementAuth } from '../../infrastructure/
 import { createManagementApi } from '../../transport/http';
 import { createDav, type DavOptions, type ReadCredentials } from '../../transport/dav';
 import { createWorkerRegistry, type RegisteredPlugin } from './plugins';
+import { createWorkerDavAccess } from './dav-access';
 
 export type WorkerPluginChanges = {
   install(archive: Uint8Array, signal: AbortSignal): Promise<PluginChange>;
@@ -39,6 +40,7 @@ export function createWorkerService(input: {
 }) {
   const { store, sources, library } = input.runtime ?? createWorkerRuntime(input.db, input.registrations);
   const authentication = input.authentication ?? createManagementAuth({ database: input.db, adminToken: input.adminToken });
+  const davAccess = createWorkerDavAccess(input.db, input.dav);
   const app = new Hono();
   app.use('*', async (c, next) => {
     await next();
@@ -52,10 +54,10 @@ export function createWorkerService(input: {
   app.route('/', authentication.app);
   app.route('/', createManagementApi({ host: 'worker', adminToken: input.adminToken, managementAuth: authentication.middleware, sources, library,
     extensions: { list: () => store.installations() },
-    connection: { davPath: '/dav', ...input.dav }, maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
+    davAccess, maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
     install: (archive, signal) => input.changes.install(archive, signal),
     remove: (id, signal) => input.changes.remove(id, signal), pluginChange: id => input.changes.get(id) }));
-  app.route('/', createDav(library.files, input.dav, input.fixedLength ? { fixedLength: input.fixedLength } : {}));
+  app.route('/', createDav(library.files, davAccess.get, input.fixedLength ? { fixedLength: input.fixedLength } : {}));
   if (input.assets) {
     const assets = input.assets;
     app.on(['GET', 'HEAD'], ['/', '/assets/*'], c => assets.fetch(c.req.raw));

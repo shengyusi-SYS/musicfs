@@ -9,6 +9,7 @@ import type { DesktopHttpsView } from '../contracts/desktop-https';
 import type { RefreshPolicy } from '../contracts/refresh-policy';
 import type { ReadCacheSettings, ReadCacheStatus } from '../contracts/read-cache';
 import type { ManagementAccess, ManagementTicket } from '../contracts/management-auth';
+import type { DavCredentials } from '../contracts/dav-access';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -114,6 +115,7 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
     library: (path: string, signal: AbortSignal) => request<ViewEntry[]>(`/library?path=${encodeURIComponent(path)}`, { signal }),
     browseDirectory: (path: string, signal: AbortSignal) => request<DirectoryListing>(`/library/directory?path=${encodeURIComponent(path)}`, { signal }),
     connection: (signal: AbortSignal) => request<Connection>('/connection', { signal }),
+    saveConnection: (value: DavCredentials) => request<Connection>('/connection', json('PUT', value)),
     authentication: (id: string, signal: AbortSignal) => request<AuthenticationSession | null>(`/instances/${encodeURIComponent(id)}/authentication`, { signal }),
     authenticate: (id: string, action: AuthenticationAction, signal?: AbortSignal) => request<Result<AuthenticationSession>>(`/instances/${encodeURIComponent(id)}/authentication`, { ...json('POST', action), ...(signal ? { signal } : {}) })
   };

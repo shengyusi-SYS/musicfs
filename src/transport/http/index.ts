@@ -10,6 +10,7 @@ import type { PluginChange } from '../../contracts/plugin-changes';
 import type { MountInput, MountManager } from '../../contracts/mounts';
 import type { RefreshView } from '../../contracts/refreshes';
 import type { RefreshPolicy } from '../../contracts/refresh-policy';
+import type { DavAccess } from '../../contracts/dav-access';
 import { ExtensionError, type Extensions, type Installation } from '../../core/extensions';
 import { SourceError, type Sources } from '../../core/sources';
 import { LibraryError, PendingRefreshError, type Library } from '../../core/library';
@@ -18,6 +19,10 @@ import { inspectPackage } from '../../infrastructure/archives';
 const name = z.string().trim().min(1).max(120);
 const instanceInput = z.object({ pluginId: z.string().min(1), name, config: z.json() }).strict();
 const configInput = z.object({ config: z.json() }).strict();
+const davCredentialsInput = z.object({
+  username: z.string().trim().min(1).max(128).regex(/^[^:\u0000-\u001f\u007f]+$/),
+  password: z.string().min(1).max(256).regex(/^[^\u0000-\u001f\u007f]+$/)
+}).strict();
 const refreshPolicyInput = z.object({ intervalMinutes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
   .refine(value => value === 0 || value >= 15) }).strict();
 const layoutInput = z.object({ expectedRevision: z.number().int().nonnegative(), nodes: z.json() }).strict();
@@ -60,6 +65,7 @@ export function createManagementApi(input: {
   host: HostKind; adminToken: string; sources: Sources; library: Library; extensions: Pick<Extensions, 'list'>;
   managementAuth?: import('hono').MiddlewareHandler;
   connection?: Connection;
+  davAccess?: DavAccess;
   mounts?: MountManager;
   mountAction?: (id: string) => void;
   maxPackageBytes: number; install: (archive: Uint8Array, signal: AbortSignal) => Promise<Installation | PluginChange>;
@@ -87,7 +93,15 @@ export function createManagementApi(input: {
   // Never serialize Outcome.nextPrivateState into a management response.
   const result = <T>(outcome: Outcome<T>): Result<T> => outcome.ok ? { ok: true, value: outcome.value } : { ok: false, error: outcome.error };
   app.get('/api/status', c => c.json({ host: input.host, version } satisfies Status));
-  app.get('/api/connection', c => input.connection ? c.json(input.connection) : c.json({ error: 'not_supported', message: 'Connection details are unavailable' }, 404));
+  app.get('/api/connection', async c => input.davAccess ? c.json({ davPath: '/dav', ...await input.davAccess.get() })
+    : input.connection ? c.json(input.connection) : c.json({ error: 'not_supported', message: 'Connection details are unavailable' }, 404));
+  app.put('/api/connection', async c => {
+    if (!input.davAccess) return c.json({ error: 'not_supported', message: 'Connection settings are unavailable' }, 404);
+    const value = davCredentialsInput.safeParse(await json(c));
+    if (!value.success) return c.json({ error: 'invalid_credentials', message: '请填写用户名和密码；用户名不能包含冒号，内容不能包含换行等控制字符。' }, 422);
+    await input.davAccess.save(value.data);
+    return c.json({ davPath: '/dav', ...value.data } satisfies Connection);
+  });
   app.get('/api/plugins', async c => c.json((await extensions.list()) satisfies PluginInstallation[]));
   app.post('/api/plugins/inspect', async c => c.json(await inspectPackage(new Uint8Array(await c.req.arrayBuffer()), input.host, c.req.raw.signal)));
   app.post('/api/plugins/inspect-url', async c => {

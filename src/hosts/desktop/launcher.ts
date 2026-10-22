@@ -166,7 +166,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
     const binary = join(resources, process.platform === 'win32' ? 'rclone.exe' : 'rclone');
     const control = createRcloneControl({ directory: controlDirectory, binary });
     const mounts = await createMountManager({ control, manageControl: false, directory: controlDirectory, binary,
-      localConnection: () => service?.readCache?.mountConnection ?? ({ url: `${origin}/dav/`, username: credentials.username, password: credentials.password }),
+      localConnection: () => service?.readCache?.mountConnection ?? ({ url: `${origin}/dav/`, ...(service?.davAccess.get() ?? { username: credentials.username, password: credentials.password }) }),
       ...(process.platform === 'win32' ? { checkDependencies: () => prerequisites.check() } : {}) });
     restore = createMountRestore({ mounts, settings: { enabled: preferences.autoMount, retry: preferences.retryAutoMount },
       onError: () => console.error('MusicFS: a saved mount could not be restored. See Connections for details.') });

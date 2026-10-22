@@ -72,7 +72,7 @@ flowchart LR
 - `sources.tsx` 组织来源列表；`source-editor.tsx` 管理创建和配置；`source-content.tsx` 负责内容与刷新；`authentication.tsx` 负责通用登录状态机。
 - `library.tsx` 浏览当前目录并切换整理工作区；`layout-editor.tsx` 管理草稿、撤销/重做和保存；`layout-sources.tsx` 读取插件入口并批量选择；`layout-tree.tsx` 负责节点改名、拖动和显式移动；`layout-draft.ts` 保存纯树操作规则。
 - `plugins.tsx` 管理安装后的列表和后台变更；`plugin-installer.tsx` 管理包选择、检查和提交。
-- `connection.tsx` 区分挂载与 DAV；`mounts.tsx` 管理挂载；`cache-settings.tsx` 复用缓存表单和统计展示；网络与 HTTPS 保留各自模块。
+- `connection.tsx` 区分挂载与 DAV；`dav-connection.tsx` 管理读取凭据与播放器导入二维码；`mounts.tsx` 管理挂载；`cache-settings.tsx` 复用缓存表单和统计展示；网络与 HTTPS 保留各自模块。
 - `settings.tsx` 管理账号和桌面偏好；`phone-access.tsx` 展示已启用的局域网地址与一次性二维码。
 
 TanStack Query 管理服务器状态，普通查询保留 30 秒新鲜期，显式变更继续失效相关查询；活动任务维持原轮询和串行推进。布局节点 DTO、插件协议、后端刷新、认证与挂载机制不变。目录整理新增只读的默认布局接口，复用核心命名与快照逻辑。RJSF 继续承载插件 Schema，字段说明折叠展示，后端校验是权威。

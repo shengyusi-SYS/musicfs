@@ -39,6 +39,15 @@ test('the packaged Worker creates a management session and protects the shared A
     expect(cookie.length).toBeGreaterThan(0);
     const signedIn = await request('/api/status', { headers: { Cookie: cookie } });
     expect(signedIn.status).toBe(200); expect((await signedIn.json() as { host: string }).host).toBe('worker');
+    const credentials = { username: 'player', password: 'worker-player:@/#?' };
+    const saved = await request('/api/connection', { method: 'PUT', headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(credentials) });
+    expect(saved.status).toBe(200); expect(await saved.json()).toEqual({ davPath: '/dav', ...credentials });
+    const connection = await request('/api/connection', { headers: { Cookie: cookie } });
+    expect(await connection.json()).toEqual({ davPath: '/dav', ...credentials });
+    const oldPlayer = await request('/dav/', { method: 'OPTIONS', headers: { Authorization: 'Basic ' + btoa('reader:reader-fixture') } });
+    expect(oldPlayer.status).toBe(401); await oldPlayer.body?.cancel();
+    const player = await request('/dav/', { method: 'OPTIONS', headers: { Authorization: 'Basic ' + btoa(`${credentials.username}:${credentials.password}`) } });
+    expect(player.status).toBe(200); await player.body?.cancel();
     const logout = await request('/api/access/logout', { method: 'POST', headers: { Cookie: cookie, Origin: origin } });
     expect(logout.status).toBe(200); await logout.body?.cancel();
     // Reusing the old cookie must fail even when a client has not applied its deletion header.

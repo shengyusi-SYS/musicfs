@@ -6,8 +6,9 @@ import parseRange from 'range-parser';
 import { LibraryError, PendingRefreshError, type FileView } from '../../core/library';
 import { SourceError } from '../../core/sources';
 import { needsFileMetadata, parsePropfind, propfindResponse } from './xml';
+import type { DavCredentials } from '../../contracts/dav-access';
 
-export type ReadCredentials = { username: string; password: string };
+export type ReadCredentials = DavCredentials;
 export type DavOptions = { fixedLength?: (size: number) => TransformStream<Uint8Array, Uint8Array> };
 const allow = 'OPTIONS, PROPFIND, GET, HEAD';
 
@@ -33,10 +34,12 @@ function logicalPath(url: string): string {
 const modifiedSeconds = (date: string) => Math.floor(Date.parse(date) / 1000) * 1000;
 
 /** One read-only Fetch path shared by Bun and Workers; XML/Range mechanisms come from libraries. */
-export function createDav(view: FileView, credentials: ReadCredentials, options: DavOptions = {}) {
-  if (!credentials.username || credentials.username.includes(':') || !credentials.password) throw new Error('DAV credentials are required');
+export function createDav(view: FileView, credentials: ReadCredentials | (() => ReadCredentials | Promise<ReadCredentials>), options: DavOptions = {}) {
+  if (typeof credentials !== 'function' && (!credentials.username || credentials.username.includes(':') || !credentials.password)) throw new Error('DAV credentials are required');
   const app = new Hono();
-  const auth = basicAuth(credentials);
+  const auth = typeof credentials === 'function'
+    ? async (c: Context, next: () => Promise<void>) => basicAuth(await credentials())(c, next)
+    : basicAuth(credentials);
   const limit = bodyLimit({ maxSize: 64 * 1024 });
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();

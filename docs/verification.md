@@ -6,6 +6,8 @@
 
 当前桌面更新为 dev.16 的 Windows 托盘双击与无命令行浏览器入口，核对范围见[托盘交互](verification/tray-interaction.md)。dev.15 的默认卷标、中文自定义与管理页重命名已通过现有 VM 必要验收，见[名称与启动核对](verification/mount-names.md)。核心桌面体验沿用已验收的 dev.14，Windows自启注册命令、自动挂载和登录见[实机证据](verification/desktop-access.md)。API0.1.9、音乐库 schema10 和平台插件版本不变；Worker认证迁移仍为0011。macOS原生产物与免费CPU仍未验，产物身份统一见[发行页](release.md)。
 
+源码新增 WebDAV 自定义凭据与通用导入二维码，尚未进入 dev.16 归档：桌面 HTTP 验证修改即时生效、旧密码失效和重启恢复；正式 Worker 本地 workerd/D1 验证跨请求保存与认证，新增迁移为 `0012.sql`；URL 测试覆盖中文、空格、冒号及 `@/#?%+`，类型检查、依赖边界与 WebUI 构建通过。二维码复用现有 Ant Design；具体播放器扫码导入和真实云端升级尚未验。
+
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
 | 桌面常驻与管理访问 | [本轮核对](verification/desktop-access.md) | 本地会话、恢复与监听；Windows 正式包与用户协助菜单点击通过，其他目标环境边界单列 |

@@ -40,6 +40,26 @@ sequenceDiagram
 
 ## 模块与存储
 
+### 播放器凭据与扫码导入
+
+「WebDAV 播放器」通过受管理会话保护的 `GET/PUT /api/connection` 查看和修改读取凭据。桌面用私有 `dav.json` 原子保存，并在内存中保留当前值；Worker 用 `0012.sql` 的单行 `dav_credentials` 表保存，每次 DAV 请求读取一次当前值，避免不同 isolate 继续接受旧密码。未自定义时沿用启动器生成的凭据或部署 Secrets。Worker 升级应先应用随包迁移，再发布代码。
+
+共用 DAV 路由通过动态凭据提供函数复用 [Hono Basic Auth](https://hono.dev/docs/middleware/builtin/basic-auth)，账号密码保存后后续请求立即采用新值；已开始的响应可正常结束。管理账号、启动器身份和来源授权各有自己的生命周期。App 本机挂载使用 `read-cache` 的独立内部连接，无需随公开 DAV 密码改变而重新挂载。
+
+WebDAV 导入二维码与管理页的「手机访问」入口分别提供：前者是 `http(s)://用户名:密码@地址/dav/` 的连接信息，由标准 URL 编码及 [Ant Design QRCode](https://ant.design/components/qr-code/) 生成，不签发管理会话。密码按用户选择明文显示；播放器是否支持扫码导入该地址由客户端决定。桌面扫码入口只列出可供其他设备使用的地址，局域网需先由用户在设置中开启；Worker 使用当前访问域名。
+
+```mermaid
+flowchart LR
+    Admin[已登录管理页] -->|保存读取凭据| Settings[桌面 dav.json / Worker D1]
+    Settings -->|当前值| DAV[Hono Basic Auth]
+    Admin -->|含账号密码的连接地址| QR[WebDAV 二维码]
+    QR --> Player[支持地址导入的播放器]
+    Player -->|Basic 认证| DAV
+    DAV --> Files[音乐文件]
+```
+
+### 管理会话
+
 | 模块 | 责任 |
 |---|---|
 | `contracts/management-auth.ts` | 登录状态、账号输入和 ticket 的页面合同 |

@@ -17,9 +17,11 @@ import { createDesktopChanges } from './changes';
 import { createDesktopReadCache } from './read-cache';
 import type { RcloneControl } from './rclone-control';
 import { createDesktopAccess } from './access';
+import { createDesktopDavAccess } from './dav-access';
 
 export async function createDesktopService(input: { directory: string; adminToken: string; instanceId?: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager; mountAction?: (id: string) => void; readCache?: { control: RcloneControl; controlDirectory: string } }) {
   await mkdir(input.directory, { recursive: true, mode: 0o700 });
+  const davAccess = await createDesktopDavAccess(input.directory, input.dav);
   const store = openSqlite(join(input.directory, 'state.sqlite'));
   const access = createDesktopAccess(input.directory, input.adminToken, input.instanceId);
   const host = createDesktopPlugins(join(input.directory, 'plugins'), store);
@@ -70,7 +72,7 @@ export async function createDesktopService(input: { directory: string; adminToke
   });
   app.route('/', access.app);
   app.route('/', createManagementApi({ host: 'desktop', adminToken: input.adminToken, managementAuth: access.middleware, sources, library, extensions,
-    connection: { davPath: '/dav', ...input.dav },
+    davAccess,
     ...(input.mounts ? { mounts: input.mounts } : {}),
     ...(input.mountAction ? { mountAction: input.mountAction } : {}),
     maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
@@ -80,13 +82,13 @@ export async function createDesktopService(input: { directory: string; adminToke
       return installed;
     },
     remove: async id => { await extensions.remove(id); refreshMounts(); }, pluginChange: id => changes.get(id) }));
-  app.route('/', createDav(readCache?.files ?? library.files, input.dav));
+  app.route('/', createDav(readCache?.files ?? library.files, davAccess.get));
   if (input.webRoot) {
     app.get('/', serveStatic({ root: input.webRoot, path: 'index.html' }));
     app.on(['GET', 'HEAD'], '/assets/*', serveStatic({ root: input.webRoot }));
   }
   background.wake();
-  return { app, store, readCache, access, close: async () => {
+  return { app, store, readCache, access, davAccess, close: async () => {
     const resume = readCache?.prepareQuit();
     try {
       if (input.mounts) await input.mounts.close();

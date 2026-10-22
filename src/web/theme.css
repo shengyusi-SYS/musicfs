@@ -127,6 +127,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .connection-tabs > .ant-tabs-nav { margin-bottom: 24px; }
 .connection-tabs > .ant-tabs-nav .ant-tabs-tab { padding-top: 0; padding-bottom: 16px; }
 .connection-card { max-width: 880px; }
+.dav-actions { margin-bottom: 16px; }
+.dav-qr { display: flex; justify-content: center; padding: 20px 0; }
+.dav-address-select { width: 100%; }
 .copy-field { margin-bottom: 24px; }
 .copy-field > label { display: block; margin-bottom: 9px; }
 .copy-field-input { display: flex; gap: 8px; }
