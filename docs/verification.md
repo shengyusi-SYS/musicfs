@@ -4,6 +4,8 @@
 
 ## 当前事实
 
+当前源码为 dev.25 音乐库树形工作区：合并来源与目录入口，新增独立于导出布局的来源浏览，设置合入上下文侧栏。29项定向离线用例、类型/构建/依赖边界及内置浏览器路径核对通过，见[工作区记录](verification/music-workspace.md)。本轮未重打发行包；现有最新归档 dev.24 修正规则重复范围与编辑体验，见[发行页](release.md)。
+
 dev.23完成自动更新规则与自定义命名模板：SQLite/D1共用调度与展示语义，schema13迁移旧周期、schema14保存独立命名策略，API0.1.11为插件提供可选命名资料。受影响离线回归、三套类型、依赖方向及页面/Worker/插件构建通过；具体结果及范围见[本轮核对](verification/updates-and-naming.md)。Windows、离线Worker、源码与作者包已归档并通过身份/摘要核对，下载入口见[发行页](release.md)；没有新增真实平台或Windows运行证据。
 
 Windows 托盘双击与无命令行浏览器入口的 dev.16 核对范围见[托盘交互](verification/tray-interaction.md)。dev.15 的默认卷标、中文自定义与管理页重命名已通过现有 VM 必要验收，见[名称与启动核对](verification/mount-names.md)。核心桌面体验沿用已验收的 dev.14，Windows自启注册命令、自动挂载和登录见[实机证据](verification/desktop-access.md)。API0.1.9、音乐库 schema10 和平台插件版本不变；Worker 管理认证使用迁移0011。macOS原生产物与免费CPU仍未验，产物身份统一见[发行页](release.md)。
@@ -23,7 +25,7 @@ dev.22 复评少量增删：修正同目录旧版本挤掉其他LRU索引的问�
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
 | 桌面常驻与管理访问 | [本轮核对](verification/desktop-access.md) | 本地会话、恢复与监听；Windows 正式包与用户协助菜单点击通过，其他目标环境边界单列 |
-| 界面与使用流程重构 | [真实页面走查](verification/ui-redesign.md)、[目录整理工作区](verification/directory-workspace.md) | 独立本地服务走查；源码与界面已进入 dev.13 发行归档 |
+| 界面与使用流程重构 | [树形音乐库](verification/music-workspace.md)、[早期页面走查](verification/ui-redesign.md)、[目录整理](verification/directory-workspace.md) | 最新源码使用独立演示数据走查；历史发行证据保留原版本范围 |
 | 局部性能优化 | [O2/O1/O3与应用场景核对](verification/performance-local-2026-10-22.md) | 正式模块、有界样本和Linux发行冒烟；未重测Windows或真实整库 |
 | 冷刷新与 SDK 请求减法 | [真实冷基线](verification/real-netease-cold-dev5.md)、[请求减法](verification/netease-cold-request-reduction.md)、[两阶段清单](verification/deferred-catalogue.md) | 完整清单、全库标签和全库入库是不同工作范围 |
 | 真正按需挂载与格式 | [Windows / WSL 可行性及生产接线](verification/lazy-mount-feasibility.md) | MP3/FLAC/M4A 的具体预留方案；APE 与容器/播放器限制分别记录 |
