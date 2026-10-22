@@ -76,8 +76,6 @@ export function LayoutEditor({ api, draft, setDraft, close, saved, showSources }
     {conflicted && <Alert className="feedback" type="warning" showIcon title="目录已在其他窗口更新" action={<Button onClick={discard}>载入最新目录</Button>} />}
     <Segmented className="layout-mobile-tabs" value={panel} onChange={setPanel} block options={[{ label: '播放器目录', value: 'tree' }, { label: '添加内容', value: 'sources' }]} />
     <div className={'layout-workspace layout-show-' + panel}>
-      {instances.isPending ? <Skeleton className="layout-tree-loading" active /> : <LayoutSources api={api} instances={instances.data ?? []} nodes={displayed ?? []} parentId={parentId} setParentId={id => setSelected(id ?? '')} disabled={disabled}
-        showSources={showSources} add={items => { if (displayed) { change(appendNodes(displayed, parentId, items)); expand(parentId); setSelected(items.at(-1)!.id); setPanel('tree'); } }} />}
       <section className="layout-target" aria-label="播放器目录">
         <div className="layout-pane-heading"><div><h2>播放器目录</h2><Tag>{draft ? '未保存' : nodes === null ? '自动排列' : '自定义'}</Tag></div>
           <Button icon={<FolderAddOutlined aria-hidden="true" />} disabled={disabled} onClick={() => createFolder(parentId)}>新建文件夹</Button></div>
@@ -85,6 +83,8 @@ export function LayoutEditor({ api, draft, setDraft, close, saved, showSources }
         {!displayed && !defaults.isError && !layout.isError ? <Skeleton className="layout-tree-loading" active /> : displayed && <LayoutTree nodes={displayed} instances={instances.data ?? []} selected={selected} select={setSelected}
           change={change} createFolder={createFolder} disabled={disabled} expanded={expanded} setExpanded={setExpanded} renaming={renaming} setRenaming={setRenaming} />}
       </section>
+      {instances.isPending ? <Skeleton className="layout-tree-loading" active /> : <LayoutSources api={api} instances={instances.data ?? []} nodes={displayed ?? []} parentId={parentId} setParentId={id => setSelected(id ?? '')} disabled={disabled}
+        showSources={showSources} add={items => { if (displayed) { change(appendNodes(displayed, parentId, items)); expand(parentId); setSelected(items.at(-1)!.id); setPanel('tree'); } }} />}
     </div>
   </div>;
 }

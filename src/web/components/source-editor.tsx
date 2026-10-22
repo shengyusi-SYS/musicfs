@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import { App, Button, Collapse, Empty, Input, Modal, Select, Skeleton } from 'antd';
+import { App, Button, Drawer, Empty, Input, Select, Skeleton } from 'antd';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Json } from '@musicfs/plugin-api';
@@ -9,10 +9,16 @@ import { Failure } from './feedback';
 
 const SchemaForm = lazy(() => import('./schema-form'));
 
-export function SourceEditor({ api, instance, initialPluginId, close, showPlugins, saved }: {
+type SourceSettingsProps = {
   api: Api; instance?: SourceInstance; initialPluginId?: string | null; close: () => void; showPlugins: () => void;
   saved: (instance: SourceInstance, authenticate: boolean) => void;
-}) {
+};
+export function SourceEditor(props: SourceSettingsProps) {
+  return <Drawer title={props.instance ? props.instance.name + ' · 设置' : '添加音乐来源'} open onClose={props.close} size={560} destroyOnHidden>
+    <SourceSettings {...props} />
+  </Drawer>;
+}
+export function SourceSettings({ api, instance, initialPluginId, close, showPlugins, saved }: SourceSettingsProps) {
   const client = useQueryClient(); const { message } = App.useApp();
   const [selected, setSelected] = useState(instance?.pluginId ?? initialPluginId ?? '');
   const [name, setName] = useState<string | undefined>(instance?.name);
@@ -33,10 +39,10 @@ export function SourceEditor({ api, instance, initialPluginId, close, showPlugin
     else saved(value, !!configuration.data?.authentication);
   } });
   const nameField = <div className="field-block"><label htmlFor="instance-name">显示名称</label><Input id="instance-name" value={displayName} maxLength={120} disabled={save.isPending} onChange={event => setName(event.target.value)} /></div>;
-  return <Modal title={instance ? instance.name + ' · 设置' : plugin && (initialPluginId || available.length === 1) ? '添加 ' + plugin.manifest.name : '添加音乐来源'} open onCancel={close} footer={null} width={560} destroyOnHidden>
+  return <>
     {plugins.isPending ? <Skeleton active /> : !plugins.isError && !available.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先安装一个来源插件"><Button type="primary" onClick={showPlugins}>安装插件</Button></Empty> : <>
       {!instance && !initialPluginId && available.length > 1 && <div className="field-block"><label htmlFor="source-plugin">音乐来源</label><Select<string> id="source-plugin" value={pluginId || null} placeholder="选择来源插件" disabled={save.isPending} onChange={id => { setSelected(id); setName(undefined); save.reset(); }} options={available.map(value => ({ value: value.manifest.id, label: value.manifest.name }))} /></div>}
-      {!instance && plugin && <Collapse ghost size="small" items={[{ key: 'name', label: '显示名称：' + displayName, children: nameField }]} />}
+      {!instance && plugin && nameField}
       <Failure error={plugins.error} retry={() => void plugins.refetch()} /><Failure error={configuration.error} retry={() => void configuration.refetch()} /><Failure error={save.error} />
       {configuration.isPending && pluginId && <Skeleton active />}
       {configuration.data && <ErrorBoundary key={pluginId} fallbackRender={() => <Failure error={new Error('配置表单未能加载，请检查插件版本。')} />}><Suspense fallback={<Skeleton active />}>
@@ -44,5 +50,5 @@ export function SourceEditor({ api, instance, initialPluginId, close, showPlugin
           submitLabel={instance ? '保存' : configuration.data.authentication ? '添加并登录' : '添加来源'} onSubmit={config => save.mutate(config)} />
       </Suspense></ErrorBoundary>}
     </>}
-  </Modal>;
+  </>;
 }

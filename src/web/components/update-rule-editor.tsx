@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { App, Button, Checkbox, Form, InputNumber, Modal, Select, Space, Switch, TimePicker } from 'antd';
+import { App, Button, Checkbox, Drawer, Form, InputNumber, Select, Skeleton, Space, Switch, TimePicker } from 'antd';
 import dayjs from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SourceInstance } from '../../contracts/management';
@@ -16,10 +16,17 @@ export function ruleTimingLabel(timing: UpdateTiming) {
   if (timing.kind === 'interval') return `每隔 ${timing.minutes >= 60 && timing.minutes % 60 === 0 ? `${timing.minutes / 60} 小时` : `${timing.minutes} 分钟`}`;
   return `${timing.kind === 'daily' ? '每天' : timing.weekdays.map(day => weekdays[day]).join('、')} ${timing.time} · ${timing.timezone}`;
 }
-
 export function UpdateRuleEditor({ api, rule, instanceId, target, label, instances, close, heading }: {
   api: Api; rule?: UpdateRule | undefined; instanceId?: string | undefined; target?: UpdateTarget | undefined;
   label?: string | undefined; instances?: SourceInstance[] | undefined; close(): void; heading?: string | undefined;
+}) {
+  return <Drawer title={heading ?? '自动更新'} open onClose={close} destroyOnHidden size={560} mask={false}>
+    <UpdateRuleSettings api={api} rule={rule} instanceId={instanceId} target={target} label={label} instances={instances} close={close} />
+  </Drawer>;
+}
+export function UpdateRuleSettings({ api, rule, instanceId, target, label, instances, close }: {
+  api: Api; rule?: UpdateRule | undefined; instanceId?: string | undefined; target?: UpdateTarget | undefined;
+  label?: string | undefined; instances?: SourceInstance[] | undefined; close(): void;
 }) {
   const [selectedInstance, setSelectedInstance] = useState(rule?.instanceId ?? instanceId ?? instances?.[0]?.id ?? '');
   const [selectedScope, setScope] = useState<UpdateTarget['kind'] | 'recursive'>();
@@ -40,11 +47,12 @@ export function UpdateRuleEditor({ api, rule, instanceId, target, label, instanc
       { value: 'instance', label: '全部内容' }, { value: 'roots', label: '仅入口清单' }
     ]} /></Form.Item>
   </>;
-  return <Modal title={heading ?? '自动更新'} open onCancel={close} destroyOnHidden footer={null} width={560} loading={rules.isPending}>
+  return <>
     <Failure error={rules.error} retry={() => void rules.refetch()} />
+    {rules.isPending && <Skeleton active paragraph={{ rows: 4 }} />}
     {rules.data && <UpdateTimingForm key={JSON.stringify([selectedInstance, nextTarget, current?.id])} api={api} rule={current}
       instanceId={selectedInstance} target={nextTarget} label={directoryName} selection={selection} close={close} reload={() => rules.refetch()} />}
-  </Modal>;
+  </>;
 }
 
 function UpdateTimingForm({ api, rule, instanceId, target, label, selection, close, reload }: {
@@ -79,15 +87,4 @@ function UpdateTimingForm({ api, rule, instanceId, target, label, selection, clo
       <Form.Item label="自动更新"><Switch aria-label="启用自动更新" checked={enabled} checkedChildren="已开启" unCheckedChildren="已暂停" onChange={setEnabled} /></Form.Item>
       <Failure error={existingRuleLoaded ? null : save.error} /><div className="dialog-actions"><Button onClick={close}>取消</Button><Button type="primary" htmlType="submit" loading={save.isPending} disabled={!valid}>保存</Button></div>
     </Form>;
-}
-
-/** Context menus load policies only while open; directory browsing adds no rule polling. */
-export function UpdateRuleControlDialog({ api, instanceId, directoryRef, label, close }: {
-  api: Api; instanceId: string; directoryRef?: string | undefined; label?: string | undefined; close(): void;
-}) {
-  const instances = useQuery({ queryKey: ['instances'], queryFn: ({ signal }) => api.instances(signal) });
-  const instanceName = instances.data?.find(instance => instance.id === instanceId)?.name;
-  const target: UpdateTarget = directoryRef === undefined ? { kind: 'instance' } : { kind: 'directory', directoryRef, recursive: false };
-  return <UpdateRuleEditor api={api} instanceId={instanceId} target={target} label={label} close={close}
-    heading={['自动更新', instanceName].filter(Boolean).join(' · ')} />;
 }

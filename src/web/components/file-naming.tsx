@@ -1,28 +1,19 @@
 import { useEffect, useId, useState } from 'react';
-import { Alert, App, Button, Collapse, Empty, Form, Input, InputNumber, List, Modal, Select, Skeleton, Space, Typography } from 'antd';
-import { EditOutlined } from '@ant-design/icons';
+import { App, Button, Collapse, Empty, Form, Input, InputNumber, List, Select, Skeleton, Space, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DEFAULT_TEMPLATE_POLICY, type FileNamingPolicy, type FileNamingSettings } from '../../contracts/file-naming';
 import type { Api } from '../api';
 import { Failure } from './feedback';
 
-export function FileNamingControl({ api, instanceId, directoryRef, label }: {
-  api: Api; instanceId: string; directoryRef?: string; label?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return <><Button icon={<EditOutlined aria-hidden="true" />} onClick={() => setOpen(true)}>文件命名</Button>
-    {open && <FileNamingEditor api={api} instanceId={instanceId} directoryRef={directoryRef} label={label} close={() => setOpen(false)} />}</>;
-}
-
-export function FileNamingEditor({ api, instanceId, directoryRef, label, close }: {
-  api: Api; instanceId: string; directoryRef?: string | undefined; label?: string | undefined;
+export function NamingSettings({ api, instanceId, directoryRef, close }: {
+  api: Api; instanceId: string; directoryRef?: string | undefined;
   close(): void;
 }) {
   const settings = useQuery({ queryKey: ['file-naming', instanceId, directoryRef], queryFn: ({ signal }) => api.fileNaming(instanceId, directoryRef, signal) });
-  return <Modal title={`文件命名${label ? ` · ${label}` : ''}`} open onCancel={close} footer={null} destroyOnHidden width={720}>
+  return <>
     <Failure error={settings.error} retry={() => void settings.refetch()} />
     {settings.isPending ? <Skeleton active /> : settings.data && <NamingForm api={api} instanceId={instanceId} directoryRef={directoryRef} settings={settings.data} close={close} />}
-  </Modal>;
+  </>;
 }
 
 function NamingForm({ api, instanceId, directoryRef, settings, close }: {
@@ -73,10 +64,9 @@ function NamingForm({ api, instanceId, directoryRef, settings, close }: {
     <div className="naming-preview-heading"><Typography.Title level={5}>{directoryRef === undefined ? '已加载目录预览' : '名称预览'}</Typography.Title></div>
     <Failure error={preview.error} retry={() => void preview.refetch()} />
     {preview.isPending ? <Skeleton active paragraph={{ rows: 2 }} /> : preview.data && (preview.data.total === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={preview.data.message ?? '当前目录没有可预览的文件'} /> : <>
-      <Typography.Paragraph type="secondary">{`当前预览目录 ${preview.data.total.toLocaleString()} 个文件，${preview.data.changed.toLocaleString()} 个名称变化`}{dirtyPreview || preview.isFetching ? ' · 正在更新预览…' : ''}</Typography.Paragraph>
-      {!!preview.data.missingFields.length && <Alert className="feedback" showIcon type="info" title={`部分歌曲缺少${preview.data.missingFields.map(field => settings.fields[field] ?? field).join('、')}，缺失字段留空；没有命名资料的文件保留原名。`} />}
-      <List className="naming-preview" size="small" dataSource={preview.data.items.slice(0, 8)} locale={{ emptyText: '当前目录没有可预览的文件' }} renderItem={(item, index) => <List.Item key={index}><div><span className="naming-before">{item.before}</span><span className="naming-after">{item.after}</span></div></List.Item>} />
-      {preview.data.changed > 0 && <Typography.Paragraph className="naming-path-impact" type="secondary">应用后文件路径会变化，播放器可能重新入库。</Typography.Paragraph>}
+      <Typography.Paragraph type="secondary">{`${preview.data.total.toLocaleString()} 个文件 · ${preview.data.changed.toLocaleString()} 个名称变化`}{dirtyPreview || preview.isFetching ? ' · 更新预览中…' : ''}
+        {!!preview.data.missingFields.length && ` · 部分缺少${preview.data.missingFields.map(field => settings.fields[field] ?? field).join('、')}`}</Typography.Paragraph>
+      <List className="naming-preview" size="small" dataSource={preview.data.items.slice(0, 8)} locale={{ emptyText: '当前目录没有可预览的文件' }} renderItem={(item, index) => <List.Item key={index}><div>{item.before !== item.after && <span className="naming-before">{item.before}</span>}<span className="naming-after">{item.after}</span></div></List.Item>} />
     </>)}
     <Failure error={save.error} /><div className="dialog-actions"><Button onClick={close}>取消</Button><Button type="primary" htmlType="submit" loading={save.isPending} disabled={mode === 'template' && !template.template.trim()}>应用命名</Button></div>
   </Form>;

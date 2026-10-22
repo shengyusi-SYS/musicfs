@@ -1,0 +1,63 @@
+.music-main { max-width: none; padding: 28px; }
+.music-main > .page-heading { margin-bottom: 20px; }
+.music-main > .page-heading h1 { font-size: 25px; }
+.music-workspace-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.music-workspace { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: calc(100dvh - 185px); border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.music-explorer { min-width: 0; padding: 18px 12px; border-right: 1px solid var(--line); background: #f8faf9; }
+.music-tree-filter { margin-bottom: 16px; }
+.music-tree.ant-tree { background: transparent; font-size: 13px; overflow: auto; max-height: calc(100dvh - 320px); }
+.music-tree .ant-tree-treenode { padding-bottom: 3px; align-items: center; }
+.music-tree .ant-tree-node-content-wrapper { display: flex; align-items: center; min-width: 0; padding-block: 5px; }
+.music-tree .ant-tree-title { flex: 1; min-width: 0; }
+.music-tree-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-tree .ant-tree-indent-unit { width: 16px; }
+.music-tree .ant-tree-iconEle { color: var(--accent); }
+.music-tree .ant-tree-node-content-wrapper.ant-tree-node-selected { background: var(--tint); color: var(--accent); }
+.music-content { min-width: 0; padding: 24px 28px 8px; }
+.music-breadcrumb { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-bottom: 22px; }
+.music-breadcrumb .ant-breadcrumb { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.music-breadcrumb-root { display: none; }
+.music-content-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 22px; }
+.music-content-heading h2.ant-typography { margin: 0 0 7px; font-size: 24px; font-weight: 600; letter-spacing: -.5px; overflow-wrap: anywhere; }
+.music-content-meta { color: var(--muted); font-size: 12px; }
+.music-content-feedback:empty { display: none; }
+.music-list-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.music-list-toolbar .ant-input-affix-wrapper { width: min(100%, 320px); }
+.music-list-toolbar .ant-typography { font-size: 12px; white-space: nowrap; }
+.music-file-table .ant-table { font-size: 14px; }
+.music-file-table .ant-table-thead > tr > th { color: var(--muted); font-size: 12px; font-weight: 500; background: #f8faf9; }
+.music-file-table .ant-table-cell { padding-inline: 14px; }
+.music-file-table .ant-table-body { scrollbar-width: thin; }
+.music-file-table .ant-pagination { margin-block: 18px 12px; }
+.music-folder-link, .music-file-name { display: flex; align-items: center; gap: 12px; min-width: 0; width: 100%; text-align: left; }
+.music-folder-link { background: none; color: var(--ink); border: 0; padding: 0; font: inherit; cursor: pointer; }
+.music-folder-link:hover { color: var(--accent); }
+.music-folder-link > span:last-child, .music-file-name > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.music-folder-link .anticon { color: var(--accent); }
+.music-file-name .anticon { color: var(--muted); }
+.music-list-loading { padding: 8px 12px; }
+.music-tree-toggle.ant-btn { display: none; }
+.music-mobile-tree .music-tree.ant-tree { max-height: none; }
+@media (max-width: 1100px) {
+  .music-main { padding: 24px; }
+  .music-workspace { grid-template-columns: 220px minmax(0, 1fr); }
+  .music-content { padding-inline: 20px; }
+}
+@media (max-width: 880px) {
+  .music-workspace { grid-template-columns: minmax(0, 1fr); }
+  .music-explorer { display: none; }
+  .music-tree-toggle.ant-btn { display: inline-flex; margin-left: -8px; }
+  .music-breadcrumb-root { display: flex; }
+}
+@media (max-width: 640px) {
+  .music-main { padding: 20px 12px 28px; }
+  .music-content { padding: 16px 14px 4px; }
+  .music-content-heading h2.ant-typography { font-size: 21px; }
+  .music-workspace-toolbar { gap: 10px; }
+  .music-workspace-toolbar .ant-space { gap: 6px !important; }
+  .music-workspace-toolbar .ant-btn { padding-inline: 10px; font-size: 13px; }
+  .music-workspace-toolbar > .ant-btn { padding-inline: 8px; }
+  .music-workspace { min-height: 55dvh; }
+  .music-content-heading { margin-bottom: 18px; }
+  .music-breadcrumb { margin-bottom: 16px; }
+}
