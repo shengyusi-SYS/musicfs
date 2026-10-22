@@ -1,5 +1,11 @@
 # MusicFS 当前交付物
 
+## dev.18 挂载冷目录自动加载
+
+应用 `0.1.0-dev.18`：修复 App 磁盘挂载首次访问未更新内容源时，刷新任务已排队却未唤醒桌面后台、需要打开 Web「浏览内容」才继续的问题。内部 DAV 的等待响应现在通知现有后台队列，目录按需加载，不要求先在页面操作。
+
+[Windows x64](../dist/releases/0.1.0-dev.18/musicfs-0.1.0-dev.18-windows-x64.zip)、[源码](../dist/releases/0.1.0-dev.18/musicfs-0.1.0-dev.18-source.zip)、[清单](../dist/releases/0.1.0-dev.18/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.18/SHA256SUMS)。退出旧后台后解压完整新版启动，重新挂载即可；无需重装插件或刷新整库。内部与公开 DAV 的冷目录对照、后台与读取相关共 23 项离线测试通过；本次未重复 Windows VM 或真实平台测试。
+
 ## dev.17 WebDAV 连接设置
 
 应用 `0.1.0-dev.17`：WebDAV 支持自定义用户名和密码，保存后立即生效、重启保留；连接页提供明文携带凭据的通用导入二维码，桌面可选择局域网地址。

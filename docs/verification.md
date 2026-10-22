@@ -4,9 +4,11 @@
 
 ## 当前事实
 
-当前桌面更新为 dev.16 的 Windows 托盘双击与无命令行浏览器入口，核对范围见[托盘交互](verification/tray-interaction.md)。dev.15 的默认卷标、中文自定义与管理页重命名已通过现有 VM 必要验收，见[名称与启动核对](verification/mount-names.md)。核心桌面体验沿用已验收的 dev.14，Windows自启注册命令、自动挂载和登录见[实机证据](verification/desktop-access.md)。API0.1.9、音乐库 schema10 和平台插件版本不变；Worker认证迁移仍为0011。macOS原生产物与免费CPU仍未验，产物身份统一见[发行页](release.md)。
+Windows 托盘双击与无命令行浏览器入口的 dev.16 核对范围见[托盘交互](verification/tray-interaction.md)。dev.15 的默认卷标、中文自定义与管理页重命名已通过现有 VM 必要验收，见[名称与启动核对](verification/mount-names.md)。核心桌面体验沿用已验收的 dev.14，Windows自启注册命令、自动挂载和登录见[实机证据](verification/desktop-access.md)。API0.1.9、音乐库 schema10 和平台插件版本不变；Worker 管理认证使用迁移0011。macOS原生产物与免费CPU仍未验，产物身份统一见[发行页](release.md)。
 
 dev.17 Windows 包新增 WebDAV 自定义凭据与通用导入二维码：桌面 HTTP 验证修改即时生效、旧密码失效和重启恢复；正式 Worker 本地 workerd/D1 验证跨请求保存与认证，新增迁移为 `0012.sql`；URL 测试覆盖中文、空格、冒号及 `@/#?%+`，类型检查、依赖边界与 WebUI 构建通过。二维码复用现有 Ant Design；具体播放器扫码导入和真实云端升级尚未验，本次未重复 Windows VM 验收。
+
+dev.18 修复挂载内部 DAV 未通知后台续步：离线正式桌面装配在空队列下，内部请求原停在 `queued`、公开请求正常；修复后两条入口均无需管理页即可完成来源入口和目标目录加载。`tests/desktop-dav-background.test.ts` 保留该对照，连同后台让步/取消、缓存及 DAV 相关共 23 项测试、类型检查与依赖边界通过。使用真实回环监听器和离线 sample，不将其记为 Windows GUI 或真实平台验收。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|

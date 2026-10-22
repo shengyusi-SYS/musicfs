@@ -62,7 +62,7 @@ export async function createDesktopService(input: { directory: string; adminToke
     return instants.length ? Math.min(...instants) : null;
   });
   const readCache = input.readCache ? await createDesktopReadCache({ directory: join(input.directory, 'read-cache'),
-    ...input.readCache, view: library.files, current: file => sources.current(file.handle.stamp) }) : undefined;
+    ...input.readCache, view: library.files, current: file => sources.current(file.handle.stamp), onRefreshPending: background.wake }) : undefined;
   const app = new Hono();
   app.use('*', async (c, next) => {
     await next();
