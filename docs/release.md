@@ -1,5 +1,13 @@
 # MusicFS 当前交付物
 
+## dev.22 小幅更新时减少额外工作
+
+应用 `0.1.0-dev.22`：变化目录的新索引进入缓存时及时移除旧版本，避免挤掉其他目录；直接WebDAV共享音频桶新增文件键时保留同桶既有节点，只标记清单过期。没有新增依赖或数据库迁移，API及示例插件版本不变。
+
+[Windows x64](../dist/releases/0.1.0-dev.22/musicfs-0.1.0-dev.22-windows-x64.zip)、[离线Worker](../dist/releases/0.1.0-dev.22/musicfs-0.1.0-dev.22-worker.zip)、[源码](../dist/releases/0.1.0-dev.22/musicfs-0.1.0-dev.22-source.zip)、[清单](../dist/releases/0.1.0-dev.22/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.22/SHA256SUMS)。退出旧后台、换完整新版启动即可，无需重装插件、清缓存或重刷整库。
+
+完整索引重建保留。序号改名仍可能影响App或播放器的按路径缓存；没有稳定文件时间的第三方插件仍使用目录时间回退。收益和必要离线验证见[评估](verification/partial-directory-update.md)，本次未新增平台、云端或Windows GUI验收。
+
 ## dev.21 无变化刷新复用内容版本
 
 应用 `0.1.0-dev.21`：目录内容不变时保留原快照指针、路径索引、已计算的文件ETag和挂载清单，只更新最近成功刷新时间与统计。缺少来源修改时间的文件也保持原时间，重启后一致；条目或来源身份变化仍正常发布。桌面与Worker共用同一事务，不再额外执行桌面全量比较。

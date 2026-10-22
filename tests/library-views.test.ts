@@ -181,6 +181,23 @@ test('bounded views evict least-recently used entries and oversized directories 
   expect(reads).toBe(6);
 });
 
+test('a changed directory replaces its previous cached version without evicting an unrelated directory', async () => {
+  const values = new Map([['a', snapshot('a-1')], ['b', snapshot('b-1')]]);
+  const reads: string[] = [];
+  const store: Pick<LibraryStore, 'snapshot' | 'snapshotHeader'> = {
+    snapshotHeader: (_id, key) => ({ ...values.get(key.ref)!, error: null }),
+    snapshot: (_id, key) => { reads.push(key.ref); return { value: values.get(key.ref)!, error: null }; }
+  };
+  const views = createPublishedViews(store, ensure, project, { views: 2, estimatedBytes: 100_000 });
+  await views.get(stamp, key('a'), signal());
+  const other = await views.get(stamp, key('b'), signal());
+  await views.get(stamp, key('a'), signal());
+  values.set('a', snapshot('a-2'));
+  expect((await views.get(stamp, key('a'), signal())).entries[0]?.id).toBe('a-2');
+  expect(await views.get(stamp, key('b'), signal())).toBe(other);
+  expect(reads).toEqual(['a', 'b', 'a']);
+});
+
 test('the desktop view budget retains two large directories across repeated switching', async () => {
   const large = (id: string): Snapshot => ({ ...snapshot(id), kind: 'directory', items: Array.from({ length: 6000 }, (_, index) => ({
     kind: 'file', entryId: String(index), name: `${index}.mp3`, fileRef: `${id}:${index}:${'r'.repeat(650)}`,

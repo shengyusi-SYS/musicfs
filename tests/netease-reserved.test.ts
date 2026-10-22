@@ -71,7 +71,7 @@ function fixture(format: Format) {
     expire(prefix: string) { for (const [key, item] of stored.values) if (key.startsWith(prefix)) item.expiresAt = 0; } };
 }
 
-test('unopened NetEase files retain their representation across unchanged refresh, insertion and reorder', async () => {
+test('unopened NetEase files retain their representation across unchanged refresh, insertion, reorder and deletion', async () => {
   const f = fixture('mp3');
   const scan = async () => (await list(f.reopen(), 'liked')).items.map(file);
   const bySong = (items: ReturnType<typeof file>[]) => new Map(items.map(item => [JSON.parse(item.fileRef).source.id, item]));
@@ -87,6 +87,11 @@ test('unopened NetEase files retain their representation across unchanged refres
   expect(inserted.get('1')?.name).not.toBe(first.get('1')?.name); // Keep the existing numbered ordering contract.
   f.playlist([2, 1, 3]); const reordered = bySong(await scan());
   for (const id of ['1', '2', '3']) expect(reordered.get(id)?.fileRef).toBe(inserted.get(id)?.fileRef);
+  f.playlist([1, 3]); const deleted = bySong(await scan());
+  for (const id of ['1', '3']) {
+    expect(deleted.get(id)?.fileRef).toBe(reordered.get(id)?.fileRef);
+    expect(deleted.get(id)?.info).toEqual(reordered.get(id)?.info);
+  }
   expect(f.calls.lyrics ?? 0).toBe(0); expect(f.calls.cover ?? 0).toBe(0); expect(f.calls.range ?? 0).toBe(0);
   expect(f.reservations).toBe(0);
 });

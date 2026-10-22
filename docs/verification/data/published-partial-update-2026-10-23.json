@@ -1,0 +1,24 @@
+{
+  "scope": "one bounded 4000-file SQLite/library run with synthetic prepared entries and stable names, native SHA-256, 32MiB desktop budget; no network/audio/real-platform timing",
+  "results": [
+    {
+      "operation": "append-one",
+      "entries": 4001,
+      "unchangedFilesWithSameEtagAndTime": 4000,
+      "syntheticRefreshMs": 73.16622899999999,
+      "fullIndexMs": 10.977467000000019,
+      "fullDescriptionsMs": 16.12926999999999,
+      "nativeHashCalls": 4001
+    },
+    {
+      "operation": "delete-one",
+      "entries": 4000,
+      "unchangedFilesWithSameEtagAndTime": 3999,
+      "syntheticRefreshMs": 41.487078,
+      "fullIndexMs": 12.862321000000009,
+      "fullDescriptionsMs": 7.498993999999982,
+      "nativeHashCalls": 4000
+    }
+  ],
+  "sourceStatOrOpenCalls": 0
+}

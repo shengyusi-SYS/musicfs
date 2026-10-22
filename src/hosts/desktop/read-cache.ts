@@ -160,7 +160,8 @@ export async function createDesktopReadCache(input: {
         await management;
         const known = entries.has(key); entries.set(key, file);
         await ensure();
-        if (!known) await input.control.call('vfs/forget', { fs: `${remote}:`, dir: key.slice(0, 2) });
+        // A new immutable key only changes its bucket listing, not existing file nodes.
+        if (!known) await input.control.call('vfs/forget', { fs: `${remote}:`, file: `${key.slice(0, 2)}/${key}` });
         failures.delete(key);
         const response = await fetch(`${running!.address}/${key.slice(0, 2)}/${key}`, { signal,
           headers: range ? { Range: `bytes=${range.start}-${range.end}` } : {} });

@@ -48,7 +48,13 @@ export function createPublishedViews<T extends { id: string; name: string }>(
         const value = header && stampKey(header.stamp) === stampKey(stamp) ? undefined : await ensure(stamp, key, signal);
         const identity = value ?? header!;
         const context: Load = { stamp, key, snapshotId: identity.id, ...(value ? { snapshot: value } : {}) };
-        const cacheKey = JSON.stringify([stampKey(stamp), key.kind, key.ref, identity.id]);
+        const directoryKey = JSON.stringify([stamp.id, key.kind, key.ref]) + ':';
+        const cacheKey = directoryKey + JSON.stringify([stampKey(stamp), identity.id]);
+        // Retained callers can still use their old targets, but superseded
+        // versions must not consume the budget or evict another directory.
+        if (!cache.has(cacheKey)) for (const previous of cache.keys()) {
+          if (previous.startsWith(directoryKey) && previous !== cacheKey) cache.delete(previous);
+        }
         // Shared work reads local published data only. One cancelled HTTP caller must not abort another's lookup.
         const view = await cache.fetch(cacheKey, { context });
         signal.throwIfAborted();
