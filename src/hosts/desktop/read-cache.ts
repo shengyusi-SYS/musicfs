@@ -21,7 +21,6 @@ const statsSchema = z.object({ opt: z.object({ CacheMode: z.union([z.literal('fu
 export async function createDesktopReadCache(input: {
   directory: string; controlDirectory: string; control: RcloneControl; view: FileView;
   current(file: FileDescription): boolean | Promise<boolean>;
-  onRefreshPending?: () => void;
 }): Promise<ReadCacheManager & { files: FileView; mountConnection: ReadCredentials & { url: string }; prepareQuit(): () => void; close(): Promise<void> }> {
   await mkdir(input.directory, { recursive: true });
   const settingsPath = join(input.directory, 'settings.json');
@@ -87,7 +86,7 @@ export async function createDesktopReadCache(input: {
       catch (error) { if (error instanceof LibraryError) failures.set(keyFor(file), error); throw error; }
     }
   };
-  const gateway = createDav(internalView, credentials, input.onRefreshPending ? { onRefreshPending: input.onRefreshPending } : {});
+  const gateway = createDav(internalView, credentials);
   const server = Bun.serve({ hostname: '127.0.0.1', port: 0, idleTimeout: 0, fetch: gateway.fetch });
   const stop = async () => {
     if (starting) await starting;

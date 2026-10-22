@@ -47,5 +47,11 @@ test('desktop restart runs a due directory update without an open page and inval
     expect(publications).toContain(current!.id);
     expect(service.store.currentRefresh(instanceId)?.status).toBe('completed');
     expect(service.store.nextRefreshScheduleAt()).toBeGreaterThan(Date.now());
+    // A changed durable schedule must wake the resident runner without another HTTP response.
+    publications.length = 0;
+    service.store.saveRefreshSchedule(instanceId, { kind: 'directory', ref: '/' }, 15, Date.now() - 1);
+    const nextDeadline = Date.now() + 750;
+    while (!publications.some(id => id !== current!.id) && Date.now() < nextDeadline) await Bun.sleep(5);
+    expect(publications.some(id => id !== current!.id)).toBe(true);
   } finally { await service?.close(); await rm(directory, { recursive: true, force: true }); }
 });

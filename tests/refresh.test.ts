@@ -35,6 +35,22 @@ async function pending(work: Promise<unknown>): Promise<PendingRefreshError> {
   throw new Error('A cold deferred directory must return a pending operation');
 }
 
+test('a long refresh gives a waiting instance a turn after each committed page', async () => {
+  const f = await setup(plugin({ list: async (_ctx, _ref, cursor) => cursor ? page([entry('last')])
+    : { ok: true, value: { items: [entry('first')], nextCursor: 'last' } } }));
+  const other = await f.sources.create(f.store.installations()[0]!.manifest.id, 'Other', {}, signal());
+  if (!other.ok) throw new Error('Fixture instance creation failed');
+  let now = 1000;
+  const refresh = createRefreshes(f.sources, f.store, { pages: 100, entries: 1000 }, () => now);
+  const first = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
+  now++;
+  const second = await refresh.start(other.value.id, { kind: 'directory', directoryRef: directory });
+  now++;
+  expect(await refresh.stepNext(signal())).toMatchObject({ operationId: first.operationId, status: 'running' });
+  now++;
+  expect(await refresh.stepNext(signal())).toMatchObject({ operationId: second.operationId, status: 'running' });
+});
+
 test('rate limits persist a cooldown and resume the same directory cursor without repeating accepted pages', async () => {
   const f = await setup(); let now = 1000; let calls = 0;
   f.source.list = async (_ctx, _ref, cursor) => {

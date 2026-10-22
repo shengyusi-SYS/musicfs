@@ -9,11 +9,7 @@ import { needsFileMetadata, parsePropfind, propfindResponse } from './xml';
 import type { DavCredentials } from '../../contracts/dav-access';
 
 export type ReadCredentials = DavCredentials;
-export type DavOptions = {
-  fixedLength?: (size: number) => TransformStream<Uint8Array, Uint8Array>;
-  /** Hosts with a resident runner must wake it when an isolated DAV listener queues work. */
-  onRefreshPending?: () => void;
-};
+export type DavOptions = { fixedLength?: (size: number) => TransformStream<Uint8Array, Uint8Array> };
 const allow = 'OPTIONS, PROPFIND, GET, HEAD';
 
 export function davStatus(error: unknown): 400 | 404 | 409 | 412 | 502 | 503 | 500 {
@@ -49,7 +45,6 @@ export function createDav(view: FileView, credentials: ReadCredentials | (() => 
     if (error instanceof HTTPException) return error.getResponse();
     if (error instanceof PendingRefreshError) {
       c.header('Retry-After', '2'); c.header('X-MusicFS-Refresh', error.operationId);
-      options.onRefreshPending?.();
     }
     return c.text(`MusicFS request failed (${davStatus(error)})`, davStatus(error));
   });

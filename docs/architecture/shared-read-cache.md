@@ -13,14 +13,15 @@ flowchart LR
   VFS -->|缺失范围| Private[回环内部 DAV]
   App[App 本机挂载 VFS] -->|绕过共享落盘| Private
   Private --> Library[原 library FileView]
-  Private -->|目录等待时唤醒| Runner[桌面后台队列]
+  Library -->|持久任务写入| Store[桌面持久化接线]
+  Store -->|写入成功后唤醒| Runner[桌面后台队列]
   Runner -->|续步并发布目录| Library
   Library --> Plugin[来源插件 可选补标签与取源]
 ```
 
 目录、HEAD、ETag、条件请求和错误映射仍走原文件视图与协议层，只包装 `open`。缓存保存最终表示字节，不保存临时 URL。服务端 VFS 本身无需 WinFsp/FUSE，系统驱动只用于本机磁盘挂载。
 
-内部 DAV 是独立回环监听器，不经过对外管理服务的响应中间件。它遇到 `PendingRefreshError` 时通过宿主注入的 `onRefreshPending` 唤醒同一个桌面后台执行器，同时保留 `503 / Retry-After` 协议。任务使用后台自身的生命周期，不依赖当前目录请求或 Web 页面继续打开；目录和延迟文件信息准备复用这条通知。
+内部 DAV 是独立回环监听器，不经过对外管理服务的响应中间件。桌面宿主在持久任务及周期策略写入成功后统一唤醒执行器，不再按 HTTP 路径或响应头决定是否运行任务。公开 DAV、内部挂载、文件属性准备和管理操作共用这条持久化接线；协议层仅返回 `503 / Retry-After` 等读取结果。任务使用后台自身的生命周期，不依赖当前目录请求或 Web 页面继续打开。
 
 内部键由实例/代际、插件身份/修订/代际、文件引用和最终 `contentId/size/mediaType` 组成。不以路径、大小或 mtime 单独判断表示；相同路径和大小的新内容身份进入新键。键不可变，内部固定 mtime 只服务该键，外部 mtime/ETag 保持原值。命中前后沿原 `current` 核对来源有效性，无需仅为验证缓存重新解析 CDN URL。
 

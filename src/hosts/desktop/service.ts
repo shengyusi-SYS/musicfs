@@ -22,7 +22,26 @@ import { createDesktopDavAccess } from './dav-access';
 export async function createDesktopService(input: { directory: string; adminToken: string; instanceId?: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager; mountAction?: (id: string) => void; readCache?: { control: RcloneControl; controlDirectory: string } }) {
   await mkdir(input.directory, { recursive: true, mode: 0o700 });
   const davAccess = await createDesktopDavAccess(input.directory, input.dav);
-  const store = openSqlite(join(input.directory, 'state.sqlite'));
+  const database = openSqlite(join(input.directory, 'state.sqlite'));
+  let wake = () => {};
+  // Wake only after durable writes succeed. Every caller uses this store,
+  // including private listeners; HTTP routes do not own background execution.
+  const store = { ...database,
+    createRefresh(...args: Parameters<typeof database.createRefresh>) {
+      const saved = database.createRefresh(...args); wake(); return saved;
+    },
+    commitRefresh(...args: Parameters<typeof database.commitRefresh>) {
+      const saved = database.commitRefresh(...args); if (saved === 'committed') wake(); return saved;
+    },
+    cancelRefresh(...args: Parameters<typeof database.cancelRefresh>) { database.cancelRefresh(...args); wake(); },
+    saveRefreshSchedule(...args: Parameters<typeof database.saveRefreshSchedule>) { database.saveRefreshSchedule(...args); wake(); },
+    createChange(...args: Parameters<typeof database.createChange>) {
+      const saved = database.createChange(...args); if (saved) wake(); return saved;
+    },
+    commitChange(...args: Parameters<typeof database.commitChange>) {
+      const saved = database.commitChange(...args); if (saved) wake(); return saved;
+    }
+  };
   const access = createDesktopAccess(input.directory, input.adminToken, input.instanceId);
   const host = createDesktopPlugins(join(input.directory, 'plugins'), store);
   const extensions = createExtensions(store, host.prepare);
@@ -61,15 +80,10 @@ export async function createDesktopService(input: { directory: string; adminToke
     const instants = [store.nextBackgroundWorkAt(), await library.schedules.nextAt()].filter((value): value is number => value !== null);
     return instants.length ? Math.min(...instants) : null;
   });
+  wake = background.wake;
   const readCache = input.readCache ? await createDesktopReadCache({ directory: join(input.directory, 'read-cache'),
-    ...input.readCache, view: library.files, current: file => sources.current(file.handle.stamp), onRefreshPending: background.wake }) : undefined;
+    ...input.readCache, view: library.files, current: file => sources.current(file.handle.stamp) }) : undefined;
   const app = new Hono();
-  app.use('*', async (c, next) => {
-    await next();
-    if (c.res.headers.has('X-MusicFS-Refresh') || c.req.path.startsWith('/api/refreshes/')
-      || c.req.path.startsWith('/api/plugin-changes/') || c.req.path.endsWith('/refresh-policy')
-      || c.req.method === 'POST' && c.req.path.startsWith('/api/plugins') && c.res.status === 202) background.wake();
-  });
   app.route('/', access.app);
   app.route('/', createManagementApi({ host: 'desktop', adminToken: input.adminToken, managementAuth: access.middleware, sources, library, extensions,
     davAccess,

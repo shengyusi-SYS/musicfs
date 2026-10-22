@@ -21,7 +21,8 @@ const stampValues = (stamp: SourceStamp): SqlValue[] => [stamp.id, stamp.pluginI
 export const refreshRecordSQL = 'SELECT document FROM library_refresh_jobs WHERE operation_id = ?';
 export const currentRefreshSQL = 'SELECT document FROM library_refresh_jobs WHERE instance_id = ? ORDER BY rowid DESC LIMIT 1';
 export const readyRefreshesSQL = `SELECT operation_id FROM library_refresh_jobs r WHERE ${active} AND ${current}
-  AND MAX(CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END, COALESCE(json_extract(document, '$.retryAt'), 0)) <= ? ORDER BY rowid LIMIT ?`;
+  AND MAX(CASE WHEN lease_token IS NULL THEN 0 ELSE lease_until END, COALESCE(json_extract(document, '$.retryAt'), 0)) <= ?
+  ORDER BY json_extract(document, '$.updatedAt'), rowid LIMIT ?`;
 // The reader uses only the first header. Avoid repeating it for every entry in a D1 result.
 export const snapshotEntriesSQL = `SELECT CASE WHEN e.ordinal = 0 OR e.ordinal IS NULL THEN s.document END AS document,
   s.error, s.published_attempt_id, e.document AS entry
