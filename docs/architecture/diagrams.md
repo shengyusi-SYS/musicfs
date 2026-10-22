@@ -21,7 +21,7 @@ flowchart LR
   Core --> Store[SQLite 或 D1]
 ```
 
-缓存的完整调用链见[共享读取图](shared-read-cache.md#所有权与调用)，App 磁盘与 WebClient 两种入口见[挂载图](desktop-mounts.md)。缓存只改变字节读取，不接管目录、认证或 HTTP 条件处理。
+缓存的完整调用链见[共享读取图](shared-read-cache.md#所有权与调用)，App 磁盘与 WebClient 两种入口见[挂载图](desktop-mounts.md)，自动更新与展示策略见[调度和命名图](updates-and-naming.md)。缓存只改变字节读取，不接管目录、认证或 HTTP 条件处理。
 
 ## 模块依赖
 

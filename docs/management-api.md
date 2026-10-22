@@ -36,6 +36,12 @@
 | `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例；`{directoryRef}` 刷新指定目录；`{scope:"file-info",directoryRef}` 准备文件属性；`{scope:"metadata",directoryRef}` 显式重新取得当前目录的音乐资料（须插件声明支持）；兼容 `{}` 仅刷新内容入口。返回202 + RefreshView，替换旧活动操作 |
 | `GET /api/instances/:id/refresh-policy?directoryRef=...` | 指定目录的周期策略；省略directoryRef为实例内容入口 |
 | `PUT /api/instances/:id/refresh-policy?directoryRef=...` | `{intervalMinutes}`：0为手动，否则至少15分钟；只安排到期任务，复用原刷新/旧快照 |
+| `GET /api/update-rules`、`POST /api/update-rules` | 查询规则或保存`{instanceId,target,timing,enabled,label?}`；target和timing见[合同](../src/contracts/refresh-policy.ts) |
+| `PUT /api/update-rules/:id`、`DELETE /api/update-rules/:id` | 编辑/暂停或移除规则；同一实例和范围共用一条规则 |
+| `POST /api/update-rules/:id/run` | 立即将此范围交给原持久刷新；返回202，已有覆盖工作可复用，无关活动工作返回409 |
+| `GET /api/instances/:id/file-naming?directoryRef=...` | 查询当前设置、修订、有效策略、继承状态及可用字段；省略目录为实例默认 |
+| `PUT /api/instances/:id/file-naming?directoryRef=...` | `{revision,policy}`；null恢复继承/实例原名，相同设置不写入，旧修订返回409 |
+| `POST /api/instances/:id/file-naming/preview?directoryRef=...` | `{policy}`；只使用已发布目录，省略目录时抽取一个继承实例设置的已加载文件目录；数量仅对应预览目录 |
 | `GET /api/instances/:id/refresh` | 当前/最近一次 RefreshView，无记录时为 null；只查询，不推进 |
 | `GET /api/refreshes/:operationId` | 查询同一操作的公开进度，不存在返回 404；不推进 |
 | `POST /api/refreshes/:operationId/step` | 至多执行一页插件读取并保存检查点，返回 200 + RefreshView；其他请求持租约时只返回已有进度 |
@@ -79,7 +85,7 @@
 
 `RefreshView` 的公开合同见 [`refreshes.ts`](../src/contracts/refreshes.ts)：包含 operationId、instanceId、scope、status、当前目录页数/暂存条目/临时计数、refreshedDirectories、failures、可选 error 和创建/更新时间；不暴露游标、租约或来源私有状态。状态为 queued、running、completed、failed、superseded、cancelled。202 仅表示受理，必须检查终态及失败明细；GET 恢复状态，POST step 推进，界面关闭不删除操作。
 
-实例刷新先更新内容入口，再处理各入口及仍可达的已浏览子目录。新子目录首次打开时加载，不遍历已移除引用或预读全部推荐歌单。成功目录数不含入口列表，每目录完整分页后分别发布；部分目录失败仍可得到 completed，但 failures 非空，保留这些目录的旧内容。根入口失败、取消、来源变化或超出目录预算会停止操作；已经发布的目录不回滚。默认目录预算 1000，单目录默认 1000 页/100,000 条目。详见[刷新范围](verification/p1-instance-refresh.md)与[持久分页](verification/p2-durable-refresh.md)。
+实例刷新先更新内容入口，再处理全部可达子目录，包括新发现的目录；递归目录范围同样包含未访问后代。普通目录及旧入口请求保持浅层，日常浏览仍按需加载。成功目录数不含入口列表，每目录完整分页后分别发布；部分目录失败仍可得到 completed，但 failures 非空，保留这些目录的旧内容。根入口失败、取消、来源变化或超出目录预算会停止操作；已经发布的目录不回滚。默认目录预算 1000，单目录默认 1000 页/100,000 条目。范围、调度及展示策略见[现行设计](architecture/updates-and-naming.md)，原分页提交见[持久分页](verification/p2-durable-refresh.md)。
 
 正式宿主的 roots、library 或 DAV 冷读取若尚无当前有效快照，会返回 `503 refresh_pending`、`Retry-After: 2` 和 `X-MusicFS-Refresh: <operationId>`。管理 JSON 还包含 operationId；重试复用同一有效活动操作，不反复替换任务。已有成功快照时直接读取它，后台刷新失败不抹空目录。共用页面可根据原操作 ID 恢复并推进；普通 DAV 客户端可以等待后台准备后重试，不获得管理权限。桌面后台持续续步；Worker 每个后台 HTTP/定时调用仅推进一页，见[Worker 指南](worker.md)。
 

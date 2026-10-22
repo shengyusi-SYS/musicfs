@@ -74,7 +74,8 @@ type Context = {
 type Entry =
   | { kind: 'directory'; entryId: string; name: string; directoryRef: Ref }
   | { kind: 'file'; entryId: string; name: string; fileRef: Ref;
-      info?: FileInfo; deferredInfo?: true };
+      info?: FileInfo; deferredInfo?: true;
+      naming?: { identity: string; fields: Record<string, string | number | string[]> } };
 
 type Root = { sourceId: string; name: string; directoryRef: Ref };
 type FileInfo = {
@@ -93,6 +94,7 @@ type ReadResult = {
 interface SourcePlugin {
   contentConfiguration?(config: Json): Json; // 纯函数，返回影响内容/认证的配置
   metadataRefresh?: true; // 声明理解 Context.metadataRefresh
+  naming?: { fields: Record<string, string> }; // 可选命名字段及界面标签，不强制音乐领域
   // config 的结构及来源语义校验；字段错误 DTO 在正式定义中展开
   validateConfig(ctx: Context, candidate: Json): Promise<Outcome<Json>>;
   roots(ctx: Context, cursor?: string): Promise<Outcome<Page<Root>>>;

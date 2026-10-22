@@ -49,7 +49,7 @@ MusicFS 是插件式只读音乐文件服务，桌面与 Worker 独立部署、�
 
 目录页暂存，末页完整成功才切换该目录发布指针；失败保留旧成功内容与失败标记。任务终态、目录失败和布局分别保存，另一目录成功不能清除原目录失败。刷新不写用户布局。
 
-每实例一个活动刷新。缓存缺失合并到原操作，显式刷新可替换；先入口再处理仍可达的已浏览目录，不递归预抓全树。桌面后台持续续步并适度让步，Worker 每次独立后台调用推进一页，Cron 提供后续唤醒。周期更新复用同一队列，不另建每曲定时器。[刷新取舍](../adr/0007-durable-paged-refresh.md)、[缓存与更新策略](cache-policy.md)
+每实例一个活动刷新。缓存缺失合并到原操作，显式刷新可替换；单目录更新只处理本层，全实例或递归目录更新包含新发现的后代。桌面后台持续续步并适度让步，Worker 每次独立后台调用推进一项工作，Cron 提供后续唤醒。自动更新与命名分别复用持久任务和展示投影，职责及流程见[自动更新与命名](updates-and-naming.md)、[缓存策略](cache-policy.md)。
 
 ## 配置、认证与安装
 
@@ -73,6 +73,7 @@ rclone RC 进程由桌面装配统一拥有，挂载和共享读取模块各管�
 |---|---|---|
 | HTTP / 页面 / 请求状态 | Hono、React/Vite、Ant Design、TanStack Query | 用例、交互和失效关系 |
 | 表单 / 校验 | RJSF AntD、Zod、Ajv standalone | 声明合同、来源语义与错误映射 |
+| 日历 / 命名模板 | Croner、Mustache.js、sanitize-filename | 规则持久执行、来源字段、继承与同名身份 |
 | ZIP / 版本 | zip.js、npm semver；fflate 仅开发期独立编码互操作 | 包合同、兼容与安装切换 |
 | 标签与 MIME | node-taglib-sharp、multipart-parser，由选用的插件打包 | 最终表示计划、区段适配与来源请求 |
 | 发布 / 持久化 | Cloudflare 官方 SDK、bun:sqlite、D1 | 发布核对、领域 SQL 和条件提交 |
