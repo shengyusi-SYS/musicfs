@@ -4,7 +4,7 @@
 
 ## 当前事实
 
-dev.23源码完成自动更新规则与自定义命名模板：SQLite/D1共用调度与展示语义，schema13迁移旧周期、schema14保存独立命名策略，API0.1.11为插件提供可选命名资料。受影响离线回归、三套类型、依赖方向及页面/Worker/插件构建通过；具体结果及范围见[本轮核对](verification/updates-and-naming.md)。本次没有新增发行归档或真实平台/Windows证据。
+dev.23完成自动更新规则与自定义命名模板：SQLite/D1共用调度与展示语义，schema13迁移旧周期、schema14保存独立命名策略，API0.1.11为插件提供可选命名资料。受影响离线回归、三套类型、依赖方向及页面/Worker/插件构建通过；具体结果及范围见[本轮核对](verification/updates-and-naming.md)。Windows、离线Worker、源码与作者包已归档并通过身份/摘要核对，下载入口见[发行页](release.md)；没有新增真实平台或Windows运行证据。
 
 Windows 托盘双击与无命令行浏览器入口的 dev.16 核对范围见[托盘交互](verification/tray-interaction.md)。dev.15 的默认卷标、中文自定义与管理页重命名已通过现有 VM 必要验收，见[名称与启动核对](verification/mount-names.md)。核心桌面体验沿用已验收的 dev.14，Windows自启注册命令、自动挂载和登录见[实机证据](verification/desktop-access.md)。API0.1.9、音乐库 schema10 和平台插件版本不变；Worker 管理认证使用迁移0011。macOS原生产物与免费CPU仍未验，产物身份统一见[发行页](release.md)。
 

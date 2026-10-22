@@ -1,6 +1,12 @@
 # MusicFS 当前交付物
 
-当前源码候选为`0.1.0-dev.23`，新增自动更新规则与命名模板，API0.1.11、网易云alpha.20、QQalpha.19，音乐库新增迁移0013/0014。功能与必要离线核对见[记录](verification/updates-and-naming.md)；尚未生成dev.23完整发行归档，下面dev.22仍是最近的完整包。
+## dev.23 自动更新与文件命名模板
+
+应用`0.1.0-dev.23`、插件API`0.1.11`，网易云`alpha.20`、QQ`alpha.19`。新增每天/每周/自定义间隔的自动更新，明确单目录、完整子树及整个来源范围；支持自由命名模板、字段插入、条件块和预览。音乐库迁移0013保留旧规则范围与首次触发点，0014保存独立命名策略，旧实例仍使用原名。
+
+[Windows x64](../dist/releases/0.1.0-dev.23/musicfs-0.1.0-dev.23-windows-x64.zip)、[离线Worker](../dist/releases/0.1.0-dev.23/musicfs-0.1.0-dev.23-worker.zip)、[源码](../dist/releases/0.1.0-dev.23/musicfs-0.1.0-dev.23-source.zip)、[插件作者包](../dist/releases/0.1.0-dev.23/musicfs-0.1.0-dev.23-plugin-author-kit.zip)、[清单](../dist/releases/0.1.0-dev.23/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.23/SHA256SUMS)。正常退出旧后台，换完整新版启动，再安装随包`plugins/`中的新版来源插件；更新目录取得命名字段后即可预览模板。实例和授权保留，模板由用户应用后改名。
+
+本次在WSL构建Windows与离线Worker，源码、页面和插件身份一致，8项文件摘要检查全部通过；包内Worker包含迁移0013/0014。功能核对见[记录](verification/updates-and-naming.md)。没有重复平台请求、调用Windows宿主或升级云端，也没有新增Windows运行时验收结论。
 
 ## dev.22 小幅更新时减少额外工作
 

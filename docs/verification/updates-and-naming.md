@@ -23,4 +23,4 @@
 - [命名核心](../../tests/file-naming.test.ts)、[SQLite/D1与HTTP/DAV集成](../../tests/file-naming-integration.test.ts)、[桌面装配](../../tests/desktop-refresh-policy.test.ts)
 - [暖视图复用](../../tests/library-views.test.ts)、[持久发布](../../tests/refresh-persistence.test.ts)、[原数据迁移](../../tests/migrations.test.ts)
 
-这轮没有请求真实音乐平台、部署Cloudflare、调用Windows宿主或重跑VM。界面证据是代码核对与构建，不记为浏览器点击或原生播放器验收；本地D1和Worker打包不替代免费计划CPU或真实云端证据。没有建立新的完整发行归档。
+这轮没有请求真实音乐平台、部署Cloudflare、调用Windows宿主或重跑VM。界面证据是代码核对与构建，不记为浏览器点击或原生播放器验收；本地D1和Worker打包不替代免费计划CPU或真实云端证据。后续已集中生成dev.23的Windows、离线Worker、源码与作者包；身份、文件摘要及下载入口见[发行页](../release.md)，不新增目标系统运行结论。
