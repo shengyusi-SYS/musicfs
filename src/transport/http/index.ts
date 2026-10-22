@@ -14,7 +14,7 @@ import type { UpdateRule, RefreshPolicy } from '../../contracts/refresh-policy';
 import type { DavAccess } from '../../contracts/dav-access';
 import { ExtensionError, type Extensions, type Installation } from '../../core/extensions';
 import { SourceError, type Sources } from '../../core/sources';
-import { LibraryError, PendingRefreshError, type Library } from '../../core/library';
+import { LibraryError, PendingRefreshError, UpdateRuleExistsError, type Library } from '../../core/library';
 import { inspectPackage } from '../../infrastructure/archives';
 
 const name = z.string().trim().min(1).max(120);
@@ -85,6 +85,7 @@ export function createManagementApi(input: {
     if (error instanceof ExtensionError) return c.json({ error: error.code, message: error.message }, error.code === 'host_not_configured' ? 503 : error.code === 'missing_plugin' ? 404 : error.code === 'revision_conflict' || error.code === 'change_in_progress' ? 409 : 422);
     if (error instanceof Error && error.name === 'MountError' && 'code' in error) return c.json({ error: error.code, message: error.message }, error.code === 'not_found' ? 404 : error.code === 'mount_busy' ? 409 : 422);
     if (error instanceof SourceError) return c.json({ error: error.code, message: error.message }, error.code === 'missing_instance' ? 404 : error.code === 'stale_call' || error.code === 'invalid_auth_action' ? 409 : 502);
+    if (error instanceof UpdateRuleExistsError) return c.json({ error: 'update_rule_exists', message: error.message, ruleId: error.ruleId }, 409);
     if (error instanceof PendingRefreshError) {
       c.header('Retry-After', '2'); c.header('X-MusicFS-Refresh', error.operationId);
       return c.json({ error: 'refresh_pending', message: error.message, operationId: error.operationId }, 503);

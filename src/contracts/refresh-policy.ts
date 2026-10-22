@@ -9,6 +9,12 @@ export type UpdateTarget =
   | { kind: 'instance' }
   | { kind: 'roots' }
   | { kind: 'directory'; directoryRef: string; recursive: boolean };
+
+/** A scope is identified by source references and recursion, independent of JSON property order. */
+export function sameUpdateTarget(left: UpdateTarget, right: UpdateTarget): boolean {
+  return left.kind === right.kind && (left.kind !== 'directory' || right.kind === 'directory'
+    && left.directoryRef === right.directoryRef && left.recursive === right.recursive);
+}
 export type UpdateRuleInput = {
   instanceId: string; target: UpdateTarget; timing: UpdateTiming; enabled: boolean;
   /** Context name only; opaque source references remain the target identity. */

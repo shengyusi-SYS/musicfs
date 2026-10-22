@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { RefreshPolicy, UpdateRule, UpdateRuleInput, UpdateTarget } from '../../contracts/refresh-policy';
+import { sameUpdateTarget, type RefreshPolicy, type UpdateRule, type UpdateRuleInput, type UpdateTarget } from '../../contracts/refresh-policy';
 import { SourceError, type Sources } from '../sources';
 import type { Refreshes, RefreshScope, RefreshView } from './refresh-types';
 import { LibraryError, type SnapshotKey } from './types';
@@ -27,7 +27,12 @@ const active = (view: RefreshView | null) => view?.status === 'queued' || view?.
 const targetOf = (key: SnapshotKey): UpdateTarget => key.kind === 'roots' ? { kind: 'roots' }
   : { kind: 'directory', directoryRef: key.ref, recursive: false };
 const keyOf = (directoryRef?: string): SnapshotKey => directoryRef === undefined ? { kind: 'roots', ref: '' } : { kind: 'directory', ref: directoryRef };
-const sameTarget = (a: UpdateTarget, b: UpdateTarget) => JSON.stringify(a) === JSON.stringify(b);
+export class UpdateRuleExistsError extends LibraryError {
+  constructor(public readonly ruleId: string) {
+    super('conflict', '此范围已有自动更新规则，请编辑已有规则。');
+    this.name = 'UpdateRuleExistsError';
+  }
+}
 export const scopeOfUpdate = (target: UpdateTarget): RefreshScope => target.kind === 'instance' ? { kind: 'instance' }
   : target.kind === 'roots' ? { kind: 'directory' }
     : { kind: 'directory', directoryRef: target.directoryRef, ...(target.recursive ? { recursive: true } : {}) };
@@ -65,10 +70,9 @@ export function createRefreshSchedules(sources: Sources, refreshes: Refreshes, s
     const value = updateRuleInput.parse(input);
     await sources.view(value.instanceId);
     const duplicate = (await persistent().updateRules()).find(rule => rule.instanceId === value.instanceId
-      && sameTarget(rule.target, value.target) && rule.id !== previous?.id);
-    if (duplicate && previous) throw new LibraryError('conflict', '此范围已有自动更新规则，请编辑已有规则。');
-    previous ??= duplicate;
-    const keepsTarget = previous !== undefined && previous.instanceId === value.instanceId && sameTarget(previous.target, value.target);
+      && sameUpdateTarget(rule.target, value.target) && rule.id !== previous?.id);
+    if (duplicate) throw new UpdateRuleExistsError(duplicate.id);
+    const keepsTarget = previous !== undefined && previous.instanceId === value.instanceId && sameUpdateTarget(previous.target, value.target);
     const operationId = keepsTarget ? previous!.operationId : null;
     const running = active(operationId ? await refreshes.get(operationId) : null);
     return project(await persistent().saveUpdateRule({ ...value, id: previous?.id ?? crypto.randomUUID(),
@@ -100,7 +104,7 @@ export function createRefreshSchedules(sources: Sources, refreshes: Refreshes, s
     async get(instanceId: string, directoryRef?: string): Promise<RefreshPolicy> {
       await sources.view(instanceId); await settle();
       const target = targetOf(keyOf(directoryRef));
-      const rule = (await store.updateRules?.() ?? []).find(rule => rule.instanceId === instanceId && sameTarget(rule.target, target));
+      const rule = (await store.updateRules?.() ?? []).find(rule => rule.instanceId === instanceId && sameUpdateTarget(rule.target, target));
       return { intervalMinutes: rule?.enabled && rule.timing.kind === 'interval' ? rule.timing.minutes : 0,
         nextRunAt: rule?.nextRunAt == null ? null : new Date(rule.nextRunAt).toISOString() };
     },
@@ -108,7 +112,7 @@ export function createRefreshSchedules(sources: Sources, refreshes: Refreshes, s
       const minutes = z.number().int().nonnegative().max(525_600).refine(value => value === 0 || value >= 15).parse(intervalMinutes);
       await sources.view(instanceId);
       const target = targetOf(keyOf(directoryRef));
-      const previous = (await persistent().updateRules()).find(rule => rule.instanceId === instanceId && sameTarget(rule.target, target));
+      const previous = (await persistent().updateRules()).find(rule => rule.instanceId === instanceId && sameUpdateTarget(rule.target, target));
       if (minutes === 0) { if (previous) await persistent().removeUpdateRule(previous.id); return { intervalMinutes: 0, nextRunAt: null }; }
       const value = await save({ instanceId, enabled: true, target, timing: { kind: 'interval', minutes } }, previous);
       return { intervalMinutes: minutes, nextRunAt: value.nextRunAt };

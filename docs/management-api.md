@@ -77,6 +77,8 @@
 
 挂载与桌面路由仅在相应正式桌面能力装配后提供，Worker不提供。缓存查询只取原生状态，不启动未用服务；配置容量不等于实际占用。0的含义随字段而异：目录期限0为手动失效、文件容量0为关闭新缓存、文件期限0为不按时间淘汰。默认值与所有权见[缓存策略](architecture/cache-policy.md)，JSON类型以[mounts](../src/contracts/mounts.ts)、[read-cache](../src/contracts/read-cache.ts)及[desktop](../src/contracts/desktop.ts)为准。
 
+新建更新规则或修改其范围时，若目标已有另一条规则，返回409 `{error:"update_rule_exists",message,ruleId}`；两条原规则均保留。它是可直接编辑已有规则的业务结果，与来源代际变化或设置修订冲突分别处理。
+
 `PluginInspection`包含manifest、revision和compatibility（host、apiVersion、apiCompatible、hostCompatible）。结构有效但API或宿主不兼容也返回200，以便安装前说明；坏包仍返回422。检查只读、不执行插件代码，不代表运行已通过；安装继续使用同一规则重新校验。发布地址安装会重新下载，不持有检查缓存或临时上传任务。
 
 `PluginChange`包含 `operationId/kind/pluginId/status/createdAt/updatedAt` 和可选安装结果/错误；status为queued、preparing、uploading、deploying、verifying、migrating、completed或failed。202仅表示受理，页面持续查询到终态，重新打开插件页可用保存的operationId恢复。结构升级只有全部实例候选与安装整体切换才completed，失败保留旧安装和全部活动数据；不返回候选配置或私有状态。未结束变更返回409，Worker发布凭据缺失返回503。恢复边界见[迁移验证](verification/p2-plugin-migration.md)及[Worker指南](worker.md)。

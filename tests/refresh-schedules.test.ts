@@ -232,9 +232,17 @@ test('management update rules expose calendar targets, reject duplicates on edit
   const rule = await created.json() as { id: string; nextRunAt: string };
   expect(rule.nextRunAt).toBe('2026-10-22T00:00:00.000Z');
   expect(await (await request()).json()).toHaveLength(1);
+  const repeated = await request('', 'POST', { ...input, timing: { ...input.timing, time: '10:00' } });
+  expect(repeated.status).toBe(409);
+  expect(await repeated.json()).toMatchObject({ error: 'update_rule_exists', ruleId: rule.id });
   const directory = await f.library.schedules.create({ instanceId: f.id, enabled: true,
     target: { kind: 'directory', directoryRef: 'music', recursive: false }, timing: { kind: 'interval', minutes: 60 } });
-  expect((await request('/' + directory.id, 'PUT', input)).status).toBe(409);
+  const duplicate = await request('/' + directory.id, 'PUT', input);
+  expect(duplicate.status).toBe(409);
+  expect(await duplicate.json()).toMatchObject({ error: 'update_rule_exists', ruleId: rule.id });
+  const unchanged = await f.library.schedules.list();
+  expect(unchanged.find(value => value.id === directory.id)).toMatchObject({ target: directory.target, timing: directory.timing });
+  expect(unchanged.find(value => value.id === rule.id)).toMatchObject({ target: input.target, timing: input.timing });
   const paused = await request('/' + rule.id, 'PUT', { ...input, enabled: false });
   expect(paused.status).toBe(200); expect(await paused.json()).toMatchObject({ enabled: false, nextRunAt: null });
   const manual = await request('/' + rule.id + '/run', 'POST'); expect(manual.status).toBe(202);

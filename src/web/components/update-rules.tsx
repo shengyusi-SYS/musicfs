@@ -40,6 +40,6 @@ export function UpdateRules({ api }: { api: Api }) {
         <Button size="small" type="text" danger icon={<DeleteOutlined aria-hidden="true" />} aria-label={`删除${ruleTargetLabel(rule)}规则`} loading={remove.isPending && remove.variables === rule.id} onClick={() => remove.mutate(rule.id)} />
       </Space></article>;
     })}</div> : !rules.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有自动更新规则" />}
-    {editing && <UpdateRuleEditor api={api} {...(editing === 'new' ? {} : { rule: editing })} instances={instances.data ?? []} close={() => setEditing(null)} />}
+    {editing && <UpdateRuleEditor key={editing === 'new' ? 'new' : editing.id} api={api} {...(editing === 'new' ? {} : { rule: editing })} instances={instances.data ?? []} close={() => setEditing(null)} />}
   </section>;
 }

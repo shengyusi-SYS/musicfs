@@ -12,6 +12,7 @@ import { LibraryError, PendingRefreshError, type Description, type FileDescripti
   type DirectoryStatus, type InstanceRefresh, type LibraryStore, type Snapshot, type SnapshotKey, type ViewEntry } from './types';
 export * from './types';
 export type { RefreshView, RefreshScope, Refreshes } from './refresh-types';
+export { UpdateRuleExistsError } from './schedules';
 
 const epochDate = '1970-01-01T00:00:00.000Z';
 const sameStamp = (a: SourceStamp, b: SourceStamp) => a.id === b.id && a.epoch === b.epoch
