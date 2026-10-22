@@ -48,11 +48,13 @@
     "antd": "6.6.6",
     "better-auth": "1.7.12",
     "cloudflare": "7.3.0",
+    "croner": "10.0.1",
     "dayjs": "1.11.23",
     "env-paths": "4.0.0",
     "fast-deep-equal": "3.1.3",
     "hono": "4.13.13",
     "lru-cache": "11.5.3",
+    "mustache": "4.2.0",
     "open": "11.0.4",
     "proper-lockfile": "4.1.2",
     "range-parser": "1.3.0",
@@ -67,6 +69,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261019.1",
     "@types/bun": "1.4.3",
+    "@types/mustache": "4.2.6",
     "@types/node": "24.19.2",
     "@types/proper-lockfile": "4.1.4",
     "@types/range-parser": "1.2.7",
@@ -78,9 +81,9 @@
     "dependency-cruiser": "18.6.0",
     "fflate": "0.8.3",
     "miniflare": "4.20260730.0",
+    "music-metadata": "12.2.3",
     "typescript": "6.0.3",
-    "vite": "8.3.4",
-    "music-metadata": "12.2.3"
+    "vite": "8.3.4"
   },
   "license": "GPL-3.0-only"
 }
