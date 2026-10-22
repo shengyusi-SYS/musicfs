@@ -63,11 +63,12 @@ export async function createDesktopService(input: { directory: string; adminToke
   const library = createLibrary(sources, { ...store,
     saveLayout(...args: Parameters<typeof store.saveLayout>) { const saved = store.saveLayout(...args); if (saved) refreshMounts(); return saved; },
     commitRefresh(...args: Parameters<typeof store.commitRefresh>) {
-      const changed = args[2]?.publish ? store.publishedEntriesChanged(args[0], args[2]) : false;
+      const task = input.mounts && args[2]?.publish ? args[0].task : null;
+      const previousId = task ? store.snapshotHeader(args[0].stamp.id, task.key)?.id : undefined;
       const result = store.commitRefresh(...args);
       // Preserve mounted listings when a successful refresh publishes unchanged contents.
-      if (result === 'committed' && changed && input.mounts && args[0].task) {
-        void publishedPaths(sources, store, args[0].stamp, args[0].task.key).then(paths => input.mounts!.refreshLocal(paths))
+      if (result === 'committed' && task && store.snapshotHeader(args[0].stamp.id, task.key)?.id !== previousId) {
+        void publishedPaths(sources, store, args[0].stamp, task.key).then(paths => input.mounts!.refreshLocal(paths))
           .catch(() => console.error('MusicFS: changed folder notification failed.'));
       }
       return result;

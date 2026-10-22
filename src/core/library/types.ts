@@ -7,7 +7,8 @@ export type LayoutNode = { id: string; name: string } & (
 );
 export type Layout = { revision: number; nodes: LayoutNode[] | null };
 export type SnapshotKey = { kind: 'roots' | 'directory'; ref: string };
-export type Snapshot = { stamp: SourceStamp; id: string; completedAt: string; statistics?: Record<string, number>; pendingFileInfo?: number } & (
+/** id identifies published content; completedAt records the latest successful check. */
+export type Snapshot = { stamp: SourceStamp; id: string; completedAt: string; contentModifiedAt?: string; statistics?: Record<string, number>; pendingFileInfo?: number } & (
   | { kind: 'roots'; items: Root[] }
   | { kind: 'directory'; items: Entry[] }
 );

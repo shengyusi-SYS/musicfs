@@ -151,14 +151,17 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       // Read this key again; never return that other directory as this result.
     }
   }
-  const publishedViews = createPublishedViews<Child>(store, snapshot, (value, key) => value.kind === 'roots'
-    ? value.items.map(root => ({ id: root.sourceId, name: root.name, modifiedAt: value.completedAt,
-      target: { kind: 'directory', stamp: value.stamp, ref: root.directoryRef } }))
-    : value.items.map(entry => ({ id: entry.entryId, name: entry.name,
-      modifiedAt: entry.kind === 'file' ? entry.info?.modifiedAt ?? value.completedAt : value.completedAt,
-      target: entry.kind === 'directory' ? { kind: 'directory', stamp: value.stamp, ref: entry.directoryRef }
-        : { kind: 'file', stamp: value.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }),
-          ...(entry.deferredInfo === true && entry.info === undefined ? { deferredDirectory: key.ref } : {}) } })), options.publishedViews);
+  const publishedViews = createPublishedViews<Child>(store, snapshot, (value, key) => {
+    const modifiedAt = value.contentModifiedAt ?? value.completedAt;
+    return value.kind === 'roots'
+      ? value.items.map(root => ({ id: root.sourceId, name: root.name, modifiedAt,
+        target: { kind: 'directory', stamp: value.stamp, ref: root.directoryRef } }))
+      : value.items.map(entry => ({ id: entry.entryId, name: entry.name,
+        modifiedAt: entry.kind === 'file' ? entry.info?.modifiedAt ?? modifiedAt : modifiedAt,
+        target: entry.kind === 'directory' ? { kind: 'directory', stamp: value.stamp, ref: entry.directoryRef }
+          : { kind: 'file', stamp: value.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }),
+            ...(entry.deferredInfo === true && entry.info === undefined ? { deferredDirectory: key.ref } : {}) } }));
+  }, options.publishedViews);
   async function refreshInstance(instanceId: string, signal: AbortSignal): Promise<InstanceRefresh> {
     signal.throwIfAborted();
     const result = await drain(await refreshes.start(instanceId, { kind: 'instance' }), signal);

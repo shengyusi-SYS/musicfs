@@ -51,21 +51,6 @@ test('a long refresh gives a waiting instance a turn after each committed page',
   expect(await refresh.stepNext(signal())).toMatchObject({ operationId: second.operationId, status: 'running' });
 });
 
-test('desktop publication compares staged pages and final entries before invalidating mounted listings', async () => {
-  const f = await setup(plugin({ list: async () => page([entry('first'), entry('last')]) }));
-  await f.library.refresh(f.id, directory, signal());
-  f.source.list = async () => ({ ok: true, value: { items: [entry('first')], nextCursor: 'last' } });
-  const refresh = f.rebuild().refreshes;
-  const job = await refresh.start(f.id, { kind: 'directory', directoryRef: directory });
-  await refresh.step(job.operationId, signal());
-  const record = f.store.refreshRecord(job.operationId)!;
-  const publish = { stamp: record.stamp, id: record.task!.attemptId, kind: 'directory' as const, completedAt: job.createdAt };
-  expect(f.store.publishedEntriesChanged(record, { items: [entry('last')], publish })).toBe(false);
-  expect(f.store.publishedEntriesChanged(record, { items: [{ ...entry('last'), name: 'Renamed.wav' }], publish })).toBe(true);
-  expect(f.store.publishedEntriesChanged(record, { items: [], publish })).toBe(true);
-  expect(f.store.publishedEntriesChanged({ ...record, stamp: { ...record.stamp, epoch: record.stamp.epoch + 1 } }, { items: [entry('last')], publish })).toBe(true);
-});
-
 test('metadata refresh keeps one explicit intent across durable pages and publishes only after completion', async () => {
   const observed: string[] = [];
   const f = await setup(plugin({ metadataRefresh: true, list: async (ctx, _directory, cursor) => {

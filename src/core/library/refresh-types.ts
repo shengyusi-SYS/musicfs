@@ -28,7 +28,7 @@ export type RefreshRecord = {
   createdAt: string; updatedAt: string;
   retryAt?: number; rateLimitRetries?: number; temporaryRetries?: number;
 };
-export type SnapshotHeader = Pick<Snapshot, 'stamp' | 'id' | 'kind' | 'completedAt' | 'statistics' | 'pendingFileInfo'>;
+export type SnapshotHeader = Pick<Snapshot, 'stamp' | 'id' | 'kind' | 'completedAt' | 'contentModifiedAt' | 'statistics' | 'pendingFileInfo'>;
 export type RefreshPage = { items: (Root | Entry)[]; nextCursor?: string; publish?: SnapshotHeader };
 type Stored<T> = T | Promise<T>;
 
@@ -39,7 +39,7 @@ export interface RefreshStore {
   refreshRecord(operationId: string): Stored<RefreshRecord | null>;
   currentRefresh(instanceId: string): Stored<RefreshRecord | null>;
   claimRefresh(operationId: string, token: string, now: number, until: number): Stored<RefreshRecord | null>;
-  /** Append at expected.task's ordinal, then checkpoint; publication switches a pointer, never a cumulative JSON array. */
+  /** Append at expected.task's ordinal, then checkpoint; only changed content switches the published pointer. */
   commitRefresh(expected: RefreshRecord, next: RefreshRecord, page?: RefreshPage, directoryError?: string): Stored<'committed' | 'stale' | 'duplicate_entry' | 'cyclic_cursor'>;
   cancelRefresh(operationId: string, updatedAt: string): Stored<void>;
   readyRefreshes(now: number, limit: number): Stored<string[]>;

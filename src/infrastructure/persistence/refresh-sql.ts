@@ -8,7 +8,7 @@ export type SqlStatement = { sql: string; values: SqlValue[] };
 export type RefreshDocumentRow = { document: string };
 export type RefreshOutcome = 'committed' | 'stale' | 'duplicate_entry' | 'cyclic_cursor';
 export type SnapshotEntryRow = { document: string | null; error: string | null; published_attempt_id: string | null; entry: string | null };
-export type SnapshotHeaderRow = { stamp: string; id: string; kind: Snapshot['kind']; completed_at: string; statistics: string | null; pending_file_info?: number | null; error: string | null };
+export type SnapshotHeaderRow = { stamp: string; id: string; kind: Snapshot['kind']; completed_at: string; content_modified_at?: string | null; statistics: string | null; pending_file_info?: number | null; error: string | null };
 const statement = (sql: string, ...values: SqlValue[]): SqlStatement => ({ sql, values });
 const active = "status IN ('queued', 'running')";
 const current = `EXISTS (SELECT 1 FROM instances i JOIN installations p ON p.id = i.plugin_id
@@ -30,11 +30,13 @@ export const snapshotEntriesSQL = `SELECT CASE WHEN e.ordinal = 0 OR e.ordinal I
   WHERE s.instance_id = ? AND s.kind = ? AND s.ref = ? ORDER BY e.ordinal`;
 export const snapshotHeaderSQL = `SELECT json_extract(document, '$.stamp') AS stamp, json_extract(document, '$.id') AS id,
   json_extract(document, '$.kind') AS kind, json_extract(document, '$.completedAt') AS completed_at,
+  json_extract(document, '$.contentModifiedAt') AS content_modified_at,
   json_extract(document, '$.statistics') AS statistics, json_extract(document, '$.pendingFileInfo') AS pending_file_info, error FROM directory_snapshots
   WHERE instance_id = ? AND kind = ? AND ref = ? AND document IS NOT NULL`;
 
 export function snapshotHeaderFromRow(row: SnapshotHeaderRow | null | undefined): (Omit<Snapshot, 'items'> & { error: string | null }) | null {
   return row ? { stamp: JSON.parse(row.stamp) as SourceStamp, id: row.id, kind: row.kind, completedAt: row.completed_at,
+    ...(row.content_modified_at == null ? {} : { contentModifiedAt: row.content_modified_at }),
     ...(row.statistics === null ? {} : { statistics: JSON.parse(row.statistics) as Record<string, number> }),
     ...(row.pending_file_info == null ? {} : { pendingFileInfo: row.pending_file_info }), error: row.error } : null;
 }
@@ -158,9 +160,31 @@ export function commitRefreshPlan(expected: RefreshRecord, next: RefreshRecord, 
     expected.stamp.id, task.attemptId, task.entries, identity, items, ...written.values));
     if (page.nextCursor !== undefined) plan.push(statement(`INSERT INTO library_refresh_cursors (instance_id, attempt_id, cursor)
       SELECT ?, ?, ? WHERE EXISTS (${written.sql})`, expected.stamp.id, task.attemptId, page.nextCursor, ...written.values));
-    if (page.publish) plan.push(statement(`UPDATE directory_snapshots SET document = ?, published_attempt_id = ?, error = NULL
-      WHERE instance_id = ? AND kind = ? AND ref = ? AND request_id = ? AND EXISTS (${written.sql})`,
-    JSON.stringify(page.publish), task.attemptId, expected.stamp.id, task.key.kind, task.key.ref, task.attemptId, ...written.values));
+    if (page.publish) {
+      const published = JSON.stringify({ ...page.publish, contentModifiedAt: page.publish.completedAt });
+      // Compare once, after appending the final page and inside the same transaction.
+      // Both sides use indexed ordinal lookups; no full directory enters the host process.
+      plan.push(statement(`WITH publication AS MATERIALIZED (
+        SELECT CASE WHEN p.published_attempt_id IS NOT NULL
+          AND json_extract(p.document, '$.stamp.id') = ? AND json_extract(p.document, '$.stamp.pluginId') = ?
+          AND json_extract(p.document, '$.stamp.epoch') = ? AND json_extract(p.document, '$.stamp.pluginRevision') = ?
+          AND json_extract(p.document, '$.stamp.pluginGeneration') = ?
+          AND (SELECT COUNT(*) FROM library_snapshot_entries WHERE attempt_id = p.published_attempt_id) = ?
+          AND NOT EXISTS (SELECT 1 FROM library_snapshot_entries c LEFT JOIN library_snapshot_entries e
+            ON e.attempt_id = p.published_attempt_id AND e.ordinal = c.ordinal
+            WHERE c.attempt_id = ? AND (e.document IS NULL OR e.document <> c.document))
+          THEN 1 ELSE 0 END AS unchanged
+        FROM directory_snapshots p WHERE p.instance_id = ? AND p.kind = ? AND p.ref = ?
+      ) UPDATE directory_snapshots SET document = CASE WHEN (SELECT unchanged FROM publication) = 1
+          THEN json_set(?, '$.id', json_extract(document, '$.id'), '$.contentModifiedAt',
+            COALESCE(json_extract(document, '$.contentModifiedAt'), json_extract(document, '$.completedAt')))
+          ELSE ? END,
+        published_attempt_id = CASE WHEN (SELECT unchanged FROM publication) = 1 THEN published_attempt_id ELSE ? END, error = NULL
+        WHERE instance_id = ? AND kind = ? AND ref = ? AND request_id = ? AND EXISTS (${written.sql})`,
+      ...stampValues(expected.stamp), task.entries + page.items.length, task.attemptId,
+      expected.stamp.id, task.key.kind, task.key.ref, published, published, task.attemptId,
+      expected.stamp.id, task.key.kind, task.key.ref, task.attemptId, ...written.values));
+    }
   }
   if (directoryError !== undefined && task) plan.push(statement(`UPDATE directory_snapshots SET error = ?
     WHERE instance_id = ? AND kind = ? AND ref = ? AND request_id = ? AND EXISTS (${written.sql})`,

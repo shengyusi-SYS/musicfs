@@ -22,7 +22,7 @@ const date = new Date(now).toISOString();
 const manifest: PluginManifest = { formatVersion: 1, id: 'org.musicfs.fixture', name: 'Fixture', version: '1.0.0', apiRange: '^1.0.0',
   hosts: { desktop: 'index.mjs', worker: 'index.mjs' }, configVersion: 1, stateVersion: 1, files: ['index.mjs'] };
 const key: SnapshotKey = { kind: 'directory', ref: 'music' };
-const file = (id: string): Entry => ({ kind: 'file', entryId: id, name: `${id}.wav`, fileRef: 'same-content' });
+const file = (id: string): Extract<Entry, { kind: 'file' }> => ({ kind: 'file', entryId: id, name: `${id}.wav`, fileRef: 'same-content' });
 function record(stamp: SourceStamp, id: string, taskKey = key): RefreshRecord {
   return { operationId: id, stamp, scope: { kind: 'instance' }, status: 'queued', revision: 0, leaseToken: null, leaseUntil: null,
     task: { key: taskKey, attemptId: `${id}-attempt`, pages: 0, entries: 0, children: [] }, pending: [], seen: [], known: [],
@@ -31,7 +31,7 @@ function record(stamp: SourceStamp, id: string, taskKey = key): RefreshRecord {
 function next(previous: RefreshRecord, changes: Partial<RefreshRecord> = {}): RefreshRecord {
   return { ...previous, revision: previous.revision + 1, leaseToken: null, leaseUntil: null, ...changes };
 }
-const header = (current: RefreshRecord, id: string): SnapshotHeader => ({ stamp: current.stamp, kind: current.task!.key.kind, id, completedAt: date });
+const header = (current: RefreshRecord, id: string): SnapshotHeader => ({ stamp: current.stamp, kind: current.task!.key.kind, id, completedAt: date, contentModifiedAt: date });
 
 async function setup(adapter: 'SQLite' | 'D1') {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-refresh-')); let store: Store;
@@ -69,6 +69,54 @@ async function setup(adapter: 'SQLite' | 'D1') {
 }
 
 for (const adapter of ['SQLite', 'D1'] as const) {
+  test(`${adapter}: unchanged publication retains content identity and rows across page sizes, checks and restarts`, async () => {
+    const fixture = await setup(adapter); const { rows, stamp } = fixture;
+    let sequence = 0;
+    async function publish(pages: Entry[][], source = stamp) {
+      const id = `check-${++sequence}`;
+      const checkedAt = new Date(now + sequence * 1000).toISOString();
+      await fixture.store.createRefresh(record(source, id), true);
+      for (let index = 0; index < pages.length; index++) {
+        const claimed = (await fixture.store.claimRefresh(id, `${id}-${index}`, now, now + 100))!;
+        const items = pages[index]!; const final = index === pages.length - 1;
+        const candidate = next(claimed, final ? { status: 'completed', task: null }
+          : { task: { ...claimed.task!, pages: index + 1, entries: claimed.task!.entries + items.length, cursor: `${index + 1}` } });
+        const page = final ? { items, publish: { ...header(claimed, id), completedAt: checkedAt, statistics: { checked: sequence } } }
+          : { items, nextCursor: `${index + 1}` };
+        if (final && fixture.queryPlan) {
+          const query = commitRefreshPlan(claimed, candidate, page).find(item => item.sql.startsWith('WITH publication'))!;
+          const plan = fixture.queryPlan(query);
+          expect(plan.find(item => /SEARCH c\b/.test(item.detail))?.detail).toContain('(attempt_id=?)');
+          expect(plan.find(item => /SEARCH e\b/.test(item.detail))?.detail).toContain('(attempt_id=? AND ordinal=?)');
+        }
+        expect(await fixture.store.commitRefresh(claimed, candidate, page)).toBe('committed');
+      }
+      return (await fixture.store.snapshotHeader(stamp.id, key))!;
+    }
+    const first = await publish([[file('a'), file('b')]]);
+    // Existing row-based snapshots predate contentModifiedAt; a successful retry
+    // must preserve their identity/date and clear the previous refresh error.
+    await rows("UPDATE directory_snapshots SET document = json_remove(document, '$.contentModifiedAt'), error = 'temporary'");
+    const same = await publish([[file('a')], [file('b')]]);
+    expect(same).toMatchObject({ id: first.id, contentModifiedAt: first.contentModifiedAt, statistics: { checked: 2 }, error: null });
+    expect(same.completedAt).not.toBe(first.completedAt);
+    expect(await rows<{ attempt_id: string; count: number }>('SELECT attempt_id, count(*) AS count FROM library_snapshot_entries GROUP BY attempt_id'))
+      .toEqual([{ attempt_id: 'check-1-attempt', count: 2 }]);
+    fixture.reopen();
+    expect(await fixture.store.snapshotHeader(stamp.id, key)).toEqual(same);
+    expect((await fixture.store.snapshot(stamp.id, key))?.value?.items).toEqual([file('a'), file('b')]);
+    const changed = await publish([[file('a'), { ...file('b'), fileRef: 'new-file' }]]);
+    expect(changed.id).not.toBe(first.id);
+    expect(changed.contentModifiedAt).toBe(changed.completedAt);
+    const empty = await publish([[]]);
+    expect(empty.id).not.toBe(changed.id);
+    expect((await publish([[]])).id).toBe(empty.id);
+    expect(await rows('SELECT attempt_id FROM library_snapshot_entries')).toEqual([]);
+    const captured = (await fixture.store.capture(stamp.id))!;
+    expect(await fixture.store.configure(captured, { changed: true }, null)).toBe(true);
+    expect((await publish([[]], { ...stamp, epoch: stamp.epoch + 1 })).id).not.toBe(empty.id);
+  });
+
   test(`${adapter}: snapshot reads carry one header and retain ordered, empty and legacy directories`, async () => {
     const fixture = await setup(adapter); const { stamp, rows } = fixture;
     const old: Snapshot = { stamp, id: 'legacy', kind: 'directory', completedAt: date, items: [file('legacy')] };

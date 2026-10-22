@@ -41,9 +41,10 @@ test('desktop schedules progress without a page and retain mount listings when p
     clock.close(); publications.length = 0;
     service = await createDesktopService(options);
     const deadline = Date.now() + 2_000;
-    while (service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value?.id === previous!.id && Date.now() < deadline) await Bun.sleep(5);
+    while (service.store.snapshotHeader(instanceId, { kind: 'directory', ref: '/' })?.completedAt === previous!.completedAt && Date.now() < deadline) await Bun.sleep(5);
     const current = service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value;
-    expect(current?.id).not.toBe(previous!.id);
+    expect(current?.id).toBe(previous!.id);
+    expect(current?.completedAt).not.toBe(previous!.completedAt);
     expect(publications).toEqual([]);
     expect(service.store.currentRefresh(instanceId)?.status).toBe('completed');
     expect(service.store.nextRefreshScheduleAt()).toBeGreaterThan(Date.now());
@@ -51,8 +52,9 @@ test('desktop schedules progress without a page and retain mount listings when p
     publications.length = 0;
     service.store.saveRefreshSchedule(instanceId, { kind: 'directory', ref: '/' }, 15, Date.now() - 1);
     const nextDeadline = Date.now() + 750;
-    while (service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value?.id === current!.id && Date.now() < nextDeadline) await Bun.sleep(5);
-    expect(service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value?.id).not.toBe(current!.id);
+    while (service.store.snapshotHeader(instanceId, { kind: 'directory', ref: '/' })?.completedAt === current!.completedAt && Date.now() < nextDeadline) await Bun.sleep(5);
+    expect(service.store.snapshotHeader(instanceId, { kind: 'directory', ref: '/' })?.id).toBe(current!.id);
+    expect(service.store.snapshotHeader(instanceId, { kind: 'directory', ref: '/' })?.completedAt).not.toBe(current!.completedAt);
     expect(publications).toEqual([]);
   } finally { await service?.close(); await rm(directory, { recursive: true, force: true }); }
 });

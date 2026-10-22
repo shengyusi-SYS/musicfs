@@ -113,6 +113,44 @@ test('published view changes only after complete publication and failed refresh 
   } finally { fixture.close(); }
 });
 
+test('unchanged refresh keeps the path index, prepared ETags and modified times while recording the latest check', async () => {
+  let now = Date.UTC(2026, 9, 23);
+  const info = { contentId: 'fixed', size: 8, mediaType: 'audio/wav' };
+  const unused = async (): Promise<never> => { throw new Error('Prepared files need no source metadata call'); };
+  const source: SourcePlugin = {
+    configuration: { schema: { type: 'object' } }, validateConfig: async (_ctx, value) => ({ ok: true, value }),
+    roots: async () => ({ ok: true, value: { items: [{ sourceId: 'root', name: '音乐', directoryRef: 'root' }] } }),
+    list: async () => ({ ok: true, value: { items: [{ kind: 'file', entryId: 'track', name: 'track.wav', fileRef: 'track', info }] } }),
+    stat: unused, open: unused
+  };
+  const fixture = await libraryFixture(source);
+  const hash = spyOn(crypto.subtle, 'digest');
+  try {
+    const library = createLibrary(fixture.sources, fixture.store, undefined, { now: () => now });
+    const path = '/实例 & #/音乐';
+    const before = await library.files.stat(`${path}/track.wav`, signal());
+    const directory = await library.files.stat(path, signal());
+    const previous = fixture.store.snapshotHeader(fixture.id, key('root'))!;
+    now += 60_000;
+    await library.refresh(fixture.id, undefined, signal());
+    await library.refresh(fixture.id, 'root', signal());
+    const read = fixture.store.snapshot; let reads = 0;
+    fixture.store.snapshot = (...args) => { reads++; return read(...args); };
+    hash.mockClear();
+    expect(await library.files.stat(`${path}/track.wav`, signal())).toEqual(before);
+    expect(reads).toBe(0);
+    expect(hash).not.toHaveBeenCalled();
+    const current = fixture.store.snapshotHeader(fixture.id, key('root'))!;
+    expect(current.id).toBe(previous.id);
+    expect(current.completedAt).toBe(new Date(now).toISOString());
+    expect(current.completedAt).not.toBe(previous.completedAt);
+    // A restart must expose the same file dates as a retained warm index.
+    const cold = createLibrary(fixture.sources, fixture.store);
+    expect(await cold.files.stat(`${path}/track.wav`, signal())).toEqual(before);
+    expect(await cold.files.stat(path, signal())).toEqual(directory);
+  } finally { hash.mockRestore(); fixture.close(); }
+});
+
 test('concurrent cold lookups build one view and a cancelled caller does not abort other lookups', async () => {
   const value = snapshot('one'); const pending = Promise.withResolvers<{ value: Snapshot; error: null }>(); let reads = 0; let builds = 0;
   const store: Pick<LibraryStore, 'snapshot' | 'snapshotHeader'> = {
