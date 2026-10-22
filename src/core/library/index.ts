@@ -6,6 +6,7 @@ import { createRefreshes } from './refresh';
 import { createRefreshSchedules, type RefreshScheduleStore } from './schedules';
 import { createFileNaming, parseFileNamingPolicy, projectFileNames, type NamingStore } from './file-naming';
 import type { FileNamingPreview } from '../../contracts/file-naming';
+import type { SourceDirectoryListing } from '../../contracts/management';
 import { assertInfo } from './file-info';
 import type { RefreshScope, RefreshStore, RefreshView } from './refresh-types';
 import { LibraryError, PendingRefreshError, type Description, type FileDescription, type FileView, type LayoutNode,
@@ -377,6 +378,13 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     },
     refreshInstance,
     directoryStatus: async (instanceId: string, directoryRef: string) => publishedStatus(await sources.view(instanceId), directoryRef),
+    async browseSourceDirectory(instanceId: string, directoryRef: string | undefined, signal: AbortSignal): Promise<SourceDirectoryListing> {
+      const stamp = await sources.view(instanceId);
+      const view = await publishedViews.get(stamp, directoryRef === undefined ? { kind: 'roots', ref: '' } : { kind: 'directory', ref: directoryRef }, signal);
+      return { entries: view.entries.map(entry => ({ name: entry.name, modifiedAt: entry.modifiedAt,
+        ...(entry.target.kind === 'directory' ? { kind: 'directory' as const, directoryRef: entry.target.ref } : { kind: 'file' as const }) })),
+        status: directoryRef === undefined ? null : await publishedStatus(stamp, directoryRef) };
+    },
     async browseDirectory(path: string, signal: AbortSignal) {
       const resolved = await resolve(path, signal);
       if (resolved.target.kind === 'source') resolved.target = await sourceDirectory(resolved.target, signal);

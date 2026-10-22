@@ -31,6 +31,7 @@
 | `GET /api/instances/:id/authentication` | 当前公开认证 `{operationId,step,error?}`，没有操作时为 null；不返回私有状态或内部来源戳 |
 | `POST /api/instances/:id/authentication` | start；poll/submit 带 operationId 与 challengeId，submit 另带 input；cancel 只带 operationId。成功返回公开结果，过期操作/挑战返回 409 |
 | `GET /api/instances/:id/roots` | 完整分页后的内容源；使用当前有效快照 |
+| `GET /api/instances/:id/directory?directoryRef=...` | 按来源引用浏览 `{entries,status}`；省略引用列出入口，目录项带 `directoryRef`，文件项只有名称与修改时间。共用快照与命名投影，不依赖导出布局，不读取音频属性 |
 | `GET /api/instances/:id/directory-status?directoryRef=...` | 当前有效目录最近成功的 `{completedAt,statistics,error}`；error为最近失败代码或null，未读取或代际已失效时为null；只读快照，不请求来源 |
 | `GET /api/library/directory?path=...` | 已发布路径的 `{entries,status}`，status为同一目录的DirectoryStatus，虚拟分组/实例容器为null；供目录浏览器显示保留的旧内容，不暴露来源引用 |
 | `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例；`{directoryRef}` 刷新指定目录；`{scope:"file-info",directoryRef}` 准备文件属性；`{scope:"metadata",directoryRef}` 显式重新取得当前目录的音乐资料（须插件声明支持）；兼容 `{}` 仅刷新内容入口。返回202 + RefreshView，替换旧活动操作 |

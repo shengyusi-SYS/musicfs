@@ -123,6 +123,7 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
     saveLayout: (expectedRevision: number, nodes: LayoutNode[] | null) => request<Layout>('/layout', json('PUT', { expectedRevision, nodes })),
     library: (path: string, signal: AbortSignal) => request<ViewEntry[]>(`/library?path=${encodeURIComponent(path)}`, { signal }),
     browseDirectory: (path: string, signal: AbortSignal) => request<DirectoryListing>(`/library/directory?path=${encodeURIComponent(path)}`, { signal }),
+    browseSourceDirectory: (id: string, ref: string | undefined, signal: AbortSignal) => request<import('../contracts/management').SourceDirectoryListing>(`/instances/${encodeURIComponent(id)}/directory${ref === undefined ? '' : '?directoryRef=' + encodeURIComponent(ref)}`, { signal }),
     connection: (signal: AbortSignal) => request<Connection>('/connection', { signal }),
     saveConnection: (value: DavCredentials) => request<Connection>('/connection', json('PUT', value)),
     authentication: (id: string, signal: AbortSignal) => request<AuthenticationSession | null>(`/instances/${encodeURIComponent(id)}/authentication`, { signal }),

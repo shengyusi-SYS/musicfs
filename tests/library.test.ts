@@ -20,6 +20,26 @@ function plugin(overrides: Partial<SourcePlugin> = {}): SourcePlugin {
 async function setup(source = plugin()) { const result = await libraryFixture(source); cleanups.push(result.close); return result; }
 const filePath = '/实例 & #/来源/音频.wav';
 
+test('source browsing works outside the export layout and reuses the named snapshot without reading audio', async () => {
+  let lists = 0; let stats = 0;
+  const source = plugin({ list: async (_ctx, ref) => { lists++; return { ok: true, value: { items: ref === 'root'
+    ? [{ kind: 'directory', entryId: 'nested', name: '嵌套目录', directoryRef: 'opaque-child' }, { kind: 'file', entryId: 'one', name: '音频.wav', fileRef: 'audio' }]
+    : [{ kind: 'file', entryId: 'nested-file', name: '另一首.wav', fileRef: 'nested-audio' }] } }; },
+    stat: async () => { stats++; return { ok: true, value: { contentId: 'fixed', size: 8, mediaType: 'audio/wav' } }; } });
+  const { library, id } = await setup(source);
+  await library.saveLayout(0, []);
+  expect(await library.files.list('/', signal())).toEqual([]);
+  expect((await library.browseSourceDirectory(id, undefined, signal())).entries).toMatchObject([{ kind: 'directory', name: '来源', directoryRef: 'root' }]);
+  const listing = await library.browseSourceDirectory(id, 'root', signal());
+  expect(listing.entries).toMatchObject([{ kind: 'directory', directoryRef: 'opaque-child' }, { kind: 'file', name: '音频.wav' }]);
+  expect(listing.status).not.toBeNull();
+  expect(await library.browseSourceDirectory(id, 'root', signal())).toEqual(listing);
+  expect(lists).toBe(1); expect(stats).toBe(0);
+  expect((await library.browseSourceDirectory(id, 'opaque-child', signal())).entries).toMatchObject([{ kind: 'file', name: '另一首.wav' }]);
+  expect(lists).toBe(2); expect(stats).toBe(0);
+  expect((await library.layout()).nodes).toEqual([]);
+});
+
 test('complete pagination preserves order and duplicate file occurrences', async () => {
   const { library } = await setup(plugin({ list: async (_ctx, _ref, cursor) => ({ ok: true, value: cursor === undefined
     ? { items: [], nextCursor: 'empty-is-not-end' }

@@ -203,6 +203,7 @@ export function createManagementApi(input: {
     return c.json(result(outcome), outcome.ok ? 200 : 422);
   });
   app.get('/api/instances/:id/roots', async c => c.json(await library.contentSources(c.req.param('id'), c.req.raw.signal)));
+  app.get('/api/instances/:id/directory', async c => c.json(await library.browseSourceDirectory(c.req.param('id'), c.req.query('directoryRef'), c.req.raw.signal)));
   app.get('/api/update-rules', async c => c.json((await library.schedules.list()) satisfies UpdateRule[]));
   app.post('/api/update-rules', async c => c.json(await library.schedules.create(updateRuleInput.parse(await json(c))), 201));
   app.put('/api/update-rules/:id', async c => c.json(await library.schedules.update(c.req.param('id'), updateRuleInput.parse(await json(c)))));

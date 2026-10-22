@@ -88,6 +88,8 @@ test('HTTP install → independent instances → layout → DAV → restart → 
     { kind: 'source', id: 'b', name: '乙', instanceId: b, sourceId: 'audio' }
   ] }];
   expect((await request('/api/layout', { method: 'PUT', ...body({ expectedRevision: 0, nodes }) })).status).toBe(200);
+  expect(await (await request(`/api/instances/${a}/directory`)).json()).toMatchObject({ entries: [{ name: '甲', kind: 'directory', directoryRef: '/' }] });
+  expect(await (await request(`/api/instances/${a}/directory?directoryRef=${encodeURIComponent('/')}`)).json()).toMatchObject({ entries: [{ name: '440 Hz.wav', kind: 'file' }] });
   const path = '/dav/' + ['音乐', '甲', '440 Hz.wav'].map(encodeURIComponent).join('/');
   expect(await (await request(path, { headers: { Authorization: reader, Range: 'bytes=0-3' } })).text()).toBe('RIFF');
   expect((await request(`/api/instances/${a}/config`, { method: 'PUT', ...body({ config: { label: '甲新设置' } }) })).status).toBe(200);

@@ -16,6 +16,10 @@ export type ViewEntry = { kind: 'file' | 'directory'; path: string; name: string
 export type ContentSources = Root[];
 export type DirectoryStatus = { completedAt: string; statistics: Record<string, number> | null; error: string | null; pendingFileInfo?: number };
 export type DirectoryListing = { entries: ViewEntry[]; status: DirectoryStatus | null; source?: { instanceId: string; pluginId: string; directoryRef: string } };
+export type SourceDirectoryListing = { entries: ({ name: string; modifiedAt: string } & (
+  | { kind: 'directory'; directoryRef: string }
+  | { kind: 'file' }
+))[]; status: DirectoryStatus | null };
 export type Result<T> = { ok: true; value: T } | { ok: false; error: PluginFault };
 export type Connection = { davPath: string; username: string; password: string };
 export type AuthenticationSession = { operationId: string; step: AuthStep | null; error?: PluginFault };
