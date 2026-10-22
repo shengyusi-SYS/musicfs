@@ -5,6 +5,7 @@ import { serveStatic } from '@hono/bun';
 import { createExtensions } from '../../core/extensions';
 import { createSources } from '../../core/sources';
 import { createLibrary } from '../../core/library';
+import { publishedPaths } from '../../core/library/published-paths';
 import { openSqlite } from '../../infrastructure/persistence/sqlite';
 import { sha256 } from '../../infrastructure/sha256';
 import { readPackage, DEFAULT_PACKAGE_LIMITS } from '../../infrastructure/archives';
@@ -48,7 +49,7 @@ export async function createDesktopService(input: { directory: string; adminToke
   const refreshMounts = () => { void input.mounts?.refreshLocal().catch(() => console.error('MusicFS: mount directory refresh failed; cached names remain until their configured expiry.')); };
   const sources = createSources({ ...store,
     insert(...args: Parameters<typeof store.insert>) { const saved = store.insert(...args); if (saved) refreshMounts(); return saved; },
-    configure(...args: Parameters<typeof store.configure>) { const saved = store.configure(...args); if (saved) refreshMounts(); return saved; },
+    configure(...args: Parameters<typeof store.configure>) { const saved = store.configure(...args); if (saved && !args[3]) refreshMounts(); return saved; },
     advanceAuthentication(...args: Parameters<typeof store.advanceAuthentication>) {
       const saved = store.advanceAuthentication(...args); if (saved) refreshMounts(); return saved;
     },
@@ -65,7 +66,10 @@ export async function createDesktopService(input: { directory: string; adminToke
       const changed = args[2]?.publish ? store.publishedEntriesChanged(args[0], args[2]) : false;
       const result = store.commitRefresh(...args);
       // Preserve mounted listings when a successful refresh publishes unchanged contents.
-      if (result === 'committed' && changed) refreshMounts();
+      if (result === 'committed' && changed && input.mounts && args[0].task) {
+        void publishedPaths(sources, store, args[0].stamp, args[0].task.key).then(paths => input.mounts!.refreshLocal(paths))
+          .catch(() => console.error('MusicFS: changed folder notification failed.'));
+      }
       return result;
     } }, undefined, { execution: 'deferred', sha256, publishedViews: { views: 32, estimatedBytes: 32 * 1024 * 1024 } });
   const changes = createDesktopChanges({ store: { ...store, commitChange(...args: Parameters<typeof store.commitChange>) {

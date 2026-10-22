@@ -377,12 +377,14 @@ export async function createMountManager(options: {
       if (!owned) throw new MountError('invalid_mount', '此挂载已不在运行，请重新挂载后重试。');
       await control.call('vfs/forget', { fs: `${remoteName(record)}:` });
     }),
-    refreshLocal: () => serialize(async () => {
+    refreshLocal: paths => serialize(async () => {
+      if (paths?.length === 0) return;
       const local = records.filter(record => record.mayBeMounted && record.view.state === 'mounted' && record.input.source.kind === 'local');
       if (!local.length) return;
       const points = await activePoints();
       for (const record of local) if (points.some(point => equalPoint(point.MountPoint, record.view.mountPoint) && point.Fs === `${remoteName(record)}:`)) {
-        await control.call('vfs/forget', { fs: `${remoteName(record)}:` });
+        if (paths === undefined || paths.includes('/')) await control.call('vfs/forget', { fs: `${remoteName(record)}:` });
+        else for (const path of new Set(paths)) await control.call('vfs/forget', { fs: `${remoteName(record)}:`, dir: path.replace(/^\//, '') });
       }
     }),
     close: () => serialize(async () => {

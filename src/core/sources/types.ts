@@ -24,8 +24,8 @@ export interface InstanceStore {
   insert(instance: Instance, privateState: Json, installation: Installation): Stored<boolean>;
   current(snapshot: SourceStamp): Stored<boolean>;
   saveState(snapshot: InstanceSnapshot, state: Json): Stored<boolean>;
-  /** Atomically replaces config/state, clears authentication and advances both revisions; null state also supports local logout. */
-  configure(snapshot: InstanceSnapshot, config: Json, privateState: Json): Stored<boolean>;
+  /** Policy-only changes retain the content epoch/authentication; all writes still compare the private-state revision. */
+  configure(snapshot: InstanceSnapshot, config: Json, privateState: Json, preserveContent?: boolean): Stored<boolean>;
   /** Advances the epoch while preserving the latest private state, fencing any pending authentication call. */
   advanceAuthentication(snapshot: InstanceSnapshot, next: AuthenticationRecord): Stored<boolean>;
   /** Atomically accepts a step and private state against both the operation and state revisions. */

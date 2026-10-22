@@ -43,3 +43,8 @@ export function migrateConfig(input: { fromVersion: number; config: Json }): Jso
   if (config !== null && typeof config === 'object' && !Array.isArray(config) && config.metadataCacheDays === 1) delete config.metadataCacheDays;
   return config;
 }
+
+export function contentConfiguration(config: Json): Json {
+  const { metadataCacheDays: _retention, ...content } = object(normalizeConfig(config));
+  return content as Json;
+}

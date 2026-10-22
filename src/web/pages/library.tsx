@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Alert, Breadcrumb, Button, Empty, Input, List, Skeleton, Space, Typography } from 'antd';
-import { ArrowRightOutlined, FileOutlined, FolderOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
+import { Alert, Breadcrumb, Button, Dropdown, Empty, Input, List, Skeleton, Space, Typography } from 'antd';
+import { ArrowRightOutlined, FileOutlined, FolderOutlined, MoreOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { Api } from '../api';
 import { Failure } from '../components/feedback';
@@ -24,6 +24,8 @@ function DirectoryBrowser({ api, path, setPath, showSources }: { api: Api; path:
   const [filter, setFilter] = useState('');
   const directory = useQuery({ queryKey: ['library', 'directory', path], queryFn: ({ signal }) => api.browseDirectory(path, signal) });
   const pending = pendingRefreshId(directory.error); const source = directory.data?.source;
+  const configuration = useQuery({ queryKey: ['configuration', source?.pluginId], enabled: !!source?.pluginId,
+    queryFn: ({ signal }) => api.configuration(source!.pluginId, signal) });
   const refresh = usePersistentRefresh(api, { instanceId: source?.instanceId, operationId: pending });
   const busy = refresh.active || refresh.starting || refresh.preparing;
   const segments = path.split('/').filter(Boolean);
@@ -34,10 +36,14 @@ function DirectoryBrowser({ api, path, setPath, showSources }: { api: Api; path:
   function open(next: string) { setFilter(''); setPath(next); }
   return <><div className="directory-toolbar"><Breadcrumb items={[{ title: <button className="text-button" onClick={() => open('/')}>全部音乐</button> }, ...segments.map((segment, index) => ({ title: <button className="text-button" onClick={() => open('/' + segments.slice(0, index + 1).join('/'))}>{segment}</button> }))]} />
     {source && <Space wrap><RefreshPolicyControl key={source.instanceId + ':' + source.directoryRef} api={api} instanceId={source.instanceId} directoryRef={source.directoryRef} disabled={busy} />
-      <Button icon={<ReloadOutlined aria-hidden="true" />} disabled={busy} onClick={() => refresh.start({ kind: 'directory', directoryRef: source.directoryRef })}>更新</Button></Space>}
+      <Button icon={<ReloadOutlined aria-hidden="true" />} disabled={busy} onClick={() => refresh.start({ kind: 'directory', directoryRef: source.directoryRef })}>更新</Button>
+      {configuration.data?.metadataRefresh && directory.data?.entries.some(entry => entry.kind === 'file') && <Dropdown menu={{ items: [{ key: 'metadata', label: '重新获取音乐资料', onClick: () => refresh.start({ kind: 'metadata', directoryRef: source.directoryRef }) }] }}>
+        <Button icon={<MoreOutlined aria-hidden="true" />} aria-label="更多更新选项" disabled={busy} />
+      </Dropdown>}
+    </Space>}
   </div>
     {((directory.data?.entries.length ?? 0) > 10 || !!filter) && <Input className="directory-search" prefix={<SearchOutlined aria-hidden="true" />} allowClear placeholder="搜索当前目录" aria-label="搜索当前目录" value={filter} onChange={event => setFilter(event.target.value)} />}
-    <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh} reload={() => refresh.view?.scope.kind === 'file-info' ? refresh.start(refresh.view.scope) : void directory.refetch()} />
+    <Failure error={pending ? null : directory.error} retry={() => void directory.refetch()} /><RefreshProgress operation={refresh} reload={() => refresh.view?.scope.kind === 'file-info' || refresh.view?.scope.kind === 'metadata' ? refresh.start(refresh.view.scope) : void directory.refetch()} />
     {directory.data?.status?.error && <Alert className="feedback" type="warning" showIcon title="更新失败，仍显示上次内容" />}
     {(directory.data?.status?.pendingFileInfo ?? 0) > 0 && <Alert className="feedback" type="info" showIcon title="首次挂载前，需要准备文件信息"
       action={source && <Button size="small" disabled={busy} onClick={() => refresh.start({ kind: 'file-info', directoryRef: source.directoryRef })}>准备文件</Button>} />}

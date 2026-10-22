@@ -61,7 +61,10 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
   const lazyReservations = client.ctx.fileInfo !== 'required' && client.ctx.cache?.putIfAbsent && generation;
   const lookupKeys = lazyReservations ? [...keys, ...keys.map(reservationKey)] : keys;
   const saved = client.ctx.cache!.getMany ? await client.ctx.cache!.getMany(lookupKeys) : await Promise.all(lookupKeys.map(key => client.ctx.cache!.get(key)));
-  const ready = new Map(keys.map((key, index) => [key, saved[index] as unknown as PreparedFile | undefined]));
+  const ready = new Map(keys.map((key, index) => {
+    const file = saved[index] as unknown as PreparedFile | undefined;
+    return [key, client.ctx.metadataRefresh && file?.metadataRefreshId !== client.ctx.metadataRefresh ? undefined : file];
+  }));
   const reservations = new Map(keys.map((key, index) => [key, saved[keys.length + index] as unknown as ReservedGeneration | undefined]));
   const created = new Map<string, ReservedGeneration>();
   const saveSeeds = async (items: typeof candidates) => {

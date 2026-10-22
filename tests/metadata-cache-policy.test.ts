@@ -77,6 +77,7 @@ function fixture(provider: 'NetEase' | 'QQ', config: Json, missing = false) {
     throw new Error('Unexpected offline QQ RPC');
   } }) as unknown as QqClient;
   return { cache, get requests() { return requests; },
+    refresh(id: string) { ctx.metadataRefresh = id; },
     read: () => provider === 'NetEase'
       ? neteaseTags(netease(), { id: 1, name: 'Source title', ar: [{ name: 'Artist' }], al: { id: 10, name: 'Source album', picUrl: 'https://p1.music.126.net/cover.png' } })
       : qqTags(qq(), { mid: 'one', title: 'Source title', singer: [{ name: 'Artist' }], album: { mid: 'album', name: 'Source album', picUrl: 'https://y.gtimg.cn/cover.png' } }),
@@ -102,6 +103,15 @@ test('metadata defaults retain stable data for a year and preserve explicit shor
 });
 
 for (const provider of ['NetEase', 'QQ'] as const) {
+  test(`${provider}: explicit metadata refresh bypasses old assets once and shares fresh assets across invocations`, async () => {
+    const f = fixture(provider, { metadataCacheDays: 365 });
+    await f.read(); const cold = f.requests;
+    f.refresh('operation-one'); await f.read(); const refreshed = f.requests;
+    expect(refreshed).toBeGreaterThan(cold);
+    await f.read(); expect(f.requests).toBe(refreshed);
+    f.refresh('operation-two'); await f.read(); expect(f.requests).toBeGreaterThan(refreshed);
+  });
+
   test(`${provider}: successful metadata and ready indexes can persist without expiry across invocations`, async () => {
     const f = fixture(provider, { metadataCacheDays: 0 }); const first = await f.read(); const requests = f.requests;
     expect(first.expiresAt).toBeNull(); expect(first.tags.title).toBe('Source title'); expect(first.tags.album).toBe('Source album');

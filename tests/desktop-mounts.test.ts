@@ -234,6 +234,12 @@ test('mount directory refresh forgets only its VFS and local publishing does not
   const remote = await manager.mount({ mountPoint: join(directory, 'remote'), source: { kind: 'remote', url: 'http://example.com/dav/', username: 'reader', password: 'secret' } });
   await manager.refreshLocal();
   expect(fake.calls.filter(call => call.method === 'vfs/forget').map(call => call.parameters)).toEqual([{ fs: `musicfs_${local.id.replaceAll('-', '')}:` }]);
+  await manager.refreshLocal(['/实例/喜欢的音乐', '/另一入口/歌单']);
+  expect(fake.calls.filter(call => call.method === 'vfs/forget').slice(-2).map(call => call.parameters)).toEqual([
+    { fs: `musicfs_${local.id.replaceAll('-', '')}:`, dir: '实例/喜欢的音乐' },
+    { fs: `musicfs_${local.id.replaceAll('-', '')}:`, dir: '另一入口/歌单' }
+  ]);
+  const unchanged = fake.calls.length; await manager.refreshLocal([]); expect(fake.calls).toHaveLength(unchanged);
   await manager.refresh(remote.id);
   expect(fake.calls.filter(call => call.method === 'vfs/forget').at(-1)?.parameters).toEqual({ fs: `musicfs_${remote.id.replaceAll('-', '')}:` });
   expect(fake.mountCalls()).toBe(2);

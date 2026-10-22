@@ -14,7 +14,7 @@ const encodedLyric = (value: unknown) => {
   catch { return; }
 };
 
-type Asset = { value: Json; expiresAt: number | null };
+type Asset = { value: Json; expiresAt: number | null; refreshId?: string };
 const earliestExpiry = (...values: (number | null | undefined)[]): number | null => {
   const finite = values.filter((value): value is number => typeof value === 'number');
   return finite.length ? Math.min(...finite) : null;
@@ -25,15 +25,17 @@ async function cached(client: QqClient, key: string, read: () => Promise<Json>):
   if (!cache) fail('not_supported', 'QQ 补标签需要支持插件资料缓存的宿主。');
   let reads = pending.get(client); if (!reads) { reads = new Map(); pending.set(client, reads); }
   const earlier = reads.get(key);
-  if (earlier) { const saved = await earlier; if (saved.expiresAt === null || saved.expiresAt > Date.now()) return saved; reads.delete(key); }
+  if (earlier) { const saved = await earlier; if ((saved.expiresAt === null || saved.expiresAt > Date.now())
+    && (!client.ctx.metadataRefresh || saved.refreshId === client.ctx.metadataRefresh)) return saved; reads.delete(key); }
   // This envelope owns its original expiry; a cache hit never renews dependent ready indexes.
   const storageKey = `metadata:${key}`;
   const result = (async () => {
     const previous = await cache.get(storageKey);
-    if (previous !== undefined) return previous as unknown as Asset;
+    if (previous !== undefined && (!client.ctx.metadataRefresh || (previous as unknown as Asset).refreshId === client.ctx.metadataRefresh)) return previous as unknown as Asset;
     const value = await read(); client.ctx.signal.throwIfAborted();
     const missing = value === null || typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
-    const asset = { value, expiresAt: metadataCacheExpiry(client.ctx.config, Date.now(), missing ? 30 : undefined) };
+    const asset = { value, expiresAt: metadataCacheExpiry(client.ctx.config, Date.now(), missing ? 30 : undefined),
+      ...(client.ctx.metadataRefresh ? { refreshId: client.ctx.metadataRefresh } : {}) };
     await cache.put(storageKey, asset, asset.expiresAt === null ? undefined : { expiresAt: asset.expiresAt }); return asset;
   })();
   reads.set(key, result);
@@ -83,7 +85,7 @@ export async function musicTags(client: QqClient, source: Record<string, unknown
     album: { ...object(object(detailAsset.value).album), ...object(source.album) } };
   const originalAlbum = object(detail.album); const albumMid = text(originalAlbum.mid);
   const albumAsset = albumMid ? await cached(client, `album:${albumMid}`, async () => {
-    if (names(originalAlbum.singer ?? originalAlbum.singers).length && text(originalAlbum.aDate ?? originalAlbum.time_public)) return originalAlbum as Json;
+    if (!client.ctx.metadataRefresh && names(originalAlbum.singer ?? originalAlbum.singers).length && text(originalAlbum.aDate ?? originalAlbum.time_public)) return originalAlbum as Json;
     const result = await legacy(client, '/v8/fcg-bin/fcg_v8_album_info_cp.fcg', { albummid: albumMid }); return object(result.data) as Json;
   }) : { value: originalAlbum as Json, expiresAt: detailAsset.expiresAt };
   const album = object(albumAsset.value);

@@ -101,7 +101,7 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
     roots: (id: string, signal: AbortSignal) => request<ContentSources>(`/instances/${encodeURIComponent(id)}/roots`, { signal }),
     directoryStatus: (id: string, ref: string, signal: AbortSignal) => request<DirectoryStatus | null>(`/instances/${encodeURIComponent(id)}/directory-status?directoryRef=${encodeURIComponent(ref)}`, { signal }),
     startRefresh: (id: string, scope: RefreshScope) => request<RefreshView>(`/instances/${encodeURIComponent(id)}/refresh`, json('POST', scope.kind === 'instance' ? { scope: 'instance' }
-      : scope.kind === 'file-info' ? { scope: 'file-info', directoryRef: scope.directoryRef }
+      : scope.kind === 'file-info' || scope.kind === 'metadata' ? { scope: scope.kind, directoryRef: scope.directoryRef }
       : scope.directoryRef === undefined ? {} : { directoryRef: scope.directoryRef })),
     currentRefresh: (id: string, signal: AbortSignal) => request<RefreshView | null>(`/instances/${encodeURIComponent(id)}/refresh`, { signal }),
     refreshPolicy: (id: string, directoryRef: string | undefined, signal: AbortSignal) => request<RefreshPolicy>(`/instances/${encodeURIComponent(id)}/refresh-policy${directoryRef === undefined ? '' : '?directoryRef=' + encodeURIComponent(directoryRef)}`, { signal }),

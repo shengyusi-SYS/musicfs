@@ -114,12 +114,19 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
 }) {
   const value = operation.view;
   const preparingFiles = value?.scope.kind === 'file-info';
+  const updatingMetadata = value?.scope.kind === 'metadata';
   const needsAuth = value?.error?.sourceFault?.kind === 'needs_auth' || value?.failures.some(item => item.error.sourceFault?.kind === 'needs_auth');
   const waiting = operation.active && value?.retryAt && Date.parse(value.retryAt) > Date.now();
   const progress = value?.current?.progress;
   const waitingTitle = value?.error?.sourceFault?.kind === 'temporary'
     ? '来源暂时请求失败，稍后从当前进度继续' : '来源限流，等待后自动继续';
   const title = !value ? '正在读取准备状态' : waiting ? waitingTitle
+    : updatingMetadata ? value.status === 'queued' ? '音乐资料已加入更新队列'
+      : value.status === 'running' ? '正在重新获取音乐资料'
+      : value.status === 'completed' ? '音乐资料已更新'
+      : value.status === 'cancelled' ? '资料更新已取消'
+      : value.status === 'superseded' ? '资料更新已被较新的操作替代'
+      : '音乐资料更新失败，已保留上次成功内容'
     : value.status === 'queued' ? preparingFiles ? '文件已加入准备队列' : '目录清单已加入准备队列'
     : value.status === 'running' ? preparingFiles ? '正在准备文件' : '正在更新目录清单'
     : value.status === 'completed' ? preparingFiles ? (value.failures.length ? '文件准备完成，部分目录仍需重试' : '文件已准备')
@@ -145,7 +152,7 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
       </>}
       action={operation.active ? <Button size="small" loading={operation.cancelling} onClick={operation.cancel}>{preparingFiles ? '取消准备' : '取消刷新'}</Button>
         : needsAuth && reauthorize ? <Button size="small" onClick={reauthorize}>重新授权</Button>
-        : value && value.status !== 'completed' && reload ? <Button size="small" loading={operation.starting} onClick={reload}>{preparingFiles ? '重新准备文件' : '重新读取目录'}</Button> : undefined} />}
+        : value && value.status !== 'completed' && reload ? <Button size="small" loading={operation.starting} onClick={reload}>{preparingFiles ? '重新准备文件' : updatingMetadata ? '重新获取音乐资料' : '重新读取目录'}</Button> : undefined} />}
     <Failure error={operation.error} retry={operation.retry} reauthorize={reauthorize} />
   </>;
 }

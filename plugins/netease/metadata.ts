@@ -11,7 +11,7 @@ const date = (value: unknown) => typeof value === 'number' && value > 0 && Numbe
 const encode = (value: Uint8Array) => { let result = ''; for (let offset = 0; offset < value.length; offset += 16_384) result += String.fromCharCode(...value.subarray(offset, offset + 16_384)); return btoa(result); };
 const decode = (value: string) => Uint8Array.from(atob(value), character => character.charCodeAt(0));
 
-type Asset = { value: Json; expiresAt: number | null };
+type Asset = { value: Json; expiresAt: number | null; refreshId?: string };
 const earliestExpiry = (...values: (number | null | undefined)[]): number | null => {
   const finite = values.filter((value): value is number => typeof value === 'number');
   return finite.length ? Math.min(...finite) : null;
@@ -24,16 +24,17 @@ async function cached(client: NeteaseClient, key: string, read: () => Promise<Js
   let result = reads.get(key);
   if (result) {
     const saved = await result;
-    if (saved.expiresAt === null || saved.expiresAt > Date.now()) return saved;
+    if ((saved.expiresAt === null || saved.expiresAt > Date.now()) && (!client.ctx.metadataRefresh || saved.refreshId === client.ctx.metadataRefresh)) return saved;
     reads.delete(key); result = undefined;
   }
   if (!result) {
     result = (async () => {
       const previous = await cache.get(key);
-      if (previous !== undefined) return previous as unknown as Asset;
+      if (previous !== undefined && (!client.ctx.metadataRefresh || (previous as unknown as Asset).refreshId === client.ctx.metadataRefresh)) return previous as unknown as Asset;
       const value = await read(); client.ctx.signal.throwIfAborted();
       const missing = value === null || typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
-      const asset = { value, expiresAt: metadataCacheExpiry(client.ctx.config, Date.now(), missing ? 30 : undefined) };
+      const asset = { value, expiresAt: metadataCacheExpiry(client.ctx.config, Date.now(), missing ? 30 : undefined),
+        ...(client.ctx.metadataRefresh ? { refreshId: client.ctx.metadataRefresh } : {}) };
       await cache.put(key, asset, asset.expiresAt === null ? undefined : { expiresAt: asset.expiresAt }); return asset;
     })();
     reads.set(key, result);
@@ -69,7 +70,7 @@ export async function musicTags(client: NeteaseClient, song: Record<string, unkn
   const songId = String(song.id); const originalAlbum = object(song.al ?? song.album);
   const albumId = positive(originalAlbum.id);
   const albumAsset = albumId === undefined ? { value: originalAlbum as Json, expiresAt: metadataCacheExpiry(client.ctx.config) } : await cached(client, `album:${albumId}`, async () => {
-    if (names(originalAlbum.artists ?? (originalAlbum.artist ? [originalAlbum.artist] : undefined)).length && (date(originalAlbum.publishTime) ?? date(song.publishTime))) return originalAlbum as Json;
+    if (!client.ctx.metadataRefresh && names(originalAlbum.artists ?? (originalAlbum.artist ? [originalAlbum.artist] : undefined)).length && (date(originalAlbum.publishTime) ?? date(song.publishTime))) return originalAlbum as Json;
     try { const result = await client.call(endpoints.album, { id: albumId }); const received = object(result.album);
       return Object.keys(received).length ? { ...originalAlbum, ...received } as Json : null; }
     catch (error) { if (error instanceof NeteaseFailure && error.fault.kind === 'not_found') return null; throw error; }

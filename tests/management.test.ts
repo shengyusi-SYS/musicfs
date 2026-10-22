@@ -46,7 +46,7 @@ test('plugin inspection reports both compatibility dimensions without installing
   const preview = await compatible.json() as PluginInspection;
   expect(preview.manifest).toEqual(parseManifest(manifest, 'desktop'));
   expect(preview.revision).toMatch(/^[0-9a-f]{64}$/);
-  expect(preview.compatibility).toEqual({ host: 'desktop', apiVersion: '0.1.9', apiCompatible: true, hostCompatible: true });
+  expect(preview.compatibility).toEqual({ host: 'desktop', apiVersion: '0.1.10', apiCompatible: true, hostCompatible: true });
   const files = unzipSync(archive);
   const incompatible = zipSync({ ...files, 'manifest.json': strToU8(JSON.stringify({ ...manifest, apiRange: '^9.0.0', hosts: { worker: 'index.mjs' } })) });
   const rejected = await request('/api/plugins/inspect', { method: 'POST', body: incompatible });
@@ -112,11 +112,13 @@ test('refresh HTTP accepts without reading, advances one page per request and re
   const store = openSqlite(':memory:'); cleanups.push(async () => store.close());
   const installation = store.activate(parseManifest(manifest, 'desktop'), 'b'.repeat(64), null);
   const calls: (string | undefined)[] = [];
+  const metadataCalls: string[] = [];
   const source: SourcePlugin = {
+    metadataRefresh: true,
     configuration: { schema: { type: 'object' } }, validateConfig: async (_ctx, value) => ({ ok: true, value, nextPrivateState: { token: 'fixture-secret-token' } }),
     roots: async (_ctx, cursor) => { calls.push(cursor); return { ok: true, value: { items: [{ sourceId: cursor ? 'b' : 'a', name: cursor ? '乙' : '甲', directoryRef: cursor ? 'b' : 'a' }],
       statistics: { records: 1 }, ...(cursor ? {} : { nextCursor: 'fixture-private-cursor' }) } }; },
-    list: async () => ({ ok: true, value: { items: [] } }),
+    list: async ctx => { if (ctx.metadataRefresh) metadataCalls.push(ctx.metadataRefresh); return { ok: true, value: { items: [] } }; },
     stat: async () => ({ ok: false, error: { kind: 'not_supported', message: 'Unused' } }),
     open: async () => ({ ok: false, error: { kind: 'not_supported', message: 'Unused' } })
   };
@@ -154,6 +156,11 @@ test('refresh HTTP accepts without reading, advances one page per request and re
   expect((await (await request(`/api/refreshes/${nextJob.operationId}/step`, { method: 'POST' })).json() as RefreshView).status).toBe('cancelled');
   expect(calls).toHaveLength(2);
   expect((await request('/api/refreshes/unknown')).status).toBe(404); expect((await request('/api/refreshes/unknown', { method: 'DELETE' })).status).toBe(404);
+  const metadata = await request(`${base}/refresh`, { method: 'POST', ...body({ scope: 'metadata', directoryRef: 'a' }) });
+  expect(metadata.status).toBe(202); const metadataJob = await metadata.json() as RefreshView;
+  expect(metadataJob.scope).toEqual({ kind: 'metadata', directoryRef: 'a' });
+  expect(await (await request(`/api/refreshes/${metadataJob.operationId}/step`, { method: 'POST' })).json()).toMatchObject({ status: 'completed' });
+  expect(metadataCalls).toEqual([metadataJob.operationId]);
 });
 
 test('DAV credentials cannot manage plugins or settings; invalid JSON and settings are rejected', async () => {

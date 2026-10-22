@@ -44,6 +44,20 @@ async function setup(adapter: 'SQLite' | 'D1') {
 }
 
 for (const adapter of ['SQLite', 'D1'] as const) {
+  test(`${adapter}: policy-only config writes retain authentication and cache across reopen while fencing old private-state writes`, async () => {
+    const f = await setup(adapter); const initial = present(await f.store.capture('a'));
+    const { id, pluginId, epoch, pluginRevision, pluginGeneration } = initial;
+    const auth = { operationId: crypto.randomUUID(), revision: 1, stamp: { id, pluginId, epoch: epoch + 1, pluginRevision, pluginGeneration },
+      step: { kind: 'complete' as const, accountName: 'Fixture' } };
+    expect(await f.store.advanceAuthentication(initial, auth)).toBe(true);
+    const before = present(await f.store.capture('a')); await (await f.cache()).put('retained', 'yes');
+    expect(await f.store.configure(before, { retention: 365 }, before.privateState, true)).toBe(true);
+    expect(await f.store.saveState(before, { stale: true })).toBe(false);
+    await f.reopen();
+    expect(await f.store.capture('a')).toMatchObject({ epoch: before.epoch, authentication: auth, config: { retention: 365 }, privateState: before.privateState });
+    expect(await (await f.cache()).get('retained')).toBe('yes');
+  }, 20_000);
+
   test(`${adapter}: plugin data persists across reopen and separates instances, expiry and cached null`, async () => {
     const f = await setup(adapter); let a = await f.cache();
     const plan = { source: 'same-audio', segments: [{ bytes: 'small-cover-and-tags' }] };

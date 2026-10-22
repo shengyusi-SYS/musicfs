@@ -98,7 +98,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
         if (item.deferredInfo !== undefined && item.deferredInfo !== true) {
           throw new LibraryError('invalid_source', 'Source returned an invalid deferred file metadata marker');
         }
-        if (record.scope.kind === 'file-info' && item.info === undefined) {
+        if ((record.scope.kind === 'file-info' || record.scope.kind === 'metadata') && item.info === undefined) {
           throw new LibraryError('invalid_source', 'Source omitted required file metadata');
         }
         if (item.info !== undefined) assertInfo(item.info);
@@ -148,7 +148,8 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
       if (current.pages >= budgets.pages) throw new LibraryError('invalid_source', 'Source pagination budget exceeded');
       const outcome = current.key.kind === 'roots' ? await sources.roots(claimed.stamp.id, signal, current.cursor)
         : await sources.list(claimed.stamp.id, current.key.ref, signal, current.cursor,
-          claimed.scope.kind === 'file-info' ? { fileInfo: 'required' } : undefined);
+          claimed.scope.kind === 'metadata' ? { fileInfo: 'required', metadataRefresh: claimed.operationId }
+            : claimed.scope.kind === 'file-info' ? { fileInfo: 'required' } : undefined);
       signal.throwIfAborted();
       if (!outcome.ok) throw new LibraryError('source_failed', outcome.error.message, outcome.error);
       const accepted = acceptPage(claimed, outcome.value);
@@ -193,7 +194,13 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     }
   }
   return {
-    start: async (instanceId, scope) => create(await sources.view(instanceId), scope, true),
+    start: async (instanceId, scope) => {
+      const stamp = await sources.view(instanceId);
+      if (scope.kind === 'metadata' && !(await sources.configuration(stamp.pluginId)).metadataRefresh) {
+        throw new LibraryError('invalid_source', '此来源尚不支持主动更新音乐资料。');
+      }
+      return create(stamp, scope, true);
+    },
     ensure: (stamp, key) => create(stamp, { kind: 'directory', ...(key.kind === 'directory' ? { directoryRef: key.ref } : {}) }, false),
     ensureFileInfo: (stamp, directoryRef) => create(stamp, { kind: 'file-info', directoryRef }, false),
     get: async operationId => { const record = await store.refreshRecord(operationId); return record ? view(record) : null; },

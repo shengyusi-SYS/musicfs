@@ -28,7 +28,7 @@ const refreshPolicyInput = z.object({ intervalMinutes: z.number().int().nonnegat
 const layoutInput = z.object({ expectedRevision: z.number().int().nonnegative(), nodes: z.json() }).strict();
 const refreshInput = z.union([
   z.object({ scope: z.literal('instance') }).strict(),
-  z.object({ scope: z.literal('file-info'), directoryRef: z.string() }).strict(),
+  z.object({ scope: z.enum(['file-info', 'metadata']), directoryRef: z.string() }).strict(),
   z.object({ directoryRef: z.string().optional() }).strict()
 ]);
 const urlInput = z.object({ url: z.url() }).strict();
@@ -213,7 +213,7 @@ export function createManagementApi(input: {
   app.post('/api/instances/:id/refresh', async c => {
     const value = refreshInput.parse(await json(c));
     const operation = await library.refreshes.start(c.req.param('id'), 'scope' in value
-      ? value.scope === 'instance' ? { kind: 'instance' } : { kind: 'file-info', directoryRef: value.directoryRef }
+      ? value.scope === 'instance' ? { kind: 'instance' } : { kind: value.scope, directoryRef: value.directoryRef }
       : { kind: 'directory', ...(value.directoryRef === undefined ? {} : { directoryRef: value.directoryRef }) });
     c.header('X-MusicFS-Refresh', operation.operationId);
     return c.json(operation satisfies RefreshView, 202);

@@ -57,7 +57,10 @@ export async function preparePage(client: QqClient, songs: Song[], offset: numbe
       const keys = candidates.flatMap(item => item.files.map(file => file.key));
       if (keys.length && !cache) fail('not_supported', 'QQ 补标签需要支持插件资料缓存的宿主。');
       const saved = !keys.length ? [] : cache!.getMany ? await cache!.getMany(keys) : await Promise.all(keys.map(key => cache!.get(key)));
-      const ready = new Map(keys.map((key, index) => [key, saved[index] as unknown as PreparedFile | undefined]));
+      const ready = new Map(keys.map((key, index) => {
+        const file = saved[index] as unknown as PreparedFile | undefined;
+        return [key, client.ctx.metadataRefresh && file?.metadataRefreshId !== client.ctx.metadataRefresh ? undefined : file];
+      }));
       for (let start = 0; start < candidates.length;) {
         const width = client.ctx.workBudget ? 1 : policy.concurrency;
         const chunk = candidates.slice(start, start + width);
@@ -87,7 +90,8 @@ export async function preparePage(client: QqClient, songs: Song[], offset: numbe
                 file = await pending;
               }
               files.push({ kind: 'file', entryId: `${item.position}:${item.song.mid}:${candidate.variant.quality}`,
-                name: `${String(item.position + 1).padStart(4, '0')} - ${item.song.title} - ${item.song.singer.map(artist => artist.name).join('、')} [${formats[candidate.variant.quality].label}]${MUSIC_FILE_TYPES[candidate.variant.quality].extension}`, ...file });
+                name: `${String(item.position + 1).padStart(4, '0')} - ${item.song.title} - ${item.song.singer.map(artist => artist.name).join('、')} [${formats[candidate.variant.quality].label}]${MUSIC_FILE_TYPES[candidate.variant.quality].extension}`,
+                fileRef: file.fileRef, info: file.info });
             }
             return files;
           } catch (error) { failure ??= error; throw error; }

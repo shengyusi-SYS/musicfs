@@ -35,9 +35,10 @@ async function plan(client: NeteaseClient, planKey: string): Promise<StoredPlan>
 }
 
 const sharedAssets = new WeakMap<NeteaseClient, Set<string>>();
+type ReadyIndex = { key: string; expiresAt: number | null; reservationOverflow?: true };
 
 export async function tagFile(client: NeteaseClient, source: MediaReference, sourceInfo: FileInfo, format: AudioFormat, tags: AudioTags, readRange: ReadRange,
-  ready?: { key: string; expiresAt: number | null }) {
+  ready?: ReadyIndex) {
   const cache = client.ctx.cache;
   if (!cache) fail('not_supported', '网易云补标签需要支持插件资料缓存的宿主。');
   const picture = tags.cover ? { data: tags.cover.data, digest: await byteHash(tags.cover.data) } : undefined;
@@ -49,8 +50,8 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
     if (saved !== undefined && saved !== null) {
       const file = { fileRef: JSON.stringify({ version: 2, source, planKey: previous }), info: (saved as unknown as TaggedPlan).content };
       if (ready) {
-        if (cache.putMany) await cache.putMany(readyWrites(ready, file));
-        else for (const item of readyWrites(ready, file)) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
+        if (cache.putMany) await cache.putMany(readyWrites(ready, file, client.ctx.metadataRefresh));
+        else for (const item of readyWrites(ready, file, client.ctx.metadataRefresh)) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
       }
       return file;
     }
@@ -66,14 +67,14 @@ export async function tagFile(client: NeteaseClient, source: MediaReference, sou
   const file = { fileRef: JSON.stringify({ version: 2, source, planKey }), info: prepared.content };
   const writes = [...(missingAsset ? [{ key: asset.key, value: asset.value }, { key: marker, value: true }] : []),
     { key: planKey, value: packed.plan as unknown as Json }, { key: inputKey, value: planKey },
-    ...(ready ? readyWrites(ready, file) : [])];
+    ...(ready ? readyWrites(ready, file, client.ctx.metadataRefresh) : [])];
   if (cache.putMany) await cache.putMany(writes);
   else for (const item of writes) await cache.put(item.key, item.value, 'expiresAt' in item ? { expiresAt: item.expiresAt } : undefined);
   if (asset) known.add(asset.key);
   return file;
 }
 
-export type PreparedFile = { fileRef: string; info: FileInfo };
+export type PreparedFile = { fileRef: string; info: FileInfo; metadataRefreshId?: string; reservationOverflow?: true };
 export const songKey = (source: MediaReference, sourceInfo: FileInfo, song: Record<string, unknown>) => {
   // SDK completeness bookkeeping does not change the recording's exported tags.
   const { richDetail: _richDetail, ...facts } = song;
@@ -82,8 +83,10 @@ export const songKey = (source: MediaReference, sourceInfo: FileInfo, song: Reco
 export const descriptorKey = (key: string) => key.replace(/^ready:/, 'tag-seed:');
 export const reservationKey = (key: string) => key.replace(/^ready:/, 'reservation:');
 export type ReservedGeneration = { id: string; modifiedAt: string };
-function readyWrites(ready: { key: string; expiresAt: number | null }, file: PreparedFile): { key: string; value: Json; expiresAt?: number }[] {
-  return [{ key: ready.key, value: file as unknown as Json, ...(ready.expiresAt === null ? {} : { expiresAt: ready.expiresAt }) },
+function readyWrites(ready: ReadyIndex, file: PreparedFile, refreshId?: string): { key: string; value: Json; expiresAt?: number }[] {
+  return [{ key: ready.key, value: { ...file, ...(refreshId ? { metadataRefreshId: refreshId } : {}),
+    ...(ready.reservationOverflow ? { reservationOverflow: true } : {}) } as unknown as Json,
+    ...(ready.expiresAt === null ? {} : { expiresAt: ready.expiresAt }) },
     // A prepared file now owns its dependency expiry. Never reuse an older unprepared reservation after that expiry.
     { key: reservationKey(ready.key), value: null, expiresAt: Date.now() }];
 }
@@ -125,7 +128,7 @@ async function reservedPlan(client: NeteaseClient, ref: ReservedReference, readR
   if (cached) return cached.plan;
   const readyKey = ref.descriptorKey.replace(/^tag-seed:/, 'ready:');
   const ready = await cache.get(readyKey) as unknown as PreparedFile | undefined;
-  if (ready && JSON.parse(ready.fileRef).version === 2) fail('content_changed', '此歌曲已单独准备，请刷新目录后重新打开。');
+  if (ready?.reservationOverflow) fail('content_changed', '此歌曲资料超过预留空间，请刷新目录后重新打开。');
   const song = await cache.get(ref.descriptorKey);
   if (!song) fail('temporary', '网易云歌曲资料已丢失，请重新刷新目录。');
   const material = await musicTags(client, song as Record<string, unknown>, client.ctx.workBudget ? 1 : 2);
@@ -137,7 +140,7 @@ async function reservedPlan(client: NeteaseClient, ref: ReservedReference, readR
     if (!(error instanceof AudioReservationError)) throw error;
     // The old advertised file must not grow. Publish an exact single-file result on the next refresh.
     await tagFile(client, ref.source, info(ref.source), ref.source.type as AudioFormat, material.tags, readRange,
-      { key: readyKey, expiresAt: material.expiresAt });
+      { key: readyKey, expiresAt: material.expiresAt, reservationOverflow: true });
     fail('content_changed', '此歌曲资料超过1MiB预留空间，已单独准备；请刷新目录后重新打开。');
   }
   prepared.content = content;
@@ -146,9 +149,12 @@ async function reservedPlan(client: NeteaseClient, ref: ReservedReference, readR
   if (packed.asset) await cache.put(packed.asset.key, packed.asset.value);
   const winner = await cache.putIfAbsent(key, { plan: packed.plan, expiresAt: material.expiresAt } as unknown as Json) as unknown as ReservedPlan;
   // The permanent first winner owns bytes; a TTL only controls reuse by future catalogue scans.
-  const writes = readyWrites({ key: readyKey, expiresAt: winner.expiresAt }, { fileRef: JSON.stringify(ref), info: content });
-  if (cache.putMany) await cache.putMany(writes);
-  else for (const item of writes) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
+  // Opening an older advertised file must not replace an already prepared newer catalogue result.
+  if (!ready || ready.fileRef === JSON.stringify(ref)) {
+    const writes = readyWrites({ key: readyKey, expiresAt: winner.expiresAt }, { fileRef: JSON.stringify(ref), info: content });
+    if (cache.putMany) await cache.putMany(writes);
+    else for (const item of writes) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
+  }
   return winner.plan;
 }
 

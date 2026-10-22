@@ -8,7 +8,7 @@
 
 ## 包与版本
 
-当前宿主合同版本为 **0.1.9**，增加可选 `PluginCache.putIfAbsent`，为延迟生成的文件表示原子固定首次写入结果。0.1.8 的显式可选 `Entry.deferredInfo` 和准备调用提示 `Context.fileInfo: 'required'` 继续复用持久分页刷新准备文件信息；0.1.7 的批量缓存、工作预算提示和分页进度，0.1.6 的可选 `Context.cache` 仍有效。不采用新能力且有兼容回退的插件仍可声明原兼容范围。0.1.5 的可选续期、0.1.4 的候选迁移、0.1.3 的完整文件 `info`、0.1.2 的目录计数及0.1.1二维码图片仍有效。旧插件无需修改、使用缓存或补标签；缺少 info 且未声明 deferredInfo 时保持原 stat 行为，不自动获得大目录请求预算保证。
+当前宿主合同版本为 **0.1.10**，增加可选内容配置身份与显式音乐资料更新。0.1.9的可选 `PluginCache.putIfAbsent` 为延迟生成的文件表示原子固定首次写入结果。0.1.8 的显式可选 `Entry.deferredInfo` 和准备调用提示 `Context.fileInfo: 'required'` 继续复用持久分页刷新准备文件信息；0.1.7 的批量缓存、工作预算提示和分页进度，0.1.6 的可选 `Context.cache` 仍有效。不采用新能力且有兼容回退的插件仍可声明原兼容范围。0.1.5 的可选续期、0.1.4 的候选迁移、0.1.3 的完整文件 `info`、0.1.2 的目录计数及0.1.1二维码图片仍有效。旧插件无需修改、使用缓存或补标签；缺少 info 且未声明 deferredInfo 时保持原 stat 行为，不自动获得大目录请求预算保证。
 
 首轮验证 ZIP 插件包，采用现成归档库解析。包内有一份 manifest、预构建 ESM 入口及依赖模块、JSON 配置 Schema、UI 提示和必要只读资产/许可；模块和资产路径在 manifest 中明确列出，不运行安装脚本或在线安装 npm 依赖。
 
@@ -27,6 +27,12 @@ manifest 表达 `id`、`version`、`apiRange`、支持的宿主和各宿主入�
 Schema、UI 提示和管理响应不能携带私有授权默认值。音质、服务器地址等配置按实例保存；没有账号或音质的插件无需声明相应能力。认证是单独的步骤合同，不塞进表单渲染器内部。
 
 当前有限 UI 提示中，`order` 是根属性的顺序，未列出的属性由宿主补齐；`widgets` 的键使用根属性名或 JSON Pointer（例如 `/server/token`），值仅允许 `password`、`textarea`、`uri`。字段错误 `fields[].path` 同样采用 JSON Pointer。前端负责翻译到表单库，插件不依赖 RJSF 的组件或内部配置对象。
+
+## 保留策略与资料更新
+
+`contentConfiguration`可从规范化配置中排除纯保留策略。输入相同身份且私有状态未变时，宿主保存配置但保留内容代际、授权、快照及资料；不提供此方法的插件保持原失效行为。不能排除账号、服务器、音质等会改变访问内容的字段。保留天数作用于后续写入，既有资料按原期限复用。
+
+需要主动更新资料的插件声明`metadataRefresh: true`。宿主仅在用户选择该操作时，在分页`list`中同时传入`fileInfo: required`和`metadataRefresh: operationId`；插件按该ID绕过以前的资料/准备索引，同一操作内复用新取得的共用资料。新资料生成新表示，不能覆盖旧引用依赖的不可变计划。分页、冷却、取消与完整发布仍沿用目录刷新。未声明能力的插件不会显示此入口。
 
 ## 最小操作面
 
@@ -57,6 +63,7 @@ type Context = {
   signal: AbortSignal;
   fetch: typeof fetch; // 标准请求能力，允许测试与宿主预算接线
   fileInfo?: 'required'; // 文件准备遍历：每个文件须返回准确 info，或明确失败
+  metadataRefresh?: string; // 用户明确要求重新获取资料，同一操作各页共用此ID
   cache?: {
     get(key: string): Promise<Json | undefined>;
     put(key: string, value: Json, options?: { expiresAt?: number }): Promise<void>;
@@ -84,6 +91,8 @@ type ReadResult = {
 };
 
 interface SourcePlugin {
+  contentConfiguration?(config: Json): Json; // 纯函数，返回影响内容/认证的配置
+  metadataRefresh?: true; // 声明理解 Context.metadataRefresh
   // config 的结构及来源语义校验；字段错误 DTO 在正式定义中展开
   validateConfig(ctx: Context, candidate: Json): Promise<Outcome<Json>>;
   roots(ctx: Context, cursor?: string): Promise<Outcome<Page<Root>>>;

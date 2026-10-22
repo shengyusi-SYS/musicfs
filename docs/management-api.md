@@ -22,10 +22,10 @@
 | `POST /api/plugins/from-url` | `{url}`，下载有大小/超时限制的 HTTP(S) 发布包并安装 |
 | `DELETE /api/plugins/:id` | 桌面完成返回 204；Worker 返回 202 持久变更操作；完成后停止该插件的新调用，保留实例与布局引用 |
 | `GET /api/plugin-changes/:operationId` | 双宿主查询持久变更进度；未结束操作继续安排后台步骤，不存在返回404 |
-| `GET /api/plugins/:id/configuration` | JSON Schema/UI 提示与是否声明认证，供通用界面使用 |
+| `GET /api/plugins/:id/configuration` | JSON Schema/UI 提示、认证及`metadataRefresh`能力，供通用界面使用 |
 | `GET /api/instances` | 实例身份、名称和配置；不包含 privateState |
 | `POST /api/instances` | `{pluginId,name,config}`，由插件校验后创建 |
-| `PUT /api/instances/:id/config` | `{config}`，校验并条件更新，旧调用失效 |
+| `PUT /api/instances/:id/config` | `{config}`，校验并条件更新；插件声明的纯保留策略变化保留内容代际，其余变化使旧内容失效 |
 | `DELETE /api/instances/:id` | 删除实例配置/私有状态及快照，保留其他实例 |
 | `DELETE /api/instances/:id/session` | 退出该实例授权，保留配置/布局并使旧调用失效；返回204 |
 | `GET /api/instances/:id/authentication` | 当前公开认证 `{operationId,step,error?}`，没有操作时为 null；不返回私有状态或内部来源戳 |
@@ -33,7 +33,7 @@
 | `GET /api/instances/:id/roots` | 完整分页后的内容源；使用当前有效快照 |
 | `GET /api/instances/:id/directory-status?directoryRef=...` | 当前有效目录最近成功的 `{completedAt,statistics,error}`；error为最近失败代码或null，未读取或代际已失效时为null；只读快照，不请求来源 |
 | `GET /api/library/directory?path=...` | 已发布路径的 `{entries,status}`，status为同一目录的DirectoryStatus，虚拟分组/实例容器为null；供目录浏览器显示保留的旧内容，不暴露来源引用 |
-| `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例；`{directoryRef}` 刷新指定目录；`{scope:"file-info",directoryRef}` 准备准确文件属性；兼容 `{}` 仅刷新内容入口。返回202 + RefreshView，替换旧活动操作 |
+| `POST /api/instances/:id/refresh` | `{scope:"instance"}` 刷新实例；`{directoryRef}` 刷新指定目录；`{scope:"file-info",directoryRef}` 准备文件属性；`{scope:"metadata",directoryRef}` 显式重新取得当前目录的音乐资料（须插件声明支持）；兼容 `{}` 仅刷新内容入口。返回202 + RefreshView，替换旧活动操作 |
 | `GET /api/instances/:id/refresh-policy?directoryRef=...` | 指定目录的周期策略；省略directoryRef为实例内容入口 |
 | `PUT /api/instances/:id/refresh-policy?directoryRef=...` | `{intervalMinutes}`：0为手动，否则至少15分钟；只安排到期任务，复用原刷新/旧快照 |
 | `GET /api/instances/:id/refresh` | 当前/最近一次 RefreshView，无记录时为 null；只查询，不推进 |

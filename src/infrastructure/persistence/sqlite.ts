@@ -102,9 +102,11 @@ export function openSqlite(path: string) {
         WHERE ${predicate} AND state_revision = $stateRevision AND ${noActiveRenewalSQL}`)
         .run({ ...bindings(snapshot), state: JSON.stringify(state), stateRevision: snapshot.stateRevision }).changes === 1;
     },
-    configure(snapshot, config, state) {
-      return db.query(`UPDATE instances SET config = $config, private_state = $state, epoch = epoch + 1, state_revision = state_revision + 1, authentication = NULL
-        WHERE ${predicate} AND state_revision = $stateRevision`).run({ ...bindings(snapshot), config: JSON.stringify(config), state: JSON.stringify(state), stateRevision: snapshot.stateRevision }).changes === 1;
+    configure(snapshot, config, state, preserveContent = false) {
+      return db.query(`UPDATE instances SET config = $config, private_state = $state, epoch = epoch + $advance, state_revision = state_revision + 1,
+        authentication = CASE WHEN $advance = 0 THEN authentication ELSE NULL END
+        WHERE ${predicate} AND state_revision = $stateRevision`).run({ ...bindings(snapshot), config: JSON.stringify(config), state: JSON.stringify(state),
+          advance: preserveContent ? 0 : 1, stateRevision: snapshot.stateRevision }).changes === 1;
     },
     advanceAuthentication(snapshot, next) {
       return db.query(`UPDATE instances SET authentication = $next, epoch = epoch + 1, state_revision = state_revision + 1

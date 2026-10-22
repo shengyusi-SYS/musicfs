@@ -54,6 +54,7 @@ export interface MountManager {
   cacheStatus(id: string): Promise<MountCacheStatus>;
   clearCache(id: string): Promise<MountView>;
   refresh(id: string): Promise<void>;
-  refreshLocal(): Promise<void>;
+  /** Omitted paths refresh all listings; otherwise invalidate only these visible folders. */
+  refreshLocal(paths?: readonly string[]): Promise<void>;
   close(): Promise<void>;
 }

@@ -85,7 +85,9 @@ export async function scanSongs(client: NeteaseClient, scan: SongScan, offset: n
   const cache = client.ctx.cache!;
   if (cache.getMany && incomplete.length) {
     const saved = await cache.getMany(incomplete.map(id => `song:${id}`));
-    saved.forEach((song, index) => { if (song) { const id = incomplete[index]!; byId.set(id, mergeSeed(object(song), byId.get(id))); } });
+    saved.forEach((song, index) => { if (song && (!client.ctx.metadataRefresh || object(song).metadataRefreshId === client.ctx.metadataRefresh)) {
+      const id = incomplete[index]!; byId.set(id, mergeSeed(object(song), byId.get(id)));
+    } });
   }
   const missing = [...new Set(ids)].filter(id => needsDetail(byId.get(id)));
   if (missing.length) {
@@ -100,7 +102,9 @@ export async function scanSongs(client: NeteaseClient, scan: SongScan, offset: n
   const expiresAt = Date.now() + lifetime;
   const detailExpiresAt = metadataCacheExpiry(client.ctx.config);
   const writes: { key: string; value: Json; expiresAt?: number }[] = [{ key, value: { complete: true, songs: [...new Set(ids)].map(id => byId.get(id)!) } as Json, expiresAt },
-    ...(cache.getMany ? [...fresh].map(([id, song]) => ({ key: `song:${id}`, value: song as Json, ...(detailExpiresAt === null ? {} : { expiresAt: detailExpiresAt }) })) : [])];
+    ...(cache.getMany ? [...fresh].map(([id, song]) => ({ key: `song:${id}`,
+      value: { ...song, ...(client.ctx.metadataRefresh ? { metadataRefreshId: client.ctx.metadataRefresh } : {}) } as Json,
+      ...(detailExpiresAt === null ? {} : { expiresAt: detailExpiresAt }) })) : [])];
   if (cache.putMany) await cache.putMany(writes);
   else for (const item of writes) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
   return { start, songs: ids.map(id => byId.get(id)!) };

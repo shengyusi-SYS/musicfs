@@ -1,5 +1,5 @@
-import { App, Button, Empty, Skeleton, Space, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Dropdown, Empty, Skeleton, Space, Typography } from 'antd';
+import { MoreOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import type { SourceInstance } from '../../contracts/management';
 import type { Api } from '../api';
@@ -18,7 +18,7 @@ export function SourceContent({ api, instance, reauthorize, showLibrary }: {
     queryFn: ({ signal }: { signal: AbortSignal }) => api.directoryStatus(instance.id, root.directoryRef, signal) })) });
   const refresh = usePersistentRefresh(api, { instanceId: instance.id, operationId: pending, onCompleted: result => {
     if (result.failures.length) message.warning('部分目录更新失败，可稍后重试');
-    else message.success(result.scope.kind === 'file-info' ? '文件已准备' : '内容已更新');
+    else message.success(result.scope.kind === 'file-info' ? '文件已准备' : result.scope.kind === 'metadata' ? '音乐资料已更新' : '内容已更新');
   } });
   const busy = refresh.active || refresh.starting || refresh.preparing || roots.isFetching;
   return <><div className="page-actions"><Button onClick={showLibrary}>查看音乐目录</Button><Button icon={<ReloadOutlined aria-hidden="true" />} loading={refresh.starting || refresh.active && refresh.view?.scope.kind === 'instance'} disabled={busy} onClick={() => refresh.start({ kind: 'instance' })}>更新全部内容</Button></div>
@@ -36,6 +36,9 @@ export function SourceContent({ api, instance, reauthorize, showLibrary }: {
         <RefreshPolicyControl api={api} instanceId={instance.id} directoryRef={root.directoryRef} disabled={busy} />
         {(status?.pendingFileInfo ?? 0) > 0 && <Button disabled={busy} onClick={() => refresh.start({ kind: 'file-info', directoryRef: root.directoryRef })}>准备文件</Button>}
         <Button icon={<ReloadOutlined aria-hidden="true" />} disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'directory' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'directory', directoryRef: root.directoryRef })}>{status ? '更新' : '加载歌曲'}</Button>
+        {configuration.data?.metadataRefresh && (status?.statistics?.files ?? 0) > 0 && <Dropdown menu={{ items: [{ key: 'metadata', label: '重新获取音乐资料', onClick: () => refresh.start({ kind: 'metadata', directoryRef: root.directoryRef }) }] }}>
+          <Button icon={<MoreOutlined aria-hidden="true" />} aria-label={root.name + '的更多更新选项'} disabled={busy} />
+        </Dropdown>}
       </Space></div>;
     }) : !roots.isError && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有可浏览的内容" />}
   </>;

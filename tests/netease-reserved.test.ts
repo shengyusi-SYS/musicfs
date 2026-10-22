@@ -60,6 +60,7 @@ function fixture(format: Format) {
       if (endpoint === endpoints.songs) { hit('details'); return { songs: String(params.ids).split(',').map(id => song(Number(id))) }; }
       if (endpoint === endpoints.playback) { hit('playback'); return { data: String(params.id).split(',').map(id => ({ id: Number(id), url: `https://m1.music.126.net/${id}.${format}`, expi: 1200, level: params.level, type: format, md5: Number(id).toString(16).padStart(32, '0'), size: bytes.length })) }; }
       if (endpoint === endpoints.lyric) { hit('lyrics'); return { lrc: { lyric }, tlyric: { lyric: '[00:00.00]Translation' }, romalrc: { lyric: '[00:00.00]Romanization' } }; }
+      if (endpoint === endpoints.album) { hit('album'); return { album: song(1).album }; }
       throw new Error('Unexpected offline endpoint');
     },
   }) as unknown as NeteaseClient;
@@ -88,6 +89,32 @@ test('unopened NetEase files retain their representation across unchanged refres
   for (const id of ['1', '2', '3']) expect(reordered.get(id)?.fileRef).toBe(inserted.get(id)?.fileRef);
   expect(f.calls.lyrics ?? 0).toBe(0); expect(f.calls.cover ?? 0).toBe(0); expect(f.calls.range ?? 0).toBe(0);
   expect(f.reservations).toBe(0);
+});
+
+test('explicit paged NetEase metadata refresh publishes new lyrics, reuses shared artwork and preserves the old file bytes', async () => {
+  const f = fixture('mp3'); const initial = await list(f.reopen(), 'liked');
+  const old = file(initial.items[0]); const unopened = file(initial.items[1]);
+  const original = await bodyBytes((await open(f.reopen(), old.fileRef, { expectedContentId: old.info!.contentId })).body);
+  f.lyrics('[00:00.00]更新后的歌词'); f.reset();
+  expect(file((await list(f.reopen(), 'liked')).items[0]).fileRef).toBe(old.fileRef);
+  expect(f.calls.lyrics ?? 0).toBe(0);
+  const refreshed: Entry[] = []; let cursor: string | undefined;
+  do {
+    const client = f.reopen(); client.ctx.fileInfo = 'required'; client.ctx.metadataRefresh = 'metadata-operation';
+    const page = await list(client, 'liked', cursor, { warmFiles: 1, concurrency: 1, coldFiles: 1 });
+    refreshed.push(...page.items); cursor = page.nextCursor;
+  } while (cursor);
+  expect(refreshed).toHaveLength(2); expect(f.calls.lyrics).toBe(2); expect(f.calls.cover).toBe(1); expect(f.calls.album).toBe(1);
+  const updated = file(refreshed[0]);
+  const bytes = await bodyBytes((await open(f.reopen(), updated.fileRef, { expectedContentId: updated.info!.contentId })).body);
+  const tags = parseId3(bytes);
+  expect(tags.getFramesByClassType<Id3v2UnsynchronizedLyricsFrame>(Id3v2FrameClassType.UnsynchronizedLyricsFrame)
+    .some(frame => frame.text.includes('更新后的歌词'))).toBe(true);
+  expect(await bodyBytes((await open(f.reopen(), old.fileRef, { expectedContentId: old.info!.contentId })).body)).toEqual(original);
+  const stillReadable = await open(f.reopen(), unopened.fileRef, { expectedContentId: unopened.info!.contentId });
+  expect(stillReadable.content).toEqual(unopened.info!);
+  expect((await bodyBytes(stillReadable.body)).length).toBe(unopened.info!.size);
+  expect((await list(f.reopen(), 'liked')).items.map(item => file(item).fileRef)).toEqual(refreshed.map(item => file(item).fileRef));
 });
 
 test('an unopened reservation expires without preparing audio and never masquerades as a prepared file', async () => {

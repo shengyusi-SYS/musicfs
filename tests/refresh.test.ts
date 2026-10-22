@@ -66,6 +66,23 @@ test('desktop publication compares staged pages and final entries before invalid
   expect(f.store.publishedEntriesChanged({ ...record, stamp: { ...record.stamp, epoch: record.stamp.epoch + 1 } }, { items: [entry('last')], publish })).toBe(true);
 });
 
+test('metadata refresh keeps one explicit intent across durable pages and publishes only after completion', async () => {
+  const observed: string[] = [];
+  const f = await setup(plugin({ metadataRefresh: true, list: async (ctx, _directory, cursor) => {
+    if (!ctx.metadataRefresh) return page([entry('old')]);
+    expect(ctx.fileInfo).toBe('required'); observed.push(ctx.metadataRefresh);
+    const item = { ...entry(cursor ? 'last' : 'first'), info: { contentId: 'new', size: 1, mediaType: 'audio/wav' } };
+    return { ok: true, value: { items: [item], ...(cursor ? {} : { nextCursor: 'next' }) } };
+  } }));
+  await f.library.refresh(f.id, directory, signal());
+  const job = await f.rebuild().refreshes.start(f.id, { kind: 'metadata', directoryRef: directory });
+  expect(await f.rebuild().refreshes.step(job.operationId, signal())).toMatchObject({ status: 'running' });
+  expect(f.store.snapshot(f.id, key)?.value?.items[0]).toMatchObject({ fileRef: 'old' });
+  expect(await f.rebuild().refreshes.step(job.operationId, signal())).toMatchObject({ status: 'completed' });
+  expect(observed).toEqual([job.operationId, job.operationId]);
+  expect(f.store.snapshot(f.id, key)?.value?.items).toHaveLength(2);
+});
+
 test('rate limits persist a cooldown and resume the same directory cursor without repeating accepted pages', async () => {
   const f = await setup(); let now = 1000; let calls = 0;
   f.source.list = async (_ctx, _ref, cursor) => {

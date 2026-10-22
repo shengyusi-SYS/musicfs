@@ -65,7 +65,7 @@
     },
     "packages/plugin-api": {
       "name": "@musicfs/plugin-api",
-      "version": "0.1.9-dev.0",
+      "version": "0.1.10-dev.0",
     },
     "plugins/netease": {
       "name": "@musicfs/plugin-netease",

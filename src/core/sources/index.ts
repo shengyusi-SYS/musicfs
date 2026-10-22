@@ -135,7 +135,7 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
   async function execute<T>(
     id: string, signal: AbortSignal,
     operation: (plugin: SourcePlugin, ctx: Context) => Promise<Outcome<T>>,
-    options: { discard?: (value: T) => Promise<void>; commit?: (snapshot: InstanceSnapshot, value: T, state: Json) => Stored<boolean> } = {}
+    options: { discard?: (value: T) => Promise<void>; commit?: (snapshot: InstanceSnapshot, value: T, state: Json, plugin: SourcePlugin) => Stored<boolean> } = {}
   ): Promise<Outcome<T>> {
     signal.throwIfAborted();
     let snapshot = await capture(id); const plugin = await load(snapshot);
@@ -154,7 +154,7 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
       || !await registry.isCurrent(snapshot.pluginId, snapshot.pluginRevision, snapshot.pluginGeneration)) return reject();
     if (options.commit && outcome.ok) {
       if (!await options.commit(snapshot, outcome.value,
-        outcome.nextPrivateState === undefined ? snapshot.privateState : outcome.nextPrivateState)) return reject();
+        outcome.nextPrivateState === undefined ? snapshot.privateState : outcome.nextPrivateState, plugin)) return reject();
     } else if (outcome.nextPrivateState !== undefined && !await store.saveState(snapshot, outcome.nextPrivateState)) {
       return reject();
     }
@@ -171,7 +171,8 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
     },
     async configuration(pluginId: string) {
       const plugin = (await registry.get(pluginId)).module;
-      return { configuration: plugin.configuration, authentication: typeof plugin.authenticate === 'function', ...(plugin.statistics ? { statistics: plugin.statistics } : {}) };
+      return { configuration: plugin.configuration, authentication: typeof plugin.authenticate === 'function',
+        metadataRefresh: plugin.metadataRefresh === true, ...(plugin.statistics ? { statistics: plugin.statistics } : {}) };
     },
     async view(id: string): Promise<SourceStamp> {
       const captured = await store.capture(id);
@@ -197,8 +198,14 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
       execute(id, signal, (plugin, ctx) => plugin.validateConfig(ctx, config), {
         // Validation may normalize the submitted JSON. A true no-op neither writes old state back
         // nor invalidates the current login, directory snapshots, cache, or running refresh.
-        commit: (snapshot, value, state) => equal(snapshot.config, value) && equal(snapshot.privateState, state)
-          ? true : store.configure(snapshot, value, state)
+        commit: (snapshot, value, state, plugin) => {
+          const unchangedState = equal(snapshot.privateState, state);
+          if (equal(snapshot.config, value) && unchangedState) return true;
+          const preserve = unchangedState && plugin.contentConfiguration !== undefined && equal(
+            z.json().parse(plugin.contentConfiguration(structuredClone(snapshot.config))),
+            z.json().parse(plugin.contentConfiguration(structuredClone(value))));
+          return store.configure(snapshot, value, state, preserve);
+        }
       }),
     async logout(id: string, signal: AbortSignal): Promise<void> {
       signal.throwIfAborted();
@@ -211,8 +218,10 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
     roots: (id: string, signal: AbortSignal, cursor?: string): Promise<Outcome<Page<Root>>> =>
       execute(id, signal, (plugin, ctx) => plugin.roots(ctx, cursor)),
     list: (id: string, directory: string, signal: AbortSignal, cursor?: string,
-      options: { fileInfo?: 'required' } = {}): Promise<Outcome<Page<Entry>>> =>
-      execute(id, signal, (plugin, ctx) => plugin.list(options.fileInfo ? { ...ctx, fileInfo: options.fileInfo } : ctx, directory, cursor)),
+      options: { fileInfo?: 'required'; metadataRefresh?: string } = {}): Promise<Outcome<Page<Entry>>> =>
+      execute(id, signal, (plugin, ctx) => options.metadataRefresh && !plugin.metadataRefresh
+        ? Promise.resolve({ ok: false, error: { kind: 'not_supported', message: '此来源尚不支持主动更新音乐资料。' } })
+        : plugin.list({ ...ctx, ...options }, directory, cursor)),
     stat: (id: string, file: string, signal: AbortSignal): Promise<Outcome<FileInfo>> =>
       execute(id, signal, (plugin, ctx) => plugin.stat(ctx, file)),
     open: (id: string, file: string, read: ReadRequest, signal: AbortSignal): Promise<Outcome<ReadResult>> =>

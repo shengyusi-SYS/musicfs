@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import type { Context, Entry, Outcome, Page } from '@musicfs/plugin-api';
 import { createQqPlugin } from '../plugins/qq';
 import { qqSession } from './helpers/qq-session';
+import { parseId3, Id3v2FrameClassType, type Id3v2UnsynchronizedLyricsFrame } from '../packages/audio-tags/test-fixtures';
 
 const value = <T>(outcome: Outcome<T>): T => { if (!outcome.ok) throw new Error(outcome.error.message); return outcome.value; };
 const song = (mid: string) => ({ ...qqTrackFields, mid, title: '歌曲', singer: [{ name: '歌手' }], file: { media_mid: `media${mid}`, size_ape: 100 } });
@@ -61,6 +62,31 @@ test('QQ small pages carry real info, preserve the complete daily sequence and a
   expect(playbackBatches.every(batch => batch.length > 0 && batch.length <= 4)).toBe(true);
   expect(JSON.stringify([first, last])).not.toContain('private');
   expect(JSON.parse(first.nextCursor!)).toMatchObject({ instanceId: f.ctx.instanceId, directory: 'daily', offset: 4, total: 8 });
+});
+
+test('QQ explicit metadata refresh replaces lyrics while the old published plan stays readable', async () => {
+  const f = await fixture(); f.setSongs([song('one')]);
+  let lyrics = '[00:00.00]Old lyrics'; let lyricRequests = 0; const underlying = f.ctx.fetch;
+  f.ctx.fetch = (async (input, init) => {
+    const url = new URL(String(input));
+    if (url.hostname === 'c.y.qq.com' && url.pathname.includes('/lyric/')) {
+      lyricRequests++; return Response.json({ code: 0, lyric: lyrics, trans: 'Translation', roma: 'Romanization' });
+    }
+    return underlying(input, init);
+  }) as typeof fetch;
+  const old = file(value(await f.plugin.list(f.ctx, 'daily')).items[0]);
+  lyrics = '[00:00.00]New lyrics';
+  expect(file(value(await f.plugin.list(f.ctx, 'daily')).items[0]).fileRef).toBe(old.fileRef); expect(lyricRequests).toBe(1);
+  const ctx = { ...f.ctx, fileInfo: 'required' as const, metadataRefresh: 'explicit-operation' };
+  const fresh = file(value(await f.plugin.list(ctx, 'daily')).items[0]);
+  expect(lyricRequests).toBe(2); expect(fresh.info!.contentId).not.toBe(old.info!.contentId);
+  expect(file(value(await f.plugin.list(ctx, 'daily')).items[0]).fileRef).toBe(fresh.fileRef); expect(lyricRequests).toBe(2);
+  for (const [entry, expected] of [[old, 'Old lyrics'], [fresh, 'New lyrics']] as const) {
+    const opened = value(await f.plugin.open(f.ctx, entry.fileRef, { expectedContentId: entry.info!.contentId }));
+    const bytes = new Uint8Array(await new Response(opened.body).arrayBuffer());
+    expect(parseId3(bytes).getFramesByClassType<Id3v2UnsynchronizedLyricsFrame>(Id3v2FrameClassType.UnsynchronizedLyricsFrame)
+      .some(frame => frame.text.includes(expected))).toBe(true);
+  }
 });
 
 test('QQ daily cursors retain the cached recommendation snapshot and reject another instance', async () => {

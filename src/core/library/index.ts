@@ -350,7 +350,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       const entries = await listResolved(resolved, signal);
       const status = resolved.target.kind === 'directory' ? await publishedStatus(resolved.target.stamp, resolved.target.ref) : null;
       return { entries, status, ...(resolved.target.kind === 'directory'
-        ? { source: { instanceId: resolved.target.stamp.id, directoryRef: resolved.target.ref } } : {}) };
+        ? { source: { instanceId: resolved.target.stamp.id, pluginId: resolved.target.stamp.pluginId, directoryRef: resolved.target.ref } } : {}) };
     },
     async contentSources(instanceId: string, signal: AbortSignal) {
       return (await rootsView(instanceId, signal)).entries.map(entry => {

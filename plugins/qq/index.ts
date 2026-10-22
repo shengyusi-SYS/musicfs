@@ -6,11 +6,13 @@ import { authenticate } from './authentication';
 import { catalogueContext, migrateState, renewalNeeded, run, validateState, type QqHandler } from './client';
 import * as catalog from './catalog';
 import * as media from './media';
-import { migrateConfig, normalizeConfig } from './configuration';
+import { contentConfiguration, migrateConfig, normalizeConfig } from './configuration';
 
 export function createQqPlugin(handler: QqHandler = handleRequest): SourcePlugin {
   return {
     migrateConfig,
+    contentConfiguration,
+    metadataRefresh: true,
     statistics: { tracks: '曲目', files: '导出文件', hiddenTracks: '未导出曲目', missingVersions: '缺失目标版本', fallbackVersions: '回退目标', deduplicatedVersions: '合并重复版本' },
     migrateState: input => migrateState(input.fromVersion, input.state),
     validateState: input => validateState(input.state),

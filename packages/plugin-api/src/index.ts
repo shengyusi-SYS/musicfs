@@ -42,6 +42,8 @@ export interface Context {
   fetch: typeof fetch;
   /** On a preparation pass, list must return exact info for each file, or an explicit fault. */
   fileInfo?: 'required';
+  /** Explicit metadata refresh operation; reuse fresh assets within this ID, never overwrite published plans. */
+  metadataRefresh?: string;
   /** Optional host storage for small, serializable plugin data, isolated to this source revision. */
   cache?: PluginCache;
   /** Optional host work allowance for this invocation; plugins may checkpoint before starting more work. */
@@ -98,6 +100,10 @@ export type AuthStep =
 
 export interface SourcePlugin {
   configuration: Configuration;
+  /** Pure identity of config fields that affect content/authentication. Omit retention policy only. */
+  contentConfiguration?(config: Json): Json;
+  /** Understands Context.metadataRefresh for deliberate, paged refreshes of music metadata. */
+  metadataRefresh?: true;
   /** Optional display labels for counters reported by this plugin's pages. */
   statistics?: Record<string, string>;
   validateConfig(ctx: Context, candidate: Json): Promise<Outcome<Json>>;

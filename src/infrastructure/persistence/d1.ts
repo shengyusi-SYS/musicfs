@@ -81,9 +81,11 @@ export function createD1Store(db: D1Database) {
         WHERE ${predicate} AND state_revision = ? AND ${noActiveRenewalSQL}`).bind(JSON.stringify(state), ...bindings(snapshot), snapshot.stateRevision).run();
       return result.meta.changes === 1;
     },
-    async configure(snapshot, config, state) {
-      const result = await db.prepare(`UPDATE instances SET config = ?, private_state = ?, epoch = epoch + 1, state_revision = state_revision + 1, authentication = NULL
-        WHERE ${predicate} AND state_revision = ?`).bind(JSON.stringify(config), JSON.stringify(state), ...bindings(snapshot), snapshot.stateRevision).run();
+    async configure(snapshot, config, state, preserveContent = false) {
+      const advance = preserveContent ? 0 : 1;
+      const result = await db.prepare(`UPDATE instances SET config = ?, private_state = ?, epoch = epoch + ?, state_revision = state_revision + 1,
+        authentication = CASE WHEN ? = 0 THEN authentication ELSE NULL END
+        WHERE ${predicate} AND state_revision = ?`).bind(JSON.stringify(config), JSON.stringify(state), advance, advance, ...bindings(snapshot), snapshot.stateRevision).run();
       return result.meta.changes === 1;
     },
     async advanceAuthentication(snapshot, next) {

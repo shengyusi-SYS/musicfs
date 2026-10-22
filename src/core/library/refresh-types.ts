@@ -3,7 +3,7 @@ import type { SourceStamp } from '../sources';
 import type { InstanceRefresh, Snapshot, SnapshotKey } from './types';
 
 export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string }
-  | { kind: 'file-info'; directoryRef: string };
+  | { kind: 'file-info' | 'metadata'; directoryRef: string };
 export type RefreshFailure = InstanceRefresh['failures'][number]['error'];
 export type RefreshStatus = 'queued' | 'running' | 'completed' | 'failed' | 'superseded' | 'cancelled';
 export type RefreshView = {
