@@ -6,7 +6,7 @@ MusicFS 在本机运行后台，用浏览器提供管理页面；挂载、音乐
 
 解压完整发行目录后，Windows 打开 `MusicFS.exe`，Linux 运行 `musicfs`。默认打开管理页面并直接进入。关闭网页后，后台和挂载继续运行；再次启动程序会打开已有后台。
 
-托盘菜单提供「打开管理页面」「手机访问」「退出 MusicFS」。页面也可退出后台；文件仍被占用时会保留后台并显示原因，关闭使用文件的程序后再试。
+Windows 双击托盘图标打开管理页面，单击不打开。右键菜单提供「打开管理页面」「手机访问」「退出 MusicFS」。页面也可退出后台；文件仍被占用时会保留后台并显示原因，关闭使用文件的程序后再试。
 
 「设置 → 启动与挂载」可分别调整：
 
@@ -70,6 +70,6 @@ App 挂载与资源管理器的「映射网络驱动器」是两条入口。原�
 
 用户数据由 `env-paths` 选择当前用户目录，包含音乐 SQLite、独立 `auth.sqlite`、插件修订、连接凭据、挂载和启动设置。Windows 使用当前用户目录 ACL；Unix 数据目录为 `0700`，私有配置为 `0600`。rclone 以隐藏窗口运行，日志位于数据目录的 `mounts/rclone.log`；启动问题查看 `startup.log`、`launcher.log`。
 
-原生辅助程序只负责托盘和当前用户自启，后台仍是 Bun。源码、依赖和各目标工具链见[辅助程序 README](../native/desktop/README.md)，应用构建、独立测试数据及窄测试入口见[开发指南](development.md)。
+原生辅助程序负责托盘、当前用户自启和 Windows 系统浏览器入口，后台仍是 Bun。源码、依赖和各目标工具链见[辅助程序 README](../native/desktop/README.md)，应用构建、独立测试数据及窄测试入口见[开发指南](development.md)。
 
 本轮管理认证已通过 Bun SQLite 和本地 workerd/D1；监听切换、后台恢复和原生桥接使用离线夹具验证。构建结果与目标系统实机验收分别记录；免费 Worker 的真实 CPU 限额尚未实测。既有 Windows/Linux 挂载和客户端结果见[桌面记录](verification/p2-desktop-host.md)、[Windows 记录](verification/p2-windows-mount.md)和[总台账](verification.md)。

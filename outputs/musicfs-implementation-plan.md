@@ -1,6 +1,6 @@
 # MusicFS 实施与交付计划
 
-当前桌面更新为 dev.15 的挂载名称与重命名，启动后台恢复沿用 dev.14，见[定向核对](../docs/verification/mount-names.md)。dev.14 常驻、登录与自动挂载的[已确认方案](musicfs-desktop-usability.md)已收口；性能主线维持原停止决定。产物身份及升级步骤只在[发行页](../docs/release.md)维护。
+当前桌面更新为 dev.16 的 Windows 托盘双击与无命令行浏览器入口，见[定向核对](../docs/verification/tray-interaction.md)；dev.15 挂载名称和 dev.14 启动后台恢复沿用已有证据。常驻、登录与自动挂载的[已确认方案](musicfs-desktop-usability.md)已收口；性能主线维持原停止决定。产物身份及升级步骤只在[发行页](../docs/release.md)维护。
 
 性能主线按[Codex 完成标准](../docs/codex-goal.md)执行。上一轮已识别的路径已交付；本轮六领域独立评估和主代理复核又发现局部优化候选，详见[场景复评与ROI](musicfs-performance-review.md)。用户已授权按 O2 → O1 → O3 实施，不自动恢复历史验证矩阵。工程经验见[可复用结论](../docs/engineering-lessons.md)，产品范围仍以[统一需求](musicfs-requirements-and-technical-design.md)为准。
 

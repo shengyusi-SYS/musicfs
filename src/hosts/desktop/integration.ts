@@ -72,15 +72,24 @@ export async function setDesktopAutostart(input: {
   command: string[];
 }): Promise<void> {
   if (!input.command[0]) throw new Error('The startup command must include its executable');
-  const child = Bun.spawn([executable(input.resourcesDirectory), 'autostart'], {
-    windowsHide: true, stdin: new Blob([JSON.stringify({ enabled: input.enabled, command: input.command })]),
+  await invokeHelper(input.resourcesDirectory, 'autostart', { enabled: input.enabled, command: input.command });
+}
+
+/** Windows uses the GUI helper and ShellExecute, without an intermediate console shell. */
+export async function openDesktopBrowser(input: { resourcesDirectory: string; url: string }): Promise<void> {
+  await invokeHelper(input.resourcesDirectory, 'open-url', input.url);
+}
+
+async function invokeHelper(resourcesDirectory: string, operation: 'autostart' | 'open-url', request: unknown): Promise<void> {
+  const child = Bun.spawn([executable(resourcesDirectory), operation], {
+    windowsHide: true, stdin: new Blob([JSON.stringify(request)]),
     stdout: 'ignore', stderr: 'pipe'
   });
   const diagnostic = new Response(child.stderr).text();
   const timer = setTimeout(() => child.kill(), 10_000); timer.unref();
   try {
     const code = await child.exited;
-    if (code !== 0) throw new Error((await diagnostic).trim() || 'MusicFS could not update login startup');
+    if (code !== 0) throw new Error((await diagnostic).trim() || `MusicFS desktop ${operation} failed`);
     await diagnostic;
   } finally { clearTimeout(timer); }
 }

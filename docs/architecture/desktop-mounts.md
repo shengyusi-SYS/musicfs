@@ -60,7 +60,9 @@ rclone 使用 Bun 原生 `windowsHide: true`，日志写文件，无额外 Power
 
 ## 启动、自动恢复与监听
 
-后台仍由 Bun 持有，浏览器与原生托盘分别提供入口。小型 Rust 辅助程序通过 JSON 行事件通知后台打开页面、手机访问或退出；退出继续走同一正常卸载用例。原生依赖、事件循环和各系统自启实现见[辅助程序 README](../../native/desktop/README.md)。
+后台仍由 Bun 持有，浏览器与原生托盘分别提供入口。小型 Rust 辅助程序通过 JSON 行事件通知后台打开页面、手机访问或退出；退出继续走同一正常卸载用例。Windows 仅处理左键双击事件，忽略单击及双击序列附带的抬起事件，不自行计时识别双击；其他平台按各自托盘的激活协议处理。
+
+后台决定管理 URL、ticket 和页面，Windows 系统打开动作交给同一 GUI 辅助程序，经 windows-sys 的 ShellExecuteW 调用默认 URL 处理程序；输入走 stdin，辅助程序及父进程不启动 PowerShell/cmd。启动器、托盘菜单和手机入口复用这一路径。其他平台保留 open 库。原生依赖、事件循环和各系统自启实现见[辅助程序 README](../../native/desktop/README.md)。
 
 `preferences.json` 保存手动/登录系统启动时是否打开页面、自启及自动挂载偏好。手动启动默认打开页面；登录系统默认启动并静默驻留。自启注册由当前程序路径更新，账号使用[共用管理会话](management-access.md)。
 

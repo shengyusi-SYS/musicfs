@@ -1,5 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+#[cfg(target_os = "windows")]
+mod browser;
 mod startup;
 
 use serde::Deserialize;
@@ -33,7 +35,12 @@ fn run() -> Result<()> {
             emit(serde_json::json!({ "type": "autostart", "enabled": request.enabled }));
             Ok(())
         }
-        _ => Err("Usage: desktop-helper tray|autostart".into()),
+        #[cfg(target_os = "windows")]
+        Some("open-url") => {
+            let url: String = serde_json::from_reader(io::stdin().lock())?;
+            browser::open(&url)
+        }
+        _ => Err("Usage: desktop-helper tray|autostart|open-url (Windows)".into()),
     }
 }
 
@@ -90,15 +97,67 @@ fn handle_menu(event: MenuEvent) {
 }
 
 fn handle_icon(event: TrayIconEvent) {
-    if matches!(
+    if opens_management(&event, cfg!(target_os = "windows")) {
+        emit_action("open");
+    }
+}
+
+fn opens_management(event: &TrayIconEvent, double_click: bool) -> bool {
+    if double_click {
+        return matches!(
+            event,
+            TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            }
+        );
+    }
+    matches!(
         event,
         TrayIconEvent::Click {
             button: MouseButton::Left,
             button_state: MouseButtonState::Up,
             ..
         }
-    ) {
-        emit_action("open");
+    )
+}
+
+#[cfg(test)]
+mod tray_tests {
+    use super::*;
+
+    #[test]
+    fn windows_double_click_sequence_opens_exactly_once() {
+        let click = |button_state| TrayIconEvent::Click {
+            id: "test".into(),
+            position: Default::default(),
+            rect: Default::default(),
+            button: MouseButton::Left,
+            button_state,
+        };
+        let double = TrayIconEvent::DoubleClick {
+            id: "test".into(),
+            position: Default::default(),
+            rect: Default::default(),
+            button: MouseButton::Left,
+        };
+        let sequence = [
+            click(MouseButtonState::Down),
+            click(MouseButtonState::Up),
+            double,
+            click(MouseButtonState::Up),
+        ];
+        assert!(!opens_management(&sequence[1], true));
+        assert!(opens_management(&sequence[2], true));
+        assert_eq!(
+            sequence
+                .iter()
+                .filter(|event| opens_management(event, true))
+                .count(),
+            1
+        );
+        // Other tray backends expose activation clicks rather than Windows double clicks.
+        assert!(opens_management(&sequence[1], false));
     }
 }
 

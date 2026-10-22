@@ -21,7 +21,7 @@
 
 ## 职责与依赖
 
-继续采用 Bun 后台与浏览器 WebUI。薄原生辅助程序只处理托盘菜单和当前用户自启注册，业务状态、单实例、浏览器打开和正常退出留在后台。托盘使用 tray-icon；Windows/macOS 用 tao 事件循环，Linux 用 KSNI。自启分别复用 auto-launch、windows-registry 和 plist/dirs，具体取舍见[系统集成调查](research-desktop-integration.md)。
+继续采用 Bun 后台与浏览器 WebUI。薄原生辅助程序处理托盘菜单、当前用户自启注册和 Windows 系统浏览器调用；业务状态、单实例、管理 URL/会话与正常退出由后台决定。Windows 左键双击打开页面，右键使用菜单；经 windows-sys 调用默认浏览器，消除中间命令行窗口。托盘使用 tray-icon；Windows/macOS 用 tao 事件循环，Linux 用 KSNI。自启分别复用 auto-launch、windows-registry 和 plist/dirs，具体取舍见[系统集成调查](research-desktop-integration.md)。
 
 桌面偏好归桌面宿主，每项自动挂载开关归挂载定义，恢复策略复用挂载管理器。手动操作取消当前会话对该项的后台恢复；退出准备若被活动挂载拒绝，可恢复后台工作，不提前永久关闭协调器。
 

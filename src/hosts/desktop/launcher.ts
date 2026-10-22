@@ -17,7 +17,7 @@ import { createDesktopHttps } from './https';
 import { createDesktopHttp } from './http';
 import { createMountRestore, type MountRestore } from './mount-restore';
 import { readDesktopPreferences, saveDesktopPreferences } from './preferences';
-import { setDesktopAutostart, startDesktopIntegration } from './integration';
+import { openDesktopBrowser, setDesktopAutostart, startDesktopIntegration } from './integration';
 import type { ManagementTicket } from '../../contracts/management-auth';
 import type { DesktopPreferencesView } from '../../contracts/desktop';
 import { createDesktopListener } from './listener';
@@ -29,6 +29,10 @@ type Runtime = z.infer<typeof runtimeSchema>;
 const lockStaleMs = 30_000;
 const lockRecoveryMs = lockStaleMs + 2_000;
 const startupTimeoutMs = lockRecoveryMs + 15_000;
+
+async function openDesktopPage(url: string, resourcesDirectory: string): Promise<unknown> {
+  return process.platform === 'win32' ? openDesktopBrowser({ resourcesDirectory, url }) : open(url);
+}
 
 export const defaultDesktopDirectory = () => envPaths('MusicFS', { suffix: '' }).data;
 
@@ -110,7 +114,7 @@ export async function launchDesktop(input: {
     if (response.ok) url.hash = new URLSearchParams({ ticket: (await response.json() as ManagementTicket).ticket }).toString();
     else if (response.status === 404) { await response.body?.cancel(); url.hash = new URLSearchParams({ token: existing.credentials.adminToken }).toString(); }
     else { await response.body?.cancel(); throw new Error('后台已运行，自动登录入口未能建立，请重试。'); }
-    try { await (input.browser ?? open)(url.href); }
+    try { await (input.browser ?? (url => openDesktopPage(url, input.resourcesDirectory)))(url.href); }
     catch { throw new Error(`后台已运行，系统浏览器未能打开。可重新点击启动器；诊断目录：${directory}。`); }
   }
   return { origin: existing.runtime.origin, reused };
@@ -219,7 +223,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
           if (phone) url.searchParams.set('phone', '1');
           if (quitFailed) { url.searchParams.set('page', 'connection'); url.searchParams.set('quitFailed', '1'); }
           url.hash = new URLSearchParams({ ticket: (await service!.access.issueTicket()).ticket }).toString();
-          await open(url.href);
+          await openDesktopPage(url.href, resources);
         }
         integration = await startDesktopIntegration({ resourcesDirectory: resources,
           onError: error => { integrationState.error = error.message; },

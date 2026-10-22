@@ -1,5 +1,11 @@
 # MusicFS 当前交付物
 
+## dev.16 Windows 托盘交互
+
+应用 `0.1.0-dev.16`：Windows 托盘改为左键双击打开管理页，单击不打开，右键菜单保持。浏览器打开复用 GUI 辅助程序调用系统 URL 处理程序，移除中间 PowerShell，覆盖启动器、托盘和手机入口。
+
+[Windows x64](../dist/releases/0.1.0-dev.16/musicfs-0.1.0-dev.16-windows-x64.zip)、[离线 Worker](../dist/releases/0.1.0-dev.16/musicfs-0.1.0-dev.16-worker.zip)、[源码](../dist/releases/0.1.0-dev.16/musicfs-0.1.0-dev.16-source.zip)、[作者包](../dist/releases/0.1.0-dev.16/musicfs-0.1.0-dev.16-plugin-author-kit.zip)、[清单](../dist/releases/0.1.0-dev.16/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.16/SHA256SUMS)。正常退出旧后台后，解压完整新版再启动。无需重装插件或刷新音乐目录，未升级云端。核对范围见[托盘交互](verification/tray-interaction.md)。
+
 ## dev.15 挂载名称
 
 应用 `0.1.0-dev.15`：挂载默认显示 MusicFS，添加时可自定义，已有项可在更多菜单重命名。保存已挂载项会正常重挂，保留 ID、来源和缓存；旧项重新挂载后采用新卷标。自动挂载仍在后台执行，管理页与托盘先可用。

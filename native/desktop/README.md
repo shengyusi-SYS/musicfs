@@ -13,6 +13,9 @@ music-source code, credentials or browser UI.
   `{"enabled":true,"command":["/path/to/MusicFS","--autostart"]}`. Returns exit 0
   after updating this user's registration. Enabling again updates the executable
   path after an extracted-release upgrade.
+- Windows `desktop-helper open-url`: reads a JSON URL string from stdin and uses
+  the system URL handler via windows-sys/ShellExecuteW, without PowerShell or cmd.
+  The launcher and tray actions both use it. URL/ticket data is not put in argv.
 
 The Bun API is `startDesktopIntegration({resourcesDirectory,onAction,onError?})`,
 which resolves to `{close(): Promise<void>}`, and
@@ -32,7 +35,7 @@ recorded in the index; license collection never downloads a source repository.
 | Platform | Tray | Login startup |
 | --- | --- | --- |
 | Linux | tray-icon KSNI over session D-Bus; no GTK | auto-launch's user XDG Autostart entry, with Exec argument encoding |
-| Windows | tray-icon and tao event loop; GUI subsystem, hidden child | windows-registry, only the MusicFS value in HKCU Run |
+| Windows | tray-icon and tao event loop; left double click opens, right click shows menu; GUI subsystem | windows-registry, only the MusicFS value in HKCU Run |
 | macOS | tray-icon created inside tao's main-thread event loop; accessory app | plist serializer and dirs, user LaunchAgent with ProgramArguments array |
 
 `auto-launch 0.6.0` does not quote executable paths or arguments for Windows/Linux.
