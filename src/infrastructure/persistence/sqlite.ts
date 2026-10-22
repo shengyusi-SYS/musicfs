@@ -20,7 +20,7 @@ import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDa
 import type { RenewalStore } from '../../core/sources/renewal';
 import { claimRenewalPlan, finishRenewalPlan, noActiveRenewalSQL, releaseRenewalStatement, renewalClaimFromRow, type RenewalClaimRow } from './renewal-sql';
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
-import type { RefreshStore } from '../../core/library/refresh-types';
+import type { RefreshPage, RefreshRecord, RefreshStore } from '../../core/library/refresh-types';
 import type { PluginChangeStore } from '../../application/change-plugin';
 import { changeFromRow, changeLeaseFromRow, changeInputFromRow, changeRecordSQL, nextChangeInstanceSQL, readyChangesSQL,
   createChangeStatement, claimChangeStatement, releaseChangeStatement, commitChangePlan, type ChangeRow, type ChangeInputRow } from './plugin-change-sql';
@@ -179,6 +179,28 @@ export function openSqlite(path: string) {
     commitRefresh(expected, next, page, directoryError) {
       return batch<{ outcome: RefreshOutcome }>(commitRefreshPlan(expected, next, page, directoryError))[0]![0]!.outcome;
     },
+    /** Compare inside SQLite, without loading either full directory into the desktop process. */
+    publishedEntriesChanged(expected: RefreshRecord, page: RefreshPage) {
+      const task = expected.task;
+      if (!task || !page.publish) return true;
+      const same = db.query<{ same: number }, SqlValue[]>(`WITH previous AS (
+        SELECT published_attempt_id, document FROM directory_snapshots WHERE instance_id = ? AND kind = ? AND ref = ?
+      ), candidate AS (
+        SELECT ordinal, document FROM library_snapshot_entries WHERE attempt_id = ?
+        UNION ALL SELECT CAST(key AS INTEGER) + ?, value FROM json_each(?)
+      ) SELECT 1 AS same FROM previous p WHERE p.published_attempt_id IS NOT NULL
+        AND json_extract(p.document, '$.stamp.id') = ? AND json_extract(p.document, '$.stamp.epoch') = ?
+        AND json_extract(p.document, '$.stamp.pluginId') = ? AND json_extract(p.document, '$.stamp.pluginRevision') = ?
+        AND json_extract(p.document, '$.stamp.pluginGeneration') = ?
+        AND (SELECT COUNT(*) FROM library_snapshot_entries WHERE attempt_id = p.published_attempt_id) = ?
+        AND NOT EXISTS (SELECT 1 FROM candidate c LEFT JOIN library_snapshot_entries e
+          ON e.attempt_id = p.published_attempt_id AND e.ordinal = c.ordinal
+          WHERE e.document IS NULL OR e.document <> c.document)`)
+        .get(expected.stamp.id, task.key.kind, task.key.ref, task.attemptId, task.entries, JSON.stringify(page.items),
+          expected.stamp.id, expected.stamp.epoch, expected.stamp.pluginId, expected.stamp.pluginRevision,
+          expected.stamp.pluginGeneration, task.entries + page.items.length);
+      return !same;
+    },
     cancelRefresh(operationId, updatedAt) { batch(cancelRefreshPlan(operationId, updatedAt)); },
     readyRefreshes(now, limit) {
       return db.query<{ operation_id: string }, [number, number]>(readyRefreshesSQL).all(now, limit).map(row => row.operation_id);
@@ -199,5 +221,7 @@ export function openSqlite(path: string) {
           WHERE operation_id IN (${readyRefreshesSQL}))`).get(Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1)?.instant ?? null;
     },
     close: () => db.close()
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & RefreshScheduleStore & PluginChangeStore & RenewalStore & PluginCacheStore & { close(): void; nextBackgroundWorkAt(): number | null };
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & RefreshScheduleStore & PluginChangeStore & RenewalStore & PluginCacheStore & {
+    close(): void; nextBackgroundWorkAt(): number | null; publishedEntriesChanged(expected: RefreshRecord, page: RefreshPage): boolean;
+  };
 }

@@ -7,7 +7,7 @@ import { createDesktopService } from '../src/hosts/desktop/service';
 import { openSqlite } from '../src/infrastructure/persistence/sqlite';
 import { requestReady } from '../scripts/helpers/refresh-http';
 
-test('desktop restart runs a due directory update without an open page and invalidates mounts after publication', async () => {
+test('desktop schedules progress without a page and retain mount listings when published entries are unchanged', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-policy-desktop-'));
   let service: Awaited<ReturnType<typeof createDesktopService>> | undefined;
   let instanceId = ''; const publications: string[] = [];
@@ -41,17 +41,18 @@ test('desktop restart runs a due directory update without an open page and inval
     clock.close(); publications.length = 0;
     service = await createDesktopService(options);
     const deadline = Date.now() + 2_000;
-    while (!publications.some(id => id !== previous!.id) && Date.now() < deadline) await Bun.sleep(5);
+    while (service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value?.id === previous!.id && Date.now() < deadline) await Bun.sleep(5);
     const current = service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value;
     expect(current?.id).not.toBe(previous!.id);
-    expect(publications).toContain(current!.id);
+    expect(publications).toEqual([]);
     expect(service.store.currentRefresh(instanceId)?.status).toBe('completed');
     expect(service.store.nextRefreshScheduleAt()).toBeGreaterThan(Date.now());
     // A changed durable schedule must wake the resident runner without another HTTP response.
     publications.length = 0;
     service.store.saveRefreshSchedule(instanceId, { kind: 'directory', ref: '/' }, 15, Date.now() - 1);
     const nextDeadline = Date.now() + 750;
-    while (!publications.some(id => id !== current!.id) && Date.now() < nextDeadline) await Bun.sleep(5);
-    expect(publications.some(id => id !== current!.id)).toBe(true);
+    while (service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value?.id === current!.id && Date.now() < nextDeadline) await Bun.sleep(5);
+    expect(service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value?.id).not.toBe(current!.id);
+    expect(publications).toEqual([]);
   } finally { await service?.close(); await rm(directory, { recursive: true, force: true }); }
 });

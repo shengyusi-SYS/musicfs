@@ -7,6 +7,7 @@ import { encrypt, endpoints, type Endpoint, type UpstreamRequest } from './gener
 const pending = z.object({ id: z.string(), key: z.string(), expiresAt: z.string(), confirmed: z.boolean() }).strict();
 const saved = z.object({ version: z.literal(1), cookies: z.string(), accountId: z.string().nullable(), accountName: z.string().nullable(), pending: pending.nullable() }).strict();
 export type NeteaseState = z.infer<typeof saved>;
+export const validateState = (state: Json): boolean => saved.safeParse(state).success;
 export const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export class NeteaseFailure extends Error { constructor(readonly fault: PluginFault) { super(fault.message); } }
 export function fail(kind: PluginFault['kind'], message: string): never { throw new NeteaseFailure({ kind, message }); }

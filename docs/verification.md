@@ -1,6 +1,6 @@
 # MusicFS 实现与验收台账
 
-文档整理：2026-10-22。这里索引版本证据，不另定义需求或待办。产品范围见[统一需求](../outputs/musicfs-requirements-and-technical-design.md)，执行决定见[实施计划](../outputs/musicfs-implementation-plan.md)，可复用教训见[工程经验](engineering-lessons.md)。
+文档整理：2026-10-23。这里索引版本证据，不另定义需求或待办。产品范围见[统一需求](../outputs/musicfs-requirements-and-technical-design.md)，执行决定见[实施计划](../outputs/musicfs-implementation-plan.md)，可复用教训见[工程经验](engineering-lessons.md)。
 
 ## 当前事实
 
@@ -9,6 +9,8 @@ Windows 托盘双击与无命令行浏览器入口的 dev.16 核对范围见[托
 dev.17 Windows 包新增 WebDAV 自定义凭据与通用导入二维码：桌面 HTTP 验证修改即时生效、旧密码失效和重启恢复；正式 Worker 本地 workerd/D1 验证跨请求保存与认证，新增迁移为 `0012.sql`；URL 测试覆盖中文、空格、冒号及 `@/#?%+`，类型检查、依赖边界与 WebUI 构建通过。二维码复用现有 Ant Design；具体播放器扫码导入和真实云端升级尚未验，本次未重复 Windows VM 验收。
 
 dev.18 修复挂载冷目录等待：离线正式桌面装配在空队列下，内部请求原停在 `queued`、公开请求正常；最终由持久写入统一唤醒后台，两条入口均无需管理页即可完成来源入口和目标目录加载。`tests/desktop-dav-background.test.ts` 保留该对照；另复现并修复无 HTTP 的周期策略变更未重排唤醒、旧任务连续占用全部页的问题。后台、SQLite/本地 D1 分页、限流、取消、周期与重启、插件迁移的 36 项测试、类型检查与依赖边界通过。使用真实回环监听器和离线 sample，不将其记为 Windows GUI 或真实平台验收。
+
+dev.19 的定向离线测试覆盖挂载/共享读取旧默认只迁移一次、自定义期限重启保留、两示例配置升级保留私有会话；小样本验证网易云歌曲详情跨临时扫描过期后复用。SQLite 对照已暂存页与末页，内容不变保留挂载缓存，修改条目或来源身份仍失效；周期刷新重启用例通过。三套类型、依赖边界与 WebUI 构建通过，未重复平台整库请求或 Windows VM 测试。现行默认及不同客户端的缓存归属见[缓存设计](architecture/cache-policy.md)。
 
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|

@@ -6,6 +6,7 @@ import type { NeteaseClient } from '../plugins/netease/client';
 import { mediaBytes, memoryCache } from './helpers/source-metadata';
 import { cover, parseId3, Id3v2FrameClassType, type Id3v2UnsynchronizedLyricsFrame } from '../packages/audio-tags/test-fixtures';
 import { open, stat } from '../plugins/netease/media';
+import { playlistScan, scanSongs } from '../plugins/netease/scan';
 
 function fixture(count: number, seed = 0) {
   const cache = memoryCache(); const bytes = mediaBytes.mp3;
@@ -48,6 +49,19 @@ function fixture(count: number, seed = 0) {
   return { client, cache, calls, reset() { for (const key of Object.keys(calls)) delete calls[key]; },
     rename(value: string) { title = value; }, reorder() { playlist.reverse(); }, setPlaylist(value: number[]) { playlist = value; }, changeMedia() { representation = 'changed'; } };
 }
+
+test('stable song details outlive temporary scans and are reused after a long absence', async () => {
+  const f = fixture(4); const day = 86400_000; const before = Date.now();
+  await scanSongs(f.client, await playlistScan(f.client, '900'), 0);
+  expect(f.cache.values.get('song:1')?.expiresAt).toBeGreaterThanOrEqual(before + 365 * day);
+  const transient = [...f.cache.values].filter(([key]) => key.startsWith('scan:'));
+  expect(transient.length).toBeGreaterThan(0);
+  for (const [, value] of transient) expect(value.expiresAt).toBeLessThanOrEqual(Date.now() + day);
+  for (const value of f.cache.values.values()) if (value.expiresAt !== undefined && value.expiresAt < before + 45 * day) value.expiresAt = 0;
+  f.reset();
+  await scanSongs(f.client, await playlistScan(f.client, '900'), 0);
+  expect(f.calls).toEqual({ playlist: 1 });
+});
 
 test('large NetEase scans reuse one membership and 200-track native batches across cold checkpoints', async () => {
   const f = fixture(4000, 10); f.client.ctx.fileInfo = 'required';

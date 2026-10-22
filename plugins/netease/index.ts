@@ -2,13 +2,15 @@ import type { JsonObject, SourcePlugin } from '@musicfs/plugin-api';
 import schema from './config.schema.json';
 import validate from './generated-config.mjs';
 import { authenticate } from './authentication';
-import { run } from './client';
+import { run, validateState } from './client';
 import * as catalog from './catalog';
 import * as media from './media';
-import { normalizeConfig } from './configuration';
+import { migrateConfig, normalizeConfig } from './configuration';
 export { normalizeConfig } from './configuration';
 
 const plugin: SourcePlugin = {
+  migrateConfig,
+  validateState: input => validateState(input.state),
   configuration: { schema: schema as JsonObject, ui: { order: ['label', 'quality', 'audio', 'metadataCacheDays'] } },
   statistics: { tracks: '曲目', files: '导出文件', hiddenTracks: '未导出曲目', missingVersions: '缺失目标版本', fallbackVersions: '回退目标', deduplicatedVersions: '合并重复版本' },
   async validateConfig(ctx, candidate) {

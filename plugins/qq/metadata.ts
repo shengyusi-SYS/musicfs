@@ -3,7 +3,6 @@ import type { AudioTags } from '@musicfs/audio-tags';
 import { fail, object, QqFailure, type QqClient } from './client';
 import { metadataCacheExpiry } from './configuration';
 
-const missingLifetime = 24 * 60 * 60 * 1000;
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value : undefined;
 const positive = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : undefined;
 const names = (value: unknown) => Array.isArray(value) ? value.map(item => text(object(item).name ?? object(item).singername)).filter((item): item is string => item !== undefined) : [];
@@ -34,7 +33,7 @@ async function cached(client: QqClient, key: string, read: () => Promise<Json>):
     if (previous !== undefined) return previous as unknown as Asset;
     const value = await read(); client.ctx.signal.throwIfAborted();
     const missing = value === null || typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
-    const asset = { value, expiresAt: missing ? Date.now() + missingLifetime : metadataCacheExpiry(client.ctx.config) };
+    const asset = { value, expiresAt: metadataCacheExpiry(client.ctx.config, Date.now(), missing ? 30 : undefined) };
     await cache.put(storageKey, asset, asset.expiresAt === null ? undefined : { expiresAt: asset.expiresAt }); return asset;
   })();
   reads.set(key, result);

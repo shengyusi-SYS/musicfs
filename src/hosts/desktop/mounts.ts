@@ -3,6 +3,7 @@ import { join, posix, win32 } from 'node:path';
 import { z } from 'zod';
 import type { MountCacheSettings, MountCacheStatus, MountInput, MountManager, MountView } from '../../contracts/mounts';
 import { createRcloneControl, MountError, writePrivateJson, type RcloneControl } from './rclone-control';
+import { CACHE_YEAR_HOURS, MOUNT_FILE_CACHE_MIB, directoryCacheDefault } from '../../contracts/cache-defaults';
 
 export { MountError } from './rclone-control';
 
@@ -17,22 +18,22 @@ const mountName = z.string().trim().min(1).max(120);
 const cacheSchema = z.object({ directoryCacheSeconds, fileCacheMaxMiB: fileCacheMaxMiB.optional(), fileCacheMaxAgeHours: fileCacheMaxAgeHours.optional() }).strict();
 const inputSchema = z.object({ name: mountName.optional(), mountPoint: z.string().min(1).max(4096),
   autoMount: z.boolean().default(true),
-  directoryCacheSeconds: directoryCacheSeconds.default(300), fileCacheMaxMiB: fileCacheMaxMiB.default(8192),
-  fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(168), source: sourceSchema }).strict();
+  directoryCacheSeconds: directoryCacheSeconds.optional(), fileCacheMaxMiB: fileCacheMaxMiB.default(MOUNT_FILE_CACHE_MIB),
+  fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(CACHE_YEAR_HOURS), source: sourceSchema }).strict();
 const viewSchema = z.object({
   id: z.uuid(), name: z.string(), mountPoint: z.string(), source: z.union([z.object({ kind: z.literal('local') }), z.object({ kind: z.literal('remote'), url: z.string() })]),
   autoMount: z.boolean().default(true),
-  directoryCacheSeconds: directoryCacheSeconds.default(300),
-  fileCacheMaxMiB: fileCacheMaxMiB.default(8192), fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(168),
+  directoryCacheSeconds: directoryCacheSeconds.optional(),
+  fileCacheMaxMiB: fileCacheMaxMiB.default(MOUNT_FILE_CACHE_MIB), fileCacheMaxAgeHours: fileCacheMaxAgeHours.default(CACHE_YEAR_HOURS),
   state: z.enum(['starting', 'mounted', 'unmounting', 'stopped', 'error']), error: z.object({ code: z.string(), message: z.string() }).optional()
 });
-const recordsSchema = z.array(z.object({ input: inputSchema, view: viewSchema, mayBeMounted: z.boolean().default(false) }));
+const recordsSchema = z.array(z.object({ input: inputSchema, view: viewSchema, mayBeMounted: z.boolean().default(false), cacheDefaultsVersion: z.literal(1).optional() }));
 const modes = ['off', 'minimal', 'writes', 'full'] as const;
 const nativeStatsSchema = z.object({
   opt: z.object({ CacheMode: z.union([z.enum(modes), z.number().int().min(0).max(3)]) }),
   diskCache: z.object({ path: z.string(), bytesUsed: z.number().nonnegative(), files: z.number().int().nonnegative() }).optional()
 });
-type RecordEntry = { input: MountInput; view: MountView; mayBeMounted: boolean };
+type RecordEntry = { input: MountInput; view: MountView; mayBeMounted: boolean; cacheDefaultsVersion?: 1 };
 type MountPoint = { MountPoint: string; Fs: string };
 type Connection = { url: string; username: string; password: string };
 
@@ -67,7 +68,19 @@ export async function createMountManager(options: {
     const result = pending.then(action).finally(() => { pendingActions--; });
     pending = result.then(() => {}, () => {}); return result;
   };
-  let savedRecords = JSON.stringify(records);
+  let upgradedDefaults = false;
+  for (const record of records) {
+    if (record.cacheDefaultsVersion === undefined) {
+      upgradedDefaults = true;
+      if (record.input.directoryCacheSeconds === 300) delete record.input.directoryCacheSeconds;
+      if (record.input.fileCacheMaxAgeHours === 168) record.input.fileCacheMaxAgeHours = CACHE_YEAR_HOURS;
+      record.cacheDefaultsVersion = 1;
+    }
+    record.input = normalizeInput(record.input);
+    record.view.directoryCacheSeconds = record.input.directoryCacheSeconds!;
+    record.view.fileCacheMaxAgeHours = record.input.fileCacheMaxAgeHours!;
+  }
+  let savedRecords = upgradedDefaults ? '' : JSON.stringify(records);
   const persist = async () => {
     const next = JSON.stringify(records);
     if (next === savedRecords) return;
@@ -85,7 +98,7 @@ export async function createMountManager(options: {
   function normalizeInput(value: MountInput): MountInput {
     const parsed = inputSchema.safeParse(value);
     if (!parsed.success) throw new MountError('invalid_mount', '请填写有效的挂载位置与读取连接。');
-    const input: MountInput = { mountPoint: parsed.data.mountPoint, source: parsed.data.source, directoryCacheSeconds: parsed.data.directoryCacheSeconds,
+    const input: MountInput = { mountPoint: parsed.data.mountPoint, source: parsed.data.source, directoryCacheSeconds: parsed.data.directoryCacheSeconds ?? directoryCacheDefault(parsed.data.source.kind),
       autoMount: parsed.data.autoMount,
       fileCacheMaxMiB: parsed.data.fileCacheMaxMiB, fileCacheMaxAgeHours: parsed.data.fileCacheMaxAgeHours,
       ...(parsed.data.name === undefined ? {} : { name: parsed.data.name }) };
@@ -190,9 +203,9 @@ export async function createMountManager(options: {
     record.input = input; record.view.state = 'starting'; delete record.view.error;
     record.view.name = input.name ?? 'MusicFS';
     record.view.autoMount = input.autoMount ?? true;
-    record.view.directoryCacheSeconds = input.directoryCacheSeconds ?? 300;
-    record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? 8192;
-    record.view.fileCacheMaxAgeHours = input.fileCacheMaxAgeHours ?? 168;
+    record.view.directoryCacheSeconds = input.directoryCacheSeconds ?? directoryCacheDefault(input.source.kind);
+    record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? MOUNT_FILE_CACHE_MIB;
+    record.view.fileCacheMaxAgeHours = input.fileCacheMaxAgeHours ?? CACHE_YEAR_HOURS;
     record.view.source = input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url };
     await persist();
     try {
@@ -245,6 +258,7 @@ export async function createMountManager(options: {
     return record;
   }
 
+  await persist();
   return {
     // Native mount/remote checks can take seconds. UI polling reads the current state
     // during that work instead of joining the mutation queue behind startup restores.
@@ -264,10 +278,10 @@ export async function createMountManager(options: {
       }
       if (previous?.mayBeMounted) throw new MountError('mount_busy', '此路径仍有待处理的挂载，请先卸载，再重新挂载。');
       const record: RecordEntry = previous ?? {
-        input, mayBeMounted: false, view: { id: crypto.randomUUID(), name: input.name ?? 'MusicFS', mountPoint: input.mountPoint,
+        input, mayBeMounted: false, cacheDefaultsVersion: 1, view: { id: crypto.randomUUID(), name: input.name ?? 'MusicFS', mountPoint: input.mountPoint,
           autoMount: input.autoMount ?? true,
-          directoryCacheSeconds: input.directoryCacheSeconds ?? 300,
-          fileCacheMaxMiB: input.fileCacheMaxMiB ?? 8192, fileCacheMaxAgeHours: input.fileCacheMaxAgeHours ?? 168,
+          directoryCacheSeconds: input.directoryCacheSeconds ?? directoryCacheDefault(input.source.kind),
+          fileCacheMaxMiB: input.fileCacheMaxMiB ?? MOUNT_FILE_CACHE_MIB, fileCacheMaxAgeHours: input.fileCacheMaxAgeHours ?? CACHE_YEAR_HOURS,
           source: input.source.kind === 'local' ? { kind: 'local' } : { kind: 'remote', url: input.source.url }, state: 'starting' }
       };
       if (!previous) records.push(record);
@@ -322,7 +336,7 @@ export async function createMountManager(options: {
       if (wasMounted) await stop(record);
       if (wasMounted) return start(record, input);
       record.input = input; record.view.directoryCacheSeconds = parsed.data.directoryCacheSeconds;
-      record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? 8192; record.view.fileCacheMaxAgeHours = input.fileCacheMaxAgeHours ?? 168;
+      record.view.fileCacheMaxMiB = input.fileCacheMaxMiB ?? MOUNT_FILE_CACHE_MIB; record.view.fileCacheMaxAgeHours = input.fileCacheMaxAgeHours ?? CACHE_YEAR_HOURS;
       await persist(); return view(record);
     }),
     cacheStatus: id => serialize(async () => {

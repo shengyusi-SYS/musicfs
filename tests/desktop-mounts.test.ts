@@ -10,6 +10,29 @@ const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const action of cleanup.splice(0).reverse()) await action(); });
 const localConnection = () => ({ url: 'http://127.0.0.1:12345/dav/', username: 'musicfs', password: 'local-secret' });
 
+test('old cache defaults upgrade once for local and remote mounts while custom periods remain intact', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-retention-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const fake = fakeControl();
+  const sources = [{ kind: 'local' as const }, { kind: 'remote' as const, url: 'http://fixture/dav/', username: 'reader', password: 'fixture' }, { kind: 'local' as const }];
+  const records = sources.map((source, index) => {
+    const settings = { directoryCacheSeconds: index === 2 ? 900 : 300, fileCacheMaxAgeHours: index === 2 ? 72 : 168, fileCacheMaxMiB: 64 };
+    const mountPoint = join(directory, String(index));
+    return { input: { mountPoint, source, ...settings }, mayBeMounted: false,
+      view: { id: crypto.randomUUID(), name: 'Saved', mountPoint, source, ...settings, state: 'stopped' } };
+  });
+  await writePrivateJson(join(directory, 'mounts.json'), records);
+  const options = { directory, binary: 'unused', localConnection, control: fake.control, manageControl: false, checkDependencies: async () => {} };
+  let manager = await createMountManager(options);
+  try {
+    expect((await manager.list()).map(item => [item.directoryCacheSeconds, item.fileCacheMaxAgeHours, item.fileCacheMaxMiB]))
+      .toEqual([[31536000, 8760, 64], [2592000, 8760, 64], [900, 72, 64]]);
+    await manager.configureCache(records[0]!.view.id, { directoryCacheSeconds: 300, fileCacheMaxAgeHours: 168 });
+    await manager.close(); manager = await createMountManager(options);
+    expect((await manager.list())[0]).toMatchObject({ directoryCacheSeconds: 300, fileCacheMaxAgeHours: 168 });
+  } finally { await manager.close(); }
+});
+
 function fakeControl() {
   const mounted = new Map<string, string>();
   const remotes = new Map<string, Record<string, unknown>>();
@@ -154,7 +177,7 @@ test('read-cache clearing preserves busy mounts and clears only the selected nam
   expect(await Bun.file(fragment(second.id)).text()).toBe('cached-fragment');
 });
 
-test('directory cache settings default to five minutes and change only after a normal unmount', async () => {
+test('local directory cache defaults to a year and change only after a normal unmount', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-cache-'));
   cleanup.push(() => rm(directory, { recursive: true, force: true }));
   const fake = fakeControl();
@@ -165,11 +188,11 @@ test('directory cache settings default to five minutes and change only after a n
   const manager = await createMountManager({ directory: join(directory, 'state'), binary: 'unused', localConnection,
     control: fake.control, checkDependencies: async () => {} });
   cleanup.push(async () => { fake.setBusy(false); await manager.close(); });
-  expect((await manager.list())[0]?.directoryCacheSeconds).toBe(300); expect(fake.calls).toHaveLength(0);
+  expect((await manager.list())[0]?.directoryCacheSeconds).toBe(31536000); expect(fake.calls).toHaveLength(0);
   expect((await manager.list())[0]?.autoMount).toBe(true);
   const mounted = await manager.mount(legacyInput);
-  expect(mounted.directoryCacheSeconds).toBe(300);
-  expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '300s', CacheMode: 'full', CacheMaxSize: 8192 * 1024 * 1024, CacheMaxAge: '168h', ReadAhead: 0 });
+  expect(mounted.directoryCacheSeconds).toBe(31536000);
+  expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters.vfsOpt).toMatchObject({ DirCacheTime: '31536000s', CacheMode: 'full', CacheMaxSize: 8192 * 1024 * 1024, CacheMaxAge: '8760h', ReadAhead: 0 });
   expect(fake.calls.find(call => call.method === 'mount/mount')?.parameters).toMatchObject({
     _config: { BufferSize: 128 * 1024 }, vfsOpt: { ChunkSize: 1024 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0 }
   });

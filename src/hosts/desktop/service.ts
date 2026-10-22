@@ -62,11 +62,12 @@ export async function createDesktopService(input: { directory: string; adminToke
   const library = createLibrary(sources, { ...store,
     saveLayout(...args: Parameters<typeof store.saveLayout>) { const saved = store.saveLayout(...args); if (saved) refreshMounts(); return saved; },
     commitRefresh(...args: Parameters<typeof store.commitRefresh>) {
-    const result = store.commitRefresh(...args);
-    // Notify the desktop consumer only after the complete directory pointer changed.
-    if (result === 'committed' && args[2]?.publish) refreshMounts();
-    return result;
-  } }, undefined, { execution: 'deferred', sha256, publishedViews: { views: 32, estimatedBytes: 32 * 1024 * 1024 } });
+      const changed = args[2]?.publish ? store.publishedEntriesChanged(args[0], args[2]) : false;
+      const result = store.commitRefresh(...args);
+      // Preserve mounted listings when a successful refresh publishes unchanged contents.
+      if (result === 'committed' && changed) refreshMounts();
+      return result;
+    } }, undefined, { execution: 'deferred', sha256, publishedViews: { views: 32, estimatedBytes: 32 * 1024 * 1024 } });
   const changes = createDesktopChanges({ store: { ...store, commitChange(...args: Parameters<typeof store.commitChange>) {
     const result = store.commitChange(...args);
     if (result && args[2].kind === 'activate') refreshMounts();

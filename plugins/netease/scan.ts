@@ -2,6 +2,7 @@ import type { Json } from '@musicfs/plugin-api';
 import { endpoints } from './generated-upstream.mjs';
 import { fail, object, type NeteaseClient } from './client';
 import { resolveVariants, resolutionKey, type Resolution, type CachedResolution } from './media';
+import { metadataCacheExpiry } from './configuration';
 
 export const batchSize = 200;
 const lifetime = 24 * 60 * 60_000;
@@ -97,10 +98,11 @@ export async function scanSongs(client: NeteaseClient, scan: SongScan, offset: n
     for (const id of missing) if (byId.get(id)?.richDetail !== true) fail('temporary', '网易云歌曲详情分页不完整。');
   }
   const expiresAt = Date.now() + lifetime;
-  const writes = [{ key, value: { complete: true, songs: [...new Set(ids)].map(id => byId.get(id)!) } as Json, expiresAt },
-    ...(cache.getMany ? [...fresh].map(([id, song]) => ({ key: `song:${id}`, value: song as Json, expiresAt })) : [])];
+  const detailExpiresAt = metadataCacheExpiry(client.ctx.config);
+  const writes: { key: string; value: Json; expiresAt?: number }[] = [{ key, value: { complete: true, songs: [...new Set(ids)].map(id => byId.get(id)!) } as Json, expiresAt },
+    ...(cache.getMany ? [...fresh].map(([id, song]) => ({ key: `song:${id}`, value: song as Json, ...(detailExpiresAt === null ? {} : { expiresAt: detailExpiresAt }) })) : [])];
   if (cache.putMany) await cache.putMany(writes);
-  else for (const item of writes) await cache.put(item.key, item.value, { expiresAt });
+  else for (const item of writes) await cache.put(item.key, item.value, item.expiresAt === undefined ? undefined : { expiresAt: item.expiresAt });
   return { start, songs: ids.map(id => byId.get(id)!) };
 }
 export async function scanVersions(client: NeteaseClient, scan: SongScan, start: number, ids: string[]) {

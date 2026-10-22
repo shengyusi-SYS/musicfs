@@ -3,6 +3,7 @@ import { Alert, App, Button, Collapse, Dropdown, Empty, Form, Input, Modal, Radi
 import { MoreOutlined, PlusOutlined, FolderOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, type Api } from '../api';
+import { CACHE_YEAR_HOURS, MOUNT_FILE_CACHE_MIB, directoryCacheDefault } from '../../contracts/cache-defaults';
 import type { MountCacheSettings, MountInput, MountView } from '../../contracts/mounts';
 import { Failure } from '../components/feedback';
 import { CacheSummary, MountCacheFields } from '../components/cache-settings';
@@ -104,8 +105,12 @@ export default function Mounts({ api }: { api: Api }) {
         ] }}><Button type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label={item.name + '的更多操作'} /></Dropdown>
       </div></article>)}</section>
     <Modal title="添加挂载" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
-      <Form form={form} layout="vertical" onFinish={submit} preserve={false} initialValues={{ directoryCacheSeconds: 300, fileCacheMaxMiB: 8192, fileCacheMaxAgeHours: 168, autoMount: true }}>
-        <Form.Item label="音乐目录"><Radio.Group value={kind} onChange={event => setKind(event.target.value)} options={[{ label: '本机 MusicFS', value: 'local' }, { label: '远程 WebDAV', value: 'remote' }]} disabled={mount.isPending} /></Form.Item>
+      <Form form={form} layout="vertical" onFinish={submit} preserve={false} initialValues={{ directoryCacheSeconds: directoryCacheDefault(kind), fileCacheMaxMiB: MOUNT_FILE_CACHE_MIB, fileCacheMaxAgeHours: CACHE_YEAR_HOURS, autoMount: true }}>
+        <Form.Item label="音乐目录"><Radio.Group value={kind} onChange={event => {
+          const next = event.target.value as 'local' | 'remote';
+          if (form.getFieldValue('directoryCacheSeconds') === directoryCacheDefault(kind)) form.setFieldValue('directoryCacheSeconds', directoryCacheDefault(next));
+          setKind(next);
+        }} options={[{ label: '本机 MusicFS', value: 'local' }, { label: '远程 WebDAV', value: 'remote' }]} disabled={mount.isPending} /></Form.Item>
         {kind === 'remote' && <><Form.Item label="WebDAV 地址" name="url" rules={[{ required: true, type: 'url', message: '请输入完整 WebDAV 地址' }]}><Input placeholder="https://music.example.com/dav" /></Form.Item>
           <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input autoComplete="off" /></Form.Item>
           <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]}><Input.Password autoComplete="off" /></Form.Item></>}

@@ -7,9 +7,11 @@ import type { ReadCacheManager, ReadCacheSettings, ReadCacheStatus } from '../..
 import { LibraryError, type Description, type FileDescription, type FileView } from '../../core/library';
 import { createDav, type ReadCredentials } from '../../transport/dav';
 import { MountError, writePrivateJson, type RcloneControl } from './rclone-control';
+import { CACHE_YEAR_HOURS, SHARED_READ_CACHE_MIB } from '../../contracts/cache-defaults';
 
 const settingsSchema = z.object({ maxMiB: z.number().int().min(0).max(1_048_576), maxAgeHours: z.number().int().min(0).max(2_147_483) }).strict();
-const defaults: ReadCacheSettings = { maxMiB: 16_384, maxAgeHours: 168 };
+const storedSettingsSchema = settingsSchema.extend({ cacheDefaultsVersion: z.literal(1).optional() });
+const defaults: ReadCacheSettings = { maxMiB: SHARED_READ_CACHE_MIB, maxAgeHours: CACHE_YEAR_HOURS };
 const remote = 'musicfs_shared_reads';
 const fixedTime = '2000-01-01T00:00:00.000Z';
 const directory = (path: string): Description => ({ kind: 'directory', path, name: path.split('/').at(-1) ?? '', etag: path, modifiedAt: fixedTime });
@@ -25,10 +27,15 @@ export async function createDesktopReadCache(input: {
   await mkdir(input.directory, { recursive: true });
   const settingsPath = join(input.directory, 'settings.json');
   let settings: ReadCacheSettings;
-  try { settings = settingsSchema.parse(JSON.parse(await readFile(settingsPath, 'utf8'))); }
+  const persistSettings = (value: ReadCacheSettings) => writePrivateJson(settingsPath, { ...value, cacheDefaultsVersion: 1 });
+  try {
+    const saved = storedSettingsSchema.parse(JSON.parse(await readFile(settingsPath, 'utf8')));
+    settings = { maxMiB: saved.maxMiB, maxAgeHours: saved.cacheDefaultsVersion === undefined && saved.maxAgeHours === 168 ? CACHE_YEAR_HOURS : saved.maxAgeHours };
+    if (saved.cacheDefaultsVersion === undefined) await persistSettings(settings);
+  }
   catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new MountError('mount_failed', 'WebDAV 读取缓存设置无法读取，请保留数据并检查设置文件。');
-    settings = { ...defaults }; await writePrivateJson(settingsPath, settings);
+    settings = { ...defaults }; await persistSettings(settings);
   }
   const cacheDirectory = join(input.controlDirectory, 'cache', 'vfs', remote);
   const credentials = { username: 'musicfs-cache', password: crypto.randomUUID() + crypto.randomUUID() };
@@ -111,7 +118,7 @@ export async function createDesktopReadCache(input: {
       const started = await input.control.call<{ id: string; addr: string }>('serve/start', { type: 'webdav', fs: `${remote}:`, addr: `127.0.0.1:${port}`,
         _config: { BufferSize: 128 * 1024, LowLevelRetries: 1 }, vfsOpt: { ReadOnly: true, CacheMode: 'full',
           CacheMaxSize: settings.maxMiB * 1024 * 1024, CacheMaxAge: settings.maxAgeHours === 0 ? 'off' : `${settings.maxAgeHours}h`,
-          ReadAhead: 0, HandleCaching: '0s', ChunkSize: 1024 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0, DirCacheTime: '300s' } });
+          ReadAhead: 0, HandleCaching: '0s', ChunkSize: 1024 * 1024, ChunkSizeLimit: -1, ChunkStreams: 0, DirCacheTime: `${CACHE_YEAR_HOURS}h` } });
       running = { id: started.id, address: `http://${started.addr}` };
     })();
     try { await starting; } finally { starting = undefined; }
@@ -191,7 +198,7 @@ export async function createDesktopReadCache(input: {
     inspect: () => serialize(inspect),
     configure: value => serialize(async () => {
       const next = settingsSchema.parse(value); assertIdle(); await stop();
-      await writePrivateJson(settingsPath, next); settings = next; return inspect();
+      await persistSettings(next); settings = next; return inspect();
     }),
     clear: () => serialize(async () => {
       assertIdle(); await stop();

@@ -3,8 +3,8 @@ import Ajv from 'ajv';
 import type { Context, Json } from '@musicfs/plugin-api';
 import neteaseSchema from '../plugins/netease/config.schema.json';
 import qqSchema from '../plugins/qq/config.schema.json';
-import { metadataCacheExpiry as neteaseExpiry, normalizeConfig as normalizeNetease } from '../plugins/netease/configuration';
-import { metadataCacheExpiry as qqExpiry, normalizeConfig as normalizeQq } from '../plugins/qq/configuration';
+import { metadataCacheExpiry as neteaseExpiry, normalizeConfig as normalizeNetease, migrateConfig as migrateNetease } from '../plugins/netease/configuration';
+import { metadataCacheExpiry as qqExpiry, normalizeConfig as normalizeQq, migrateConfig as migrateQq } from '../plugins/qq/configuration';
 import { NeteaseFailure, type NeteaseClient } from '../plugins/netease/client';
 import type { QqClient } from '../plugins/qq/client';
 import { endpoints } from '../plugins/netease/generated-upstream.mjs';
@@ -14,8 +14,40 @@ import { tagFile as neteaseTagFile } from '../plugins/netease/tagged';
 import { tagFile as qqTagFile } from '../plugins/qq/tagged';
 import { cover, fixture as audioFixture } from '../packages/audio-tags/test-fixtures';
 import { memoryCache } from './helpers/source-metadata';
+import neteasePlugin from '../plugins/netease';
+import qqPlugin from '../plugins/qq';
+import neteaseManifest from '../plugins/netease/manifest.json';
+import qqManifest from '../plugins/qq/manifest.json';
+import { parseManifest } from '../src/core/extensions';
+import { preparePluginMigration } from '../src/core/sources/migration';
 
 const day = 24 * 60 * 60_000;
+
+test('plugin config migration upgrades old defaults once while preserving other periods and audio settings', () => {
+  for (const [migrate, normalize, legacy] of [[migrateNetease, normalizeNetease, 7], [migrateQq, normalizeQq, 1]] as const) {
+    expect(migrate({ fromVersion: 1, config: { metadataCacheDays: legacy } })).toEqual(normalize({}));
+    for (const days of [0, 30, 90]) expect(migrate({ fromVersion: 1, config: { metadataCacheDays: days } })).toMatchObject({ metadataCacheDays: days });
+    expect(normalize({ metadataCacheDays: legacy })).toMatchObject({ metadataCacheDays: legacy });
+  }
+});
+
+test('both real plugin migration hooks preserve their existing private session without platform requests', async () => {
+  const signal = new AbortController().signal;
+  const noFetch = (async (_input: RequestInfo | URL, _init?: RequestInit) => {
+    throw new Error('Cache default migration must not access the platform');
+  }) as unknown as typeof fetch;
+  for (const [plugin, manifest, oldDefault] of [[neteasePlugin, neteaseManifest, 7], [qqPlugin, qqManifest, 1]] as const) {
+    const config = { metadataCacheDays: oldDefault };
+    const created = await plugin.validateConfig({ instanceId: 'cache-migration', config, privateState: null, signal, fetch: noFetch }, config);
+    if (!created.ok || !created.nextPrivateState) throw new Error('Offline session fixture initialization failed');
+    const target = parseManifest(manifest, 'desktop');
+    const previous = { ...target, configVersion: 1 };
+    const result = await preparePluginMigration(previous, target, plugin, { id: 'cache-migration', pluginId: target.id,
+      name: 'Saved', config: created.value, privateState: created.nextPrivateState, epoch: 1, stateRevision: 1 }, signal, noFetch);
+    expect(result.privateState).toEqual(created.nextPrivateState);
+    expect(result.config).not.toHaveProperty('metadataCacheDays');
+  }
+});
 function fixture(provider: 'NetEase' | 'QQ', config: Json, missing = false) {
   const cache = memoryCache(); let requests = 0;
   const ctx: Context = { instanceId: 'metadata-policy-offline', config, privateState: null, signal: new AbortController().signal, cache,
@@ -57,13 +89,13 @@ function fixture(provider: 'NetEase' | 'QQ', config: Json, missing = false) {
   };
 }
 
-test('metadata cache schemas accept finite days and zero without changing legacy normalized defaults', () => {
-  expect(normalizeNetease({ metadataCacheDays: 7 })).toEqual(normalizeNetease({}));
-  expect(normalizeQq({ metadataCacheDays: 1 })).toEqual(normalizeQq({}));
+test('metadata defaults retain stable data for a year and preserve explicit shorter policies', () => {
+  expect(normalizeNetease({ metadataCacheDays: 365 })).toEqual(normalizeNetease({}));
+  expect(normalizeQq({ metadataCacheDays: 365 })).toEqual(normalizeQq({}));
   const validator = new Ajv();
-  for (const [schema, normalize, expiry, defaults] of [[neteaseSchema, normalizeNetease, neteaseExpiry, 7], [qqSchema, normalizeQq, qqExpiry, 1]] as const) {
+  for (const [schema, normalize, expiry, defaults] of [[neteaseSchema, normalizeNetease, neteaseExpiry, 365], [qqSchema, normalizeQq, qqExpiry, 365]] as const) {
     const validate = validator.compile(schema);
-    for (const days of [0, 1, 30]) expect(validate(normalize({ metadataCacheDays: days }))).toBe(true);
+    for (const days of [0, 1, 7, 30, 365]) expect(validate(normalize({ metadataCacheDays: days }))).toBe(true);
     for (const days of [-1, 0.5, '0']) expect(validate(normalize({ metadataCacheDays: days }))).toBe(false);
     expect(normalize({})).not.toHaveProperty('metadataCacheDays'); expect(expiry({}, 1000)).toBe(1000 + defaults * day); expect(expiry({ metadataCacheDays: 0 }, 1000)).toBeNull();
   }
@@ -78,13 +110,13 @@ for (const provider of ['NetEase', 'QQ'] as const) {
     await f.prepareReady(first); expect(f.cache.values.get('ready:cache-policy')?.expiresAt).toBeUndefined();
   });
 
-  test(`${provider}: finite metadata expires, while missing results stay retryable after one day under permanent policy`, async () => {
+  test(`${provider}: finite metadata expires, while missing results stay retryable after one month under permanent policy`, async () => {
     const f = fixture(provider, { metadataCacheDays: 3 }); const before = Date.now(); const first = await f.read(); const requests = f.requests;
     expect(first.expiresAt).toBeGreaterThanOrEqual(before + 3 * day); expect(first.expiresAt).toBeLessThanOrEqual(Date.now() + 3 * day);
     await f.read(); expect(f.requests).toBe(requests); f.expire(); await f.read(); expect(f.requests).toBeGreaterThan(requests);
     const missing = fixture(provider, { metadataCacheDays: 0 }, true); const absent = await missing.read(); const missingRequests = missing.requests;
     expect(absent.tags.title).toBe('Source title'); expect(absent.tags.album).toBe('Source album'); expect(absent.tags.cover).toBeUndefined(); expect(absent.tags.lyrics).toBeUndefined();
-    expect(absent.expiresAt).toBeGreaterThanOrEqual(before + day); expect(absent.expiresAt).toBeLessThanOrEqual(Date.now() + day);
+    expect(absent.expiresAt).toBeGreaterThanOrEqual(before + 30 * day); expect(absent.expiresAt).toBeLessThanOrEqual(Date.now() + 30 * day);
     for (const saved of missing.cache.values.values()) expect(saved.expiresAt).toBeGreaterThan(before);
     await missing.read(); expect(missing.requests).toBe(missingRequests); missing.expire(); await missing.read(); expect(missing.requests).toBeGreaterThan(missingRequests);
   });

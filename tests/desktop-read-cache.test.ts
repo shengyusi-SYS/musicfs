@@ -6,6 +6,22 @@ import type { ReadResult } from '@musicfs/plugin-api';
 import type { FileDescription, FileView } from '../src/core/library';
 import { createDesktopReadCache } from '../src/hosts/desktop/read-cache';
 
+test('shared byte cache upgrades the old retention once and preserves later custom choices', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-read-cache-policy-'));
+  const unused = async (): Promise<never> => { throw new Error('Retention migration must not start native caching'); };
+  const create = () => createDesktopReadCache({ directory, controlDirectory: join(directory, 'control'),
+    view: { list: unused, stat: unused, statMany: unused, open: unused },
+    control: { call: unused, removeRemote: unused, close: unused }, current: () => true });
+  await Bun.write(join(directory, 'settings.json'), JSON.stringify({ maxMiB: 64, maxAgeHours: 168 }));
+  let cache = await create();
+  try {
+    expect((await cache.inspect()).settings).toEqual({ maxMiB: 64, maxAgeHours: 8760 });
+    await cache.configure({ maxMiB: 64, maxAgeHours: 168 });
+    await cache.close(); cache = await create();
+    expect((await cache.inspect()).settings).toEqual({ maxMiB: 64, maxAgeHours: 168 });
+  } finally { await cache.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test('an unused shared cache can be inspected and closed without activating or modifying rclone', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-unused-read-cache-'));
   const unused = async (): Promise<never> => { throw new Error('Unused native capability was activated'); };

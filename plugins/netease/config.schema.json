@@ -4,8 +4,8 @@
   "additionalProperties": false,
   "properties": {
     "label": { "type": "string", "title": "目录名称", "minLength": 1, "maxLength": 80, "default": "网易云音乐" },
-    "metadataCacheDays": { "type": "integer", "title": "音乐资料缓存天数", "minimum": 0, "default": 7,
-      "description": "封面、歌词和补充音乐资料的保留天数；0 表示长期保留。空或缺失结果仍在 1 天后重试，不影响播放地址和歌单名单更新。" },
+    "metadataCacheDays": { "type": "integer", "title": "音乐资料缓存天数", "minimum": 0, "default": 365,
+      "description": "封面、歌词和补充音乐资料的保留天数；0 表示长期保留。空或缺失结果最多保留 30 天，不影响播放地址和歌单名单更新。" },
     "quality": {
       "type": "string", "title": "单版本目标音质", "default": "standard",
       "description": "只在单版本模式生效；多版本模式使用下方的多版本目标音质。",
