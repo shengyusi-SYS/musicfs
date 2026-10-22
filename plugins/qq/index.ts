@@ -13,6 +13,7 @@ export function createQqPlugin(handler: QqHandler = handleRequest): SourcePlugin
     migrateConfig,
     contentConfiguration,
     metadataRefresh: true,
+    naming: { fields: { title: '歌名', artist: '歌手', album: '专辑', albumArtist: '专辑艺术家', track: '专辑曲号', disc: '碟号', index: '目录序号', quality: '音质', id: '来源歌曲编号' } },
     statistics: { tracks: '曲目', files: '导出文件', hiddenTracks: '未导出曲目', missingVersions: '缺失目标版本', fallbackVersions: '回退目标', deduplicatedVersions: '合并重复版本' },
     migrateState: input => migrateState(input.fromVersion, input.state),
     validateState: input => validateState(input.state),

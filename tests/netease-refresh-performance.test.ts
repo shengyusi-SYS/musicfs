@@ -63,6 +63,16 @@ test('stable song details outlive temporary scans and are reused after a long ab
   expect(f.calls).toEqual({ playlist: 1 });
 });
 
+test('NetEase publishes template facts from existing song data without preparing audio', async () => {
+  const f = fixture(2); const page = await list(f.client, 'liked');
+  expect(page.items[0]).toMatchObject({ naming: { identity: JSON.stringify(['1', 'standard']),
+    fields: { id: '1', title: 'Song 1', artist: ['Artist'], album: 'Album', albumArtist: ['Artist'], track: 1, disc: 1, index: 1, quality: '标准' } } });
+  expect(f.calls).toEqual({ user: 1, playlist: 2, details: 1, playback: 1 });
+  f.reorder(); const reordered = await list(f.client, 'liked');
+  const same = reordered.items.find(entry => entry.kind === 'file' && entry.naming?.fields.id === '1');
+  expect(same?.kind === 'file' && same.naming).toMatchObject({ identity: JSON.stringify(['1', 'standard']), fields: { index: 2 } });
+});
+
 test('large NetEase scans reuse one membership and 200-track native batches across cold checkpoints', async () => {
   const f = fixture(4000, 10); f.client.ctx.fileInfo = 'required';
   const seedBatches: string[][] = []; const putMany = f.cache.putMany!;

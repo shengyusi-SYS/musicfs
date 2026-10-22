@@ -12,8 +12,12 @@ import renewalsSchema from './migrations/0007.sql' with { type: 'text' };
 import pluginCacheSchema from './migrations/0008.sql' with { type: 'text' };
 import pluginCacheIndexes from './migrations/0009.sql' with { type: 'text' };
 import refreshSchedulesSchema from './migrations/0010.sql' with { type: 'text' };
+import automaticUpdateSchema from './migrations/0013.sql' with { type: 'text' };
+import fileNamingSchema from './migrations/0014.sql' with { type: 'text' };
+import type { NamingStore } from '../../core/library/file-naming';
+import { fileNamingPoliciesSQL, fileNamingPreviewDirectorySQL, fileNamingFromRows, saveFileNamingStatement, type FileNamingRow } from './file-naming-sql';
 import type { RefreshScheduleStore } from '../../core/library/schedules';
-import { refreshScheduleSQL, nextRefreshScheduleSQL, saveRefreshScheduleStatement, claimDueRefreshScheduleStatement,
+import { updateRuleSQL, updateRulesSQL, completedUpdateRulesSQL, dueUpdateRuleSQL, nextRefreshScheduleSQL, saveUpdateRuleStatement, finishUpdateRuleStatement,
   scheduleFromRow, type RefreshScheduleRow } from './refresh-schedule-sql';
 import type { PluginCacheStore } from '../../core/sources/cache';
 import { cachedPluginDataStatement, cachedPluginDataManyStatement, cachePluginDataPlan, cachePluginDataManyPlan, cachePluginDataIfAbsentPlan } from './plugin-cache-sql';
@@ -40,8 +44,8 @@ export function openSqlite(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = db.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version;
-  if (version === undefined || version < 0 || version > 10) { db.close(); throw new Error('Unsupported MusicFS database version'); }
-  if (version < 10) db.transaction(() => {
+  if (version === undefined || version < 0 || version > 14) { db.close(); throw new Error('Unsupported MusicFS database version'); }
+  if (version < 14) db.transaction(() => {
     if (version === 0) db.exec(initialSchema);
     if (version < 2) db.exec(librarySchema);
     if (version < 3) db.exec(authenticationSchema);
@@ -51,7 +55,9 @@ export function openSqlite(path: string) {
     if (version < 7) db.exec(renewalsSchema);
     if (version < 8) db.exec(pluginCacheSchema);
     if (version < 9) db.exec(pluginCacheIndexes);
-    db.exec(refreshSchedulesSchema); db.exec('PRAGMA user_version = 10');
+    if (version < 10) db.exec(refreshSchedulesSchema);
+    if (version < 13) db.exec(automaticUpdateSchema);
+    db.exec(fileNamingSchema); db.exec('PRAGMA user_version = 14');
   })();
 
   const installation = (id: string): Installation | undefined => {
@@ -148,6 +154,13 @@ export function openSqlite(path: string) {
       return db.query('UPDATE library_layout SET revision = revision + 1, nodes = ? WHERE id = 1 AND revision = ?')
         .run(nodes === null ? null : JSON.stringify(nodes), expectedRevision).changes === 1;
     },
+    fileNamingPolicies(instanceId, directoryRef) {
+      return fileNamingFromRows(db.query<FileNamingRow, [string, string]>(fileNamingPoliciesSQL).all(instanceId, directoryRef ?? ''), directoryRef !== undefined);
+    },
+    saveFileNamingPolicy(...args) { return execute(saveFileNamingStatement(...args)).length === 1; },
+    fileNamingPreviewDirectory(instanceId) {
+      return db.query<{ ref: string }, [string]>(fileNamingPreviewDirectorySQL).get(instanceId)?.ref ?? null;
+    },
     snapshot(instanceId, key) {
       return snapshotFromRows(db.query<SnapshotEntryRow, [string, string, string]>(snapshotEntriesSQL).all(instanceId, key.kind, key.ref));
     },
@@ -169,6 +182,9 @@ export function openSqlite(path: string) {
       const results = batch<RefreshDocumentRow>(createRefreshPlan(record, replace));
       return createdRefresh(results.at(-1)!);
     },
+    createScheduledRefresh(record, claim) {
+      return refreshFromRow(batch<RefreshDocumentRow>(createRefreshPlan(record, false, claim)).at(-1)?.[0]);
+    },
     refreshRecord(operationId) {
       return refreshFromRow(db.query<RefreshDocumentRow, [string]>(refreshRecordSQL).get(operationId));
     },
@@ -185,11 +201,13 @@ export function openSqlite(path: string) {
     readyRefreshes(now, limit) {
       return db.query<{ operation_id: string }, [number, number]>(readyRefreshesSQL).all(now, limit).map(row => row.operation_id);
     },
-    refreshSchedule(instanceId, key) {
-      return scheduleFromRow(db.query<RefreshScheduleRow, [string, string, string]>(refreshScheduleSQL).get(instanceId, key.kind, key.ref));
-    },
-    saveRefreshSchedule(instanceId, key, intervalMinutes, nextRunAt) { execute(saveRefreshScheduleStatement(instanceId, key, intervalMinutes, nextRunAt)); },
-    claimDueRefreshSchedule(now) { return scheduleFromRow(execute<RefreshScheduleRow>(claimDueRefreshScheduleStatement(now))[0]); },
+    updateRule(id) { return scheduleFromRow(db.query<RefreshScheduleRow, [string]>(updateRuleSQL).get(id)); },
+    updateRules() { return db.query<RefreshScheduleRow, []>(updateRulesSQL).all().map(row => scheduleFromRow(row)!); },
+    completedUpdateRules() { return db.query<RefreshScheduleRow, []>(completedUpdateRulesSQL).all().map(row => scheduleFromRow(row)!); },
+    saveUpdateRule(rule) { return scheduleFromRow(execute<RefreshScheduleRow>(saveUpdateRuleStatement(rule))[0])!; },
+    removeUpdateRule(id) { db.query('DELETE FROM automatic_update_rules WHERE id = ?').run(id); },
+    dueUpdateRule(now) { return scheduleFromRow(db.query<RefreshScheduleRow, [number]>(dueUpdateRuleSQL).get(now)); },
+    finishUpdateRule(rule, nextRunAt) { execute(finishUpdateRuleStatement(rule, nextRunAt)); },
     nextRefreshScheduleAt() { return db.query<{ instant: number | null }, []>(nextRefreshScheduleSQL).get()?.instant ?? null; },
     nextBackgroundWorkAt() {
       // Reuse the ready predicates with an unbounded lease horizon, including
@@ -201,7 +219,7 @@ export function openSqlite(path: string) {
           WHERE operation_id IN (${readyRefreshesSQL}))`).get(Number.MAX_SAFE_INTEGER, -1, Number.MAX_SAFE_INTEGER, -1)?.instant ?? null;
     },
     close: () => db.close()
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & RefreshScheduleStore & PluginChangeStore & RenewalStore & PluginCacheStore & {
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & RefreshScheduleStore & NamingStore & PluginChangeStore & RenewalStore & PluginCacheStore & {
     close(): void; nextBackgroundWorkAt(): number | null;
   };
 }

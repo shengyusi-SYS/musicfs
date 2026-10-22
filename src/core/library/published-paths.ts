@@ -1,6 +1,7 @@
 import type { Sources, SourceStamp } from '../sources';
 import type { LibraryStore, LayoutNode, SnapshotKey } from './types';
 import { namedView } from './published-views';
+import { projectFileNames } from './file-naming';
 
 /** Map a publication to visible folders using saved snapshots only; never warm a source. */
 export async function publishedPaths(sources: Pick<Sources, 'instances'>, store: LibraryStore, stamp: SourceStamp, key: SnapshotKey): Promise<string[]> {
@@ -41,7 +42,9 @@ export async function publishedPaths(sources: Pick<Sources, 'instances'>, store:
         const snapshot = (await store.snapshot(stamp.id, { kind: 'directory', ref }))?.value;
         if (!snapshot || snapshot.kind !== 'directory' || snapshot.stamp.epoch !== stamp.epoch
           || snapshot.stamp.pluginRevision !== stamp.pluginRevision || snapshot.stamp.pluginGeneration !== stamp.pluginGeneration) return [];
-        const entries = await namedView(snapshot.items.map(entry => ({ ...entry, id: entry.entryId })));
+        const header = await store.snapshotHeader(stamp.id, { kind: 'directory', ref });
+        const entries = await namedView(projectFileNames(snapshot.items, header?.fileNamingPolicy ?? { mode: 'original' })
+          .map(entry => ({ ...entry, id: entry.entryId })));
         return entries.entries.flatMap(entry => entry.kind === 'directory' ? [{ pathName: entry.pathName, directoryRef: entry.directoryRef }] : []);
       })();
       saved.set(ref, value);

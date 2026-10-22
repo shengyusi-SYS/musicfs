@@ -3,6 +3,7 @@ import type { Entry, Page, Root } from '@musicfs/plugin-api';
 import { SourceError, type Sources, type SourceStamp } from '../sources';
 import { LibraryError, type LibraryStore, type SnapshotKey } from './types';
 import { assertInfo } from './file-info';
+import { assertEntryNaming } from './file-naming';
 import type { RefreshFailure, RefreshPage, RefreshRecord, RefreshScope, RefreshStore, RefreshTask, RefreshView, Refreshes } from './refresh-types';
 
 const active = (status: RefreshRecord['status']) => status === 'queued' || status === 'running';
@@ -31,18 +32,21 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     return project(active(record.status) && !await sources.current(record.stamp)
       ? { ...record, status: 'superseded', error: staleFailure() } : record);
   }
-  async function create(stamp: SourceStamp, scope: RefreshScope, replace: boolean): Promise<RefreshView> {
+  async function candidate(stamp: SourceStamp, scope: RefreshScope): Promise<RefreshRecord> {
     const key: SnapshotKey = scope.kind === 'instance' || scope.directoryRef === undefined ? { kind: 'roots', ref: '' }
       : { kind: 'directory', ref: scope.directoryRef };
     const date = timestamp();
     const previous = await store.currentRefresh(stamp.id);
     const cooling = previous && sameStamp(previous.stamp, stamp) && previous.error?.sourceFault?.kind === 'rate_limited'
       && (previous.retryAt ?? 0) > now() ? previous : undefined;
-    return view(await store.createRefresh({ operationId: crypto.randomUUID(), stamp, scope, status: 'queued', revision: 1,
-      leaseToken: null, leaseUntil: null, task: task(key), pending: [], seen: [],
-      known: scope.kind === 'instance' ? await store.knownDirectoryRefs(stamp.id) : [], refreshedDirectories: 0, failures: [],
+    return { operationId: crypto.randomUUID(), stamp, scope, status: 'queued', revision: 1,
+      leaseToken: null, leaseUntil: null, task: task(key), pending: [], seen: key.kind === 'directory' ? [key.ref] : [],
+      known: [], refreshedDirectories: 0, failures: [],
       createdAt: date, updatedAt: date, ...(cooling ? { retryAt: cooling.retryAt!, rateLimitRetries: cooling.rateLimitRetries ?? 0,
-        ...(cooling.error ? { error: cooling.error } : {}) } : {}) }, replace));
+        ...(cooling.error ? { error: cooling.error } : {}) } : {}) };
+  }
+  async function create(stamp: SourceStamp, scope: RefreshScope, replace: boolean): Promise<RefreshView> {
+    return view(await store.createRefresh(await candidate(stamp, scope), replace));
   }
   function appendUnique(target: string[], values: string[], seen: string[]) {
     const included = new Set([...seen, ...target]);
@@ -50,7 +54,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
   }
   function advance(record: RefreshRecord) {
     delete record.retryAt; delete record.rateLimitRetries; delete record.temporaryRetries; delete record.error;
-    if (record.scope.kind !== 'instance' || !record.pending.length) { record.status = 'completed'; return; }
+    if (!(record.scope.kind === 'instance' || record.scope.kind === 'directory' && record.scope.recursive) || !record.pending.length) { record.status = 'completed'; return; }
     if (record.seen.length >= (budgets.directories ?? 1000)) {
       record.status = 'failed'; record.error = { code: 'invalid_source', message: 'Instance refresh directory budget exceeded' }; return;
     }
@@ -95,6 +99,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
       } else if (!('entryId' in item) || !(item.kind === 'file' && typeof item.fileRef === 'string'
         || item.kind === 'directory' && typeof item.directoryRef === 'string')) throw new LibraryError('invalid_source', 'Source returned an invalid directory entry');
       if ('kind' in item && item.kind === 'file') {
+        assertEntryNaming(item);
         if (item.deferredInfo !== undefined && item.deferredInfo !== true) {
           throw new LibraryError('invalid_source', 'Source returned an invalid deferred file metadata marker');
         }
@@ -107,9 +112,9 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
     }
     current.pages++; current.entries += page.items.length;
     if (current.entries > budgets.entries) throw new LibraryError('invalid_source', 'Source entry budget exceeded');
-    if (next.scope.kind === 'instance') {
+    if (next.scope.kind === 'instance' || next.scope.kind === 'directory' && next.scope.recursive) {
       if (previous.key.kind === 'roots') appendUnique(next.pending, (page.items as Root[]).map(item => item.directoryRef), next.seen);
-      else appendUnique(current.children, (page.items as Entry[]).flatMap(item => item.kind === 'directory' && next.known.includes(item.directoryRef) ? [item.directoryRef] : []), next.seen);
+      else appendUnique(current.children, (page.items as Entry[]).flatMap(item => item.kind === 'directory' ? [item.directoryRef] : []), next.seen);
     }
     const accepted: RefreshPage = { items: page.items };
     if (page.nextCursor !== undefined) {
@@ -184,7 +189,7 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
         next.temporaryRetries = (claimed.temporaryRetries ?? 0) + 1; next.error = failureOf(error);
         const saved = checkpoint(claimed, next);
         return await store.commitRefresh(claimed, saved) === 'stale' ? superseded(claimed) : project(saved);
-      } else if (claimed.scope.kind === 'instance' && claimed.task?.key.kind === 'directory') {
+      } else if ((claimed.scope.kind === 'instance' || claimed.scope.kind === 'directory' && claimed.scope.recursive) && claimed.task?.key.kind === 'directory') {
         next.failures.push({ directoryRef: claimed.task.key.ref, error: failureOf(error) });
         advance(next);
       } else { next.status = 'failed'; next.error = failureOf(error); }
@@ -202,6 +207,11 @@ export function createRefreshes(sources: Sources, store: LibraryStore & RefreshS
       return create(stamp, scope, true);
     },
     ensure: (stamp, key) => create(stamp, { kind: 'directory', ...(key.kind === 'directory' ? { directoryRef: key.ref } : {}) }, false),
+    async ensureScheduled(stamp, scope, claim) {
+      if (!store.createScheduledRefresh) throw new Error('Scheduled refreshes require persistent storage');
+      const record = await store.createScheduledRefresh(await candidate(stamp, scope), claim);
+      return record ? view(record) : null;
+    },
     ensureFileInfo: (stamp, directoryRef) => create(stamp, { kind: 'file-info', directoryRef }, false),
     get: async operationId => { const record = await store.refreshRecord(operationId); return record ? view(record) : null; },
     current: async instanceId => { const record = await store.currentRefresh(instanceId); return record ? view(record) : null; },

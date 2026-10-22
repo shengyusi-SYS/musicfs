@@ -44,8 +44,9 @@ export default function createWorker(registrations: RegisteredPlugin[]) {
       if (await changes.stepNext(signal)) return;
       // The native scheduler is a slow fallback when no management page is open.
       const { library } = runtime(env.DB);
-      if (await library.refreshes.stepNext(signal)) return;
-      await library.schedules.stepNext(signal);
+      // Link overlapping due rules before advancing catalogue work.
+      if (await library.schedules.stepNext(signal)) return;
+      await library.refreshes.stepNext(signal);
     }
   };
 }

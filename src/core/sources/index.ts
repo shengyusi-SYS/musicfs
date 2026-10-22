@@ -172,7 +172,8 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
     async configuration(pluginId: string) {
       const plugin = (await registry.get(pluginId)).module;
       return { configuration: plugin.configuration, authentication: typeof plugin.authenticate === 'function',
-        metadataRefresh: plugin.metadataRefresh === true, ...(plugin.statistics ? { statistics: plugin.statistics } : {}) };
+        metadataRefresh: plugin.metadataRefresh === true, ...(plugin.statistics ? { statistics: plugin.statistics } : {}),
+        ...(plugin.naming ? { naming: plugin.naming } : {}) };
     },
     async view(id: string): Promise<SourceStamp> {
       const captured = await store.capture(id);

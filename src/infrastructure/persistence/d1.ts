@@ -5,7 +5,9 @@ import type { AuthenticationRecord, Instance, InstanceStore, SourceStamp } from 
 import type { LayoutNode, LibraryStore } from '../../core/library/types';
 import type { RefreshStore } from '../../core/library/refresh-types';
 import type { RefreshScheduleStore } from '../../core/library/schedules';
-import { refreshScheduleSQL, nextRefreshScheduleSQL, saveRefreshScheduleStatement, claimDueRefreshScheduleStatement,
+import type { NamingStore } from '../../core/library/file-naming';
+import { fileNamingPoliciesSQL, fileNamingPreviewDirectorySQL, fileNamingFromRows, saveFileNamingStatement, type FileNamingRow } from './file-naming-sql';
+import { updateRuleSQL, updateRulesSQL, completedUpdateRulesSQL, dueUpdateRuleSQL, nextRefreshScheduleSQL, saveUpdateRuleStatement, finishUpdateRuleStatement,
   scheduleFromRow, type RefreshScheduleRow } from './refresh-schedule-sql';
 import type { PluginChangeStore } from '../../application/change-plugin';
 import type { RenewalStore } from '../../core/sources/renewal';
@@ -140,6 +142,14 @@ export function createD1Store(db: D1Database) {
         .bind(nodes === null ? null : JSON.stringify(nodes), expectedRevision).run();
       return result.meta.changes === 1;
     },
+    async fileNamingPolicies(instanceId, directoryRef) {
+      const rows = await db.prepare(fileNamingPoliciesSQL).bind(instanceId, directoryRef ?? '').all<FileNamingRow>();
+      return fileNamingFromRows(rows.results, directoryRef !== undefined);
+    },
+    async saveFileNamingPolicy(...args) { return await prepare(saveFileNamingStatement(...args)).first() !== null; },
+    async fileNamingPreviewDirectory(instanceId) {
+      return (await db.prepare(fileNamingPreviewDirectorySQL).bind(instanceId).first<{ ref: string }>())?.ref ?? null;
+    },
     async snapshot(instanceId, key) {
       const rows = await db.prepare(snapshotEntriesSQL).bind(instanceId, key.kind, key.ref).all<SnapshotEntryRow>();
       return snapshotFromRows(rows.results);
@@ -166,6 +176,10 @@ export function createD1Store(db: D1Database) {
       const results = await db.batch<RefreshDocumentRow>(createRefreshPlan(record, replace).map(prepare));
       return createdRefresh(results.at(-1)!.results);
     },
+    async createScheduledRefresh(record, claim) {
+      const results = await db.batch<RefreshDocumentRow>(createRefreshPlan(record, false, claim).map(prepare));
+      return refreshFromRow(results.at(-1)?.results[0]);
+    },
     async refreshRecord(operationId) {
       return refreshFromRow(await db.prepare(refreshRecordSQL).bind(operationId).first<RefreshDocumentRow>());
     },
@@ -184,11 +198,13 @@ export function createD1Store(db: D1Database) {
       const rows = await db.prepare(readyRefreshesSQL).bind(now, limit).all<{ operation_id: string }>();
       return rows.results.map(row => row.operation_id);
     },
-    async refreshSchedule(instanceId, key) {
-      return scheduleFromRow(await db.prepare(refreshScheduleSQL).bind(instanceId, key.kind, key.ref).first<RefreshScheduleRow>());
-    },
-    async saveRefreshSchedule(instanceId, key, intervalMinutes, nextRunAt) { await prepare(saveRefreshScheduleStatement(instanceId, key, intervalMinutes, nextRunAt)).run(); },
-    async claimDueRefreshSchedule(now) { return scheduleFromRow(await prepare(claimDueRefreshScheduleStatement(now)).first<RefreshScheduleRow>()); },
+    async updateRule(id) { return scheduleFromRow(await db.prepare(updateRuleSQL).bind(id).first<RefreshScheduleRow>()); },
+    async updateRules() { const result = await db.prepare(updateRulesSQL).all<RefreshScheduleRow>(); return result.results.map(row => scheduleFromRow(row)!); },
+    async completedUpdateRules() { const result = await db.prepare(completedUpdateRulesSQL).all<RefreshScheduleRow>(); return result.results.map(row => scheduleFromRow(row)!); },
+    async saveUpdateRule(rule) { return scheduleFromRow(await prepare(saveUpdateRuleStatement(rule)).first<RefreshScheduleRow>())!; },
+    async removeUpdateRule(id) { await db.prepare('DELETE FROM automatic_update_rules WHERE id = ?').bind(id).run(); },
+    async dueUpdateRule(now) { return scheduleFromRow(await db.prepare(dueUpdateRuleSQL).bind(now).first<RefreshScheduleRow>()); },
+    async finishUpdateRule(rule, nextRunAt) { await prepare(finishUpdateRuleStatement(rule, nextRunAt)).run(); },
     async nextRefreshScheduleAt() { return (await db.prepare(nextRefreshScheduleSQL).first<{ instant: number | null }>())?.instant ?? null; }
-  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & RefreshScheduleStore & PluginChangeStore & RenewalStore & PluginCacheStore;
+  } satisfies InstallationStore & InstanceStore & LibraryStore & RefreshStore & RefreshScheduleStore & NamingStore & PluginChangeStore & RenewalStore & PluginCacheStore;
 }

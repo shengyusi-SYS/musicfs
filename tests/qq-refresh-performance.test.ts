@@ -89,6 +89,8 @@ test('QQ hot refresh batches small ready indexes without loading metadata or lar
   const warmStart = f.costs.length;
   f.reset(); const warm = await scan(f);
   expect(warm.items).toEqual(cold.items); expect(warm.items).toHaveLength(20);
+  expect(warm.items[0]).toMatchObject({ naming: { identity: JSON.stringify(['song1', '128']),
+    fields: { id: 'song1', title: 'Song 1', artist: ['Artist'], album: 'Album', track: 1, disc: 1, index: 1, quality: '128k' } } });
   expect(cold.pages).toBe(5); expect(warm.pages).toBe(1);
   expect(f.calls).toEqual({ playlist: 1, playback: 6, probe: 20 });
   expect(f.reads).toEqual({ getMany: 6 }); expect(f.planBytes).toBe(0);

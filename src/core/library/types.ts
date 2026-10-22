@@ -1,5 +1,6 @@
 import type { ByteRange, Entry, FileInfo, PluginFault, ReadResult, Root } from '@musicfs/plugin-api';
 import type { SourceStamp } from '../sources';
+import type { FileNamingPolicy } from '../../contracts/file-naming';
 
 export type LayoutNode = { id: string; name: string } & (
   | { kind: 'group'; children: LayoutNode[] }
@@ -13,14 +14,18 @@ export type Snapshot = { stamp: SourceStamp; id: string; completedAt: string; co
   | { kind: 'directory'; items: Entry[] }
 );
 export type DirectoryStatus = { completedAt: string; statistics: Record<string, number> | null; error: string | null; pendingFileInfo?: number };
+/** Display settings travel with the existing header query, never with immutable source snapshots. */
+export type PublishedHeader = Omit<Snapshot, 'items'> & { error: string | null; fileNamingPolicy?: FileNamingPolicy };
 export type InstanceRefresh = { refreshedDirectories: number; failures: { directoryRef: string; error: { code: string; message: string; sourceFault?: PluginFault } }[] };
 type Stored<T> = T | Promise<T>;
 export interface LibraryStore {
   layout(): Stored<Layout>;
   saveLayout(expectedRevision: number, nodes: LayoutNode[] | null): Stored<boolean>;
   snapshot(instanceId: string, key: SnapshotKey): Stored<{ value: Snapshot | null; error: string | null } | undefined>;
-  snapshotHeader(instanceId: string, key: SnapshotKey): Stored<(Omit<Snapshot, 'items'> & { error: string | null }) | null>;
+  snapshotHeader(instanceId: string, key: SnapshotKey): Stored<PublishedHeader | null>;
   knownDirectoryRefs(instanceId: string): Stored<string[]>;
+  /** Management preview only: select one already published file directory without warming a source. */
+  fileNamingPreviewDirectory?(instanceId: string): Stored<string | null>;
 }
 
 export type DirectoryInfo = { kind: 'directory'; path: string; name: string; etag: string; modifiedAt: string };

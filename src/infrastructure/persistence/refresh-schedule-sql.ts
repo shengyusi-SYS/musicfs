@@ -1,27 +1,43 @@
 import type { RefreshSchedule } from '../../core/library/schedules';
-import type { SnapshotKey } from '../../core/library/types';
-import type { SqlStatement } from './refresh-sql';
+import type { UpdateRuleInput } from '../../contracts/refresh-policy';
+import { updateScopeCoveredSQL, type SqlStatement } from './refresh-sql';
 
-export type RefreshScheduleRow = { instance_id: string; kind: SnapshotKey['kind']; ref: string; interval_minutes: number; next_run_at: number };
+export type RefreshScheduleRow = { id: string; instance_id: string; target: string; timing: string; label: string | null;
+  enabled: number; revision: number; next_run_at: number | null; operation_id: string | null; last_run_at: number | null; settled: number };
 export const scheduleFromRow = (row: RefreshScheduleRow | null | undefined): RefreshSchedule | null => row ? {
-  instanceId: row.instance_id, key: { kind: row.kind, ref: row.ref }, intervalMinutes: row.interval_minutes, nextRunAt: row.next_run_at
+  id: row.id, instanceId: row.instance_id, target: JSON.parse(row.target) as UpdateRuleInput['target'],
+  timing: JSON.parse(row.timing) as UpdateRuleInput['timing'], label: row.label, enabled: row.enabled === 1,
+  revision: row.revision, nextRunAt: row.next_run_at, operationId: row.operation_id, lastRunAt: row.last_run_at, settled: row.settled === 1
 } : null;
-const eligible = `FROM refresh_schedules s JOIN instances i ON i.id = s.instance_id
+
+const activeCurrent = `r.instance_id = s.instance_id AND r.status IN ('queued', 'running')
+  AND r.source_epoch = i.epoch AND r.plugin_revision = p.revision AND r.plugin_generation = p.generation`;
+const eligible = `FROM automatic_update_rules s JOIN instances i ON i.id = s.instance_id
   JOIN installations p ON p.id = i.plugin_id AND p.status = 'active'
-  WHERE NOT EXISTS (SELECT 1 FROM library_refresh_jobs r WHERE r.instance_id = s.instance_id
-    AND r.status IN ('queued', 'running') AND r.source_epoch = i.epoch AND r.plugin_revision = p.revision
-    AND r.plugin_generation = p.generation)`;
-export const refreshScheduleSQL = 'SELECT * FROM refresh_schedules WHERE instance_id = ? AND kind = ? AND ref = ?';
+  WHERE s.enabled = 1 AND s.next_run_at IS NOT NULL AND (
+    NOT EXISTS (SELECT 1 FROM library_refresh_jobs r WHERE ${activeCurrent}) OR
+    EXISTS (SELECT 1 FROM library_refresh_jobs r WHERE ${activeCurrent} AND ${updateScopeCoveredSQL()}))`;
+export const updateRuleSQL = 'SELECT * FROM automatic_update_rules WHERE id = ?';
+export const updateRulesSQL = 'SELECT * FROM automatic_update_rules ORDER BY rowid';
+export const completedUpdateRulesSQL = `SELECT s.* FROM automatic_update_rules s
+  LEFT JOIN library_refresh_jobs r ON r.operation_id = s.operation_id
+  LEFT JOIN instances i ON i.id = s.instance_id LEFT JOIN installations p ON p.id = i.plugin_id
+  WHERE s.settled = 0 AND (r.operation_id IS NULL OR r.status NOT IN ('queued', 'running')
+    OR p.id IS NULL OR p.status != 'active' OR r.source_epoch != i.epoch
+    OR r.plugin_revision != p.revision OR r.plugin_generation != p.generation)`;
 export const nextRefreshScheduleSQL = `SELECT MIN(s.next_run_at) AS instant ${eligible}`;
-export function saveRefreshScheduleStatement(instanceId: string, key: SnapshotKey, intervalMinutes: number, nextRunAt: number): SqlStatement {
-  return intervalMinutes === 0
-    ? { sql: 'DELETE FROM refresh_schedules WHERE instance_id = ? AND kind = ? AND ref = ?', values: [instanceId, key.kind, key.ref] }
-    : { sql: `INSERT INTO refresh_schedules (instance_id, kind, ref, interval_minutes, next_run_at) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(instance_id, kind, ref) DO UPDATE SET interval_minutes = excluded.interval_minutes, next_run_at = excluded.next_run_at`,
-      values: [instanceId, key.kind, key.ref, intervalMinutes, nextRunAt] };
+export const dueUpdateRuleSQL = `SELECT s.* ${eligible} AND s.next_run_at <= ? ORDER BY s.next_run_at, s.rowid LIMIT 1`;
+export function saveUpdateRuleStatement(rule: RefreshSchedule): SqlStatement {
+  return { sql: `INSERT INTO automatic_update_rules
+    (id, instance_id, target, timing, label, enabled, revision, next_run_at, operation_id, last_run_at, settled)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET instance_id = excluded.instance_id, target = excluded.target, timing = excluded.timing,
+      label = excluded.label, enabled = excluded.enabled, revision = automatic_update_rules.revision + 1,
+      next_run_at = excluded.next_run_at, operation_id = excluded.operation_id, last_run_at = excluded.last_run_at, settled = excluded.settled
+    RETURNING *`, values: [rule.id, rule.instanceId, JSON.stringify(rule.target), JSON.stringify(rule.timing), rule.label,
+    rule.enabled ? 1 : 0, rule.revision, rule.nextRunAt, rule.operationId, rule.lastRunAt, rule.settled ? 1 : 0] };
 }
-export function claimDueRefreshScheduleStatement(now: number): SqlStatement {
-  return { sql: `UPDATE refresh_schedules SET next_run_at = ? + interval_minutes * 60000
-    WHERE rowid = (SELECT s.rowid ${eligible} AND s.next_run_at <= ? ORDER BY s.next_run_at, s.rowid LIMIT 1)
-    RETURNING *`, values: [now, now] };
+export function finishUpdateRuleStatement(rule: RefreshSchedule, nextRunAt: number | null): SqlStatement {
+  return { sql: `UPDATE automatic_update_rules SET next_run_at = ?, settled = 1
+    WHERE id = ? AND revision = ? AND operation_id = ? AND settled = 0`, values: [nextRunAt, rule.id, rule.revision, rule.operationId] };
 }

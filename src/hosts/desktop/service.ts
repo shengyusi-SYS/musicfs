@@ -35,7 +35,12 @@ export async function createDesktopService(input: { directory: string; adminToke
       const saved = database.commitRefresh(...args); if (saved === 'committed') wake(); return saved;
     },
     cancelRefresh(...args: Parameters<typeof database.cancelRefresh>) { database.cancelRefresh(...args); wake(); },
-    saveRefreshSchedule(...args: Parameters<typeof database.saveRefreshSchedule>) { database.saveRefreshSchedule(...args); wake(); },
+    createScheduledRefresh(...args: Parameters<typeof database.createScheduledRefresh>) {
+      const saved = database.createScheduledRefresh(...args); if (saved) wake(); return saved;
+    },
+    saveUpdateRule(...args: Parameters<typeof database.saveUpdateRule>) { const saved = database.saveUpdateRule(...args); wake(); return saved; },
+    removeUpdateRule(...args: Parameters<typeof database.removeUpdateRule>) { database.removeUpdateRule(...args); wake(); },
+    finishUpdateRule(...args: Parameters<typeof database.finishUpdateRule>) { database.finishUpdateRule(...args); wake(); },
     createChange(...args: Parameters<typeof database.createChange>) {
       const saved = database.createChange(...args); if (saved) wake(); return saved;
     },
@@ -62,6 +67,13 @@ export async function createDesktopService(input: { directory: string; adminToke
   }, host.registry);
   const library = createLibrary(sources, { ...store,
     saveLayout(...args: Parameters<typeof store.saveLayout>) { const saved = store.saveLayout(...args); if (saved) refreshMounts(); return saved; },
+    saveFileNamingPolicy(...args: Parameters<typeof store.saveFileNamingPolicy>) {
+      const saved = store.saveFileNamingPolicy(...args);
+      if (saved && input.mounts) void sources.view(args[0]).then(stamp => publishedPaths(sources, store, stamp,
+        args[1] === undefined ? { kind: 'roots', ref: '' } : { kind: 'directory', ref: args[1] }))
+        .then(paths => input.mounts!.refreshLocal(paths)).catch(() => console.error('MusicFS: renamed folder notification failed.'));
+      return saved;
+    },
     commitRefresh(...args: Parameters<typeof store.commitRefresh>) {
       const task = input.mounts && args[2]?.publish ? args[0].task : null;
       const previousId = task ? store.snapshotHeader(args[0].stamp.id, task.key)?.id : undefined;
@@ -81,7 +93,7 @@ export async function createDesktopService(input: { directory: string; adminToke
   const background = createDesktopRunner(async signal => {
     const changed = await changes.stepNext(signal);
     if (changed) return true;
-    return Boolean(await library.refreshes.stepNext(signal) || await library.schedules.stepNext(signal));
+    return Boolean(await library.schedules.stepNext(signal) || await library.refreshes.stepNext(signal));
   }, async () => {
     const instants = [store.nextBackgroundWorkAt(), await library.schedules.nextAt()].filter((value): value is number => value !== null);
     return instants.length ? Math.min(...instants) : null;

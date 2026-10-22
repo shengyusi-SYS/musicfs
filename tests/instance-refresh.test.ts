@@ -38,15 +38,17 @@ async function setup() {
   return { ...f, source, content, calls, failures, api: createApi('fixture-admin', fetcher), http, finish };
 }
 
-test('the WebUI refresh action updates cached song directories, with new child directories left lazy', async () => {
+test('the WebUI full-instance refresh updates cached songs and discovers unvisited child directories', async () => {
   const f = await setup();
   const path = '/实例 & #/集合/已浏览';
   expect((await f.library.files.list(path, signal())).map(item => item.name)).toEqual(['old.wav']);
-  f.content.set('cached', [file('new.wav')]); f.calls.length = 0;
+  f.content.set('cached', [file('new.wav')]); f.content.set('lazy', [file('newly-discovered.wav')]); f.calls.length = 0;
   await f.finish(await f.api.startRefresh(f.id, { kind: 'instance' }));
   expect((await f.library.files.list(path, signal())).map(item => item.name)).toEqual(['new.wav']);
-  expect(f.calls).toEqual(['collection', 'cached']);
-  expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'lazy' })).toBeUndefined();
+  expect(f.calls).toEqual(['collection', 'cached', 'lazy']);
+  expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'lazy' })?.value?.items).toEqual([file('newly-discovered.wav')]);
+  expect((await f.library.files.list('/实例 & #/集合/lazy', signal())).map(item => item.name)).toEqual(['newly-discovered.wav']);
+  expect(f.calls).toEqual(['collection', 'cached', 'lazy']);
 });
 
 test('instance refresh reports partial failure, keeps last complete content and never rewrites the layout', async () => {
@@ -54,9 +56,11 @@ test('instance refresh reports partial failure, keeps last complete content and 
   await f.library.files.list('/实例 & #/集合/已浏览', signal());
   const before = f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' });
   const layout = await f.library.saveLayout(0, [{ kind: 'source', id: 'export', name: '我的导出', instanceId: f.id, sourceId: 'collection' }]);
-  f.failures.add('cached'); f.content.set('collection', [directory('cached', '已浏览'), directory('new')]);
+  f.failures.add('cached'); f.content.set('collection', [directory('cached', '已浏览'), directory('new')]); f.calls.length = 0;
   const result = await f.finish(await f.api.startRefresh(f.id, { kind: 'instance' }));
-  expect(result).toMatchObject({ refreshedDirectories: 1, failures: [{ directoryRef: 'cached', error: { code: 'source_failed', sourceFault: { kind: 'unavailable' } } }] });
+  expect(result).toMatchObject({ refreshedDirectories: 2, failures: [{ directoryRef: 'cached', error: { code: 'source_failed', sourceFault: { kind: 'unavailable' } } }] });
+  expect(f.calls).toEqual(['collection', 'cached', 'new']);
+  expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'new' })?.value?.items).toEqual([]);
   expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' })?.value).toEqual(before?.value);
   expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'cached' })?.error).toBe('unavailable');
   expect(await f.library.layout()).toEqual(layout);
@@ -145,13 +149,15 @@ test('instance refresh skips unreachable old snapshots, isolates instances and v
   const f = await setup();
   await f.library.files.list('/实例 & #/集合/已浏览', signal());
   await f.library.refresh(f.id, 'removed', signal());
+  const unreachableSnapshot = f.store.snapshot(f.id, { kind: 'directory', ref: 'removed' });
   const other = await f.sources.create('org.musicfs.sample', '另一个实例', {}, signal());
   if (!other.ok) throw new Error('Fixture creation failed');
   await f.library.refresh(other.value.id, 'cached', signal());
   const otherSnapshot = f.store.snapshot(other.value.id, { kind: 'directory', ref: 'cached' });
   f.content.set('cached', [directory('collection')]); f.calls.length = 0;
-  expect(await f.finish(await f.api.startRefresh(f.id, { kind: 'instance' }))).toMatchObject({ status: 'completed', refreshedDirectories: 2, failures: [] });
-  expect(f.calls).toEqual(['collection', 'cached']);
+  expect(await f.finish(await f.api.startRefresh(f.id, { kind: 'instance' }))).toMatchObject({ status: 'completed', refreshedDirectories: 3, failures: [] });
+  expect(f.calls).toEqual(['collection', 'cached', 'lazy']);
+  expect(f.store.snapshot(f.id, { kind: 'directory', ref: 'removed' })).toEqual(unreachableSnapshot);
   expect(f.store.snapshot(other.value.id, { kind: 'directory', ref: 'cached' })).toEqual(otherSnapshot);
 });
 

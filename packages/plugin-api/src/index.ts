@@ -68,11 +68,19 @@ export interface Configuration {
   ui?: { order?: string[]; widgets?: Record<string, 'password' | 'textarea' | 'uri'> };
 }
 
+/** Optional display facts obtained during listing, independent of fileRef and audio bytes.
+ * Conventional music fields: title, artist (string[]), album, albumArtist (string[]),
+ * track, disc, index (one-based directory order), quality, id. Other sources may declare their own fields.
+ */
+export type FileNamingFacts = { identity: string; fields: Record<string, string | number | string[]> };
+
 export type Entry =
   | { kind: 'directory'; entryId: string; name: string; directoryRef: string }
   | { kind: 'file'; entryId: string; name: string; fileRef: string;
       /** Complete metadata for these exact bytes, never a size hint or a temporary locator. */
       info?: FileInfo;
+      /** identity excludes global directory position; repeated occurrences are allocated by the host. */
+      naming?: FileNamingFacts;
       /** Opt in to background preparation for bulk attributes. Single stat/open still resolve this file on demand. */
       deferredInfo?: true };
 export type Root = { sourceId: string; name: string; directoryRef: string };
@@ -106,6 +114,8 @@ export interface SourcePlugin {
   metadataRefresh?: true;
   /** Optional display labels for counters reported by this plugin's pages. */
   statistics?: Record<string, string>;
+  /** Optional template field labels. Listing already owns these facts; naming must not fetch audio or extra metadata. */
+  naming?: { fields: Record<string, string> };
   validateConfig(ctx: Context, candidate: Json): Promise<Outcome<Json>>;
   roots(ctx: Context, cursor?: string): Promise<Outcome<Page<Root>>>;
   list(ctx: Context, directory: string, cursor?: string): Promise<Outcome<Page<Entry>>>;

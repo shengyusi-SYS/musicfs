@@ -43,7 +43,7 @@ for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9]) test(`version-${version} data
     expect(current.layout()).toEqual({ revision: 0, nodes: null }); expect(current.saveLayout(0, [])).toBe(true); current.close();
     current = openSqlite(path); expect(current.layout()).toEqual({ revision: 1, nodes: [] }); expect(current.instances()).toHaveLength(1); current.close();
     const migrated = new Database(path);
-    expect(migrated.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version).toBe(10);
+    expect(migrated.query<{ user_version: number }, []>('PRAGMA user_version').get()?.user_version).toBe(14);
     if (version >= 8) {
       expect(migrated.query<{ document: string }, []>('SELECT document FROM source_plugin_cache').get()?.document).toBe('{"retained":true}');
       const cleanup = cachePluginDataPlan({ id: 'instance', pluginId: 'legacy', epoch: 1, pluginRevision: 'old', pluginGeneration: 1 }, 'probe', 'null', null, 1000)[0]!;

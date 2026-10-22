@@ -6,7 +6,7 @@ export type PluginInstallation = { manifest: PluginManifest; revision: string; g
 export type PluginInspection = { manifest: PluginManifest; revision: string;
   compatibility: { host: HostKind; apiVersion: string; apiCompatible: boolean; hostCompatible: boolean } };
 export type SourceInstance = { id: string; pluginId: string; name: string; config: Json; epoch: number };
-export type SourceConfiguration = { configuration: Configuration; authentication: boolean; metadataRefresh?: boolean; statistics?: Record<string, string> };
+export type SourceConfiguration = { configuration: Configuration; authentication: boolean; metadataRefresh?: boolean; statistics?: Record<string, string>; naming?: { fields: Record<string, string> } };
 export type LayoutNode = { id: string; name: string } & (
   | { kind: 'group'; children: LayoutNode[] }
   | { kind: 'source'; instanceId: string; sourceId: string }

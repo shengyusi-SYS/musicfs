@@ -1,6 +1,6 @@
 import type { PluginFault, WorkProgress } from '@musicfs/plugin-api';
 
-export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string }
+export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string; recursive?: boolean }
   | { kind: 'file-info' | 'metadata'; directoryRef: string };
 export type RefreshView = {
   operationId: string; instanceId: string; scope: RefreshScope;

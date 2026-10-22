@@ -2,7 +2,7 @@ import type { Entry, Root, WorkProgress } from '@musicfs/plugin-api';
 import type { SourceStamp } from '../sources';
 import type { InstanceRefresh, Snapshot, SnapshotKey } from './types';
 
-export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string }
+export type RefreshScope = { kind: 'instance' } | { kind: 'directory'; directoryRef?: string; recursive?: boolean }
   | { kind: 'file-info' | 'metadata'; directoryRef: string };
 export type RefreshFailure = InstanceRefresh['failures'][number]['error'];
 export type RefreshStatus = 'queued' | 'running' | 'completed' | 'failed' | 'superseded' | 'cancelled';
@@ -31,11 +31,14 @@ export type RefreshRecord = {
 export type SnapshotHeader = Pick<Snapshot, 'stamp' | 'id' | 'kind' | 'completedAt' | 'contentModifiedAt' | 'statistics' | 'pendingFileInfo'>;
 export type RefreshPage = { items: (Root | Entry)[]; nextCursor?: string; publish?: SnapshotHeader };
 type Stored<T> = T | Promise<T>;
+export type ScheduleClaim = { ruleId: string; revision: number; now: number; manual?: boolean };
 
 /** All changes check the source stamp and lease/revision inside the database. */
 export interface RefreshStore {
   /** Reuse an active same-instance job for an ordinary miss; explicit refresh replaces it. */
   createRefresh(record: RefreshRecord, replace: boolean): Stored<RefreshRecord>;
+  /** Atomically associate this exact target with durable work without consuming unrelated active work. */
+  createScheduledRefresh?(record: RefreshRecord, claim: ScheduleClaim): Stored<RefreshRecord | null>;
   refreshRecord(operationId: string): Stored<RefreshRecord | null>;
   currentRefresh(instanceId: string): Stored<RefreshRecord | null>;
   claimRefresh(operationId: string, token: string, now: number, until: number): Stored<RefreshRecord | null>;
@@ -54,6 +57,7 @@ export interface Refreshes {
   /** An ordinary cache miss reuses work instead of replacing it. */
   ensure(stamp: SourceStamp, key: SnapshotKey): Promise<RefreshView>;
   /** Prepare complete file properties through the same paged directory refresh. */
+  ensureScheduled(stamp: SourceStamp, scope: RefreshScope, claim: ScheduleClaim): Promise<RefreshView | null>;
   ensureFileInfo(stamp: SourceStamp, directoryRef: string): Promise<RefreshView>;
   /** At most one plugin page; the host decides when a separate invocation runs. */
   stepNext(signal: AbortSignal): Promise<RefreshView | null>;

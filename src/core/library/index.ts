@@ -4,6 +4,8 @@ import type { Sources, SourceStamp } from '../sources';
 import { createPublishedViews, namedView, type NamedView, type PublishedViewLimits } from './published-views';
 import { createRefreshes } from './refresh';
 import { createRefreshSchedules, type RefreshScheduleStore } from './schedules';
+import { createFileNaming, parseFileNamingPolicy, projectFileNames, type NamingStore } from './file-naming';
+import type { FileNamingPreview } from '../../contracts/file-naming';
 import { assertInfo } from './file-info';
 import type { RefreshScope, RefreshStore, RefreshView } from './refresh-types';
 import { LibraryError, PendingRefreshError, type Description, type FileDescription, type FileView, type LayoutNode,
@@ -92,11 +94,11 @@ type Target =
   | { kind: 'source'; instanceId: string; sourceId: string }
   | { kind: 'directory'; stamp: SourceStamp; ref: string }
   | { kind: 'file'; stamp: SourceStamp; ref: string; info?: FileInfo; deferredDirectory?: string };
-type Child = { id: string; name: string; target: Target; modifiedAt: string };
+type Child = { id: string; name: string; target: Target; modifiedAt: string; namingIdentity?: string };
 type Resolved = { target: Target; name: string; path: string; modifiedAt: string };
 type MetadataGroup = { stamp: SourceStamp; entries: [ViewEntry, Resolved][] };
 
-export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore & Partial<RefreshScheduleStore>,
+export function createLibrary(sources: Sources, store: LibraryStore & RefreshStore & Partial<RefreshScheduleStore & NamingStore>,
   budgets: { pages: number; entries: number; directories?: number } = { pages: 10_000, entries: 100_000 },
   options: { execution?: 'inline' | 'deferred'; sha256?: (bytes: Uint8Array) => string | Promise<string>; now?: () => number;
     publishedViews?: PublishedViewLimits } = {}) {
@@ -104,6 +106,17 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   const digest = (value: unknown) => hash(new TextEncoder().encode(JSON.stringify(value)));
   const refreshes = createRefreshes(sources, store, budgets, options.now);
   const schedules = createRefreshSchedules(sources, refreshes, store, options.now);
+  const naming = createFileNaming({
+    fileNamingPolicies: (instanceId, directoryRef) => store.fileNamingPolicies?.(instanceId, directoryRef)
+      ?? { instance: { revision: 0, policy: null }, directory: null },
+    saveFileNamingPolicy: (...args) => {
+      if (!store.saveFileNamingPolicy) throw new LibraryError('invalid_source', '当前存储不支持保存命名设置。');
+      return store.saveFileNamingPolicy(...args);
+    }
+  }, async instanceId => {
+    const stamp = await sources.view(instanceId);
+    return (await sources.configuration(stamp.pluginId)).naming?.fields ?? {};
+  });
   async function drain(initial: RefreshView, signal: AbortSignal): Promise<RefreshView> {
     let progress = initial;
     try {
@@ -151,12 +164,13 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       // Read this key again; never return that other directory as this result.
     }
   }
-  const publishedViews = createPublishedViews<Child>(store, snapshot, (value, key) => {
+  const publishedViews = createPublishedViews<Child>(store, snapshot, (value, key, policy) => {
     const modifiedAt = value.contentModifiedAt ?? value.completedAt;
     return value.kind === 'roots'
       ? value.items.map(root => ({ id: root.sourceId, name: root.name, modifiedAt,
         target: { kind: 'directory', stamp: value.stamp, ref: root.directoryRef } }))
-      : value.items.map(entry => ({ id: entry.entryId, name: entry.name,
+      : projectFileNames(value.items, policy).map(entry => ({ id: entry.entryId, name: entry.name,
+        ...(entry.namingIdentity === undefined ? {} : { namingIdentity: entry.namingIdentity }),
         modifiedAt: entry.kind === 'file' ? entry.info?.modifiedAt ?? modifiedAt : modifiedAt,
         target: entry.kind === 'directory' ? { kind: 'directory', stamp: value.stamp, ref: entry.directoryRef }
           : { kind: 'file', stamp: value.stamp, ref: entry.fileRef, ...(entry.info === undefined ? {} : { info: entry.info }),
@@ -345,6 +359,21 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     files,
     refreshes,
     schedules,
+    naming: {
+      get: naming.get,
+      set: naming.set,
+      async preview(instanceId: string, directoryRef: string | undefined, input: unknown): Promise<FileNamingPreview> {
+        const settings = await naming.get(instanceId, directoryRef);
+        const policy = parseFileNamingPolicy(input, settings.fields)
+          ?? (directoryRef === undefined ? { mode: 'original' as const } : (await naming.get(instanceId)).effectivePolicy);
+        const ref = directoryRef ?? await store.fileNamingPreviewDirectory?.(instanceId) ?? undefined;
+        if (ref === undefined) return { items: [], total: 0, changed: 0, missingFields: [] };
+        const stamp = await sources.view(instanceId);
+        const saved = (await store.snapshot(instanceId, { kind: 'directory', ref }))?.value;
+        if (!saved || saved.kind !== 'directory' || !sameStamp(saved.stamp, stamp)) return { items: [], total: 0, changed: 0, missingFields: [], directoryRef: ref };
+        return { ...await naming.preview(saved.items, policy, 20, settings.effectivePolicy), directoryRef: ref };
+      }
+    },
     refreshInstance,
     directoryStatus: async (instanceId: string, directoryRef: string) => publishedStatus(await sources.view(instanceId), directoryRef),
     async browseDirectory(path: string, signal: AbortSignal) {

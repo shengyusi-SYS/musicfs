@@ -89,8 +89,17 @@ export async function preparePage(client: QqClient, songs: Song[], offset: numbe
                 }
                 file = await pending;
               }
+              const album = object(item.song.album); const albumArtists = album.singer ?? album.singers;
+              const albumArtist = Array.isArray(albumArtists) ? albumArtists.map(value => object(value).name ?? object(value).singername)
+                .filter((value): value is string => typeof value === 'string' && !!value) : [];
+              const positive = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : undefined;
+              const track = positive(item.song.index_album); const disc = positive(item.song.index_cd);
               files.push({ kind: 'file', entryId: `${item.position}:${item.song.mid}:${candidate.variant.quality}`,
                 name: `${String(item.position + 1).padStart(4, '0')} - ${item.song.title} - ${item.song.singer.map(artist => artist.name).join('、')} [${formats[candidate.variant.quality].label}]${MUSIC_FILE_TYPES[candidate.variant.quality].extension}`,
+                naming: { identity: JSON.stringify([item.song.mid, candidate.variant.quality]), fields: { title: item.song.title,
+                  artist: item.song.singer.map(artist => artist.name), ...(typeof album.name === 'string' && album.name ? { album: album.name } : {}),
+                  ...(albumArtist.length ? { albumArtist } : {}), ...(track === undefined ? {} : { track }), ...(disc === undefined ? {} : { disc }),
+                  index: item.position + 1, quality: formats[candidate.variant.quality].label, id: item.song.mid } },
                 fileRef: file.fileRef, info: file.info });
             }
             return files;

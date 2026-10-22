@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { valid, validRange, satisfies } from 'semver';
 import type { HostKind, PluginManifest, SourcePlugin } from '@musicfs/plugin-api';
 
-export const PLUGIN_API_VERSION = '0.1.10';
+export const PLUGIN_API_VERSION = '0.1.11';
 
 export class ExtensionError extends Error {
   constructor(public readonly code: 'invalid_package' | 'incompatible' | 'revision_conflict' | 'missing_plugin' | 'host_not_configured' | 'change_in_progress', message: string) {
@@ -129,6 +129,10 @@ export function assertPluginModule(value: unknown): asserts value is SourcePlugi
     const renewal = value.renewal;
     if (renewal === null || typeof renewal !== 'object' || typeof Reflect.get(renewal, 'needed') !== 'function'
       || typeof Reflect.get(renewal, 'renew') !== 'function') throw new ExtensionError('invalid_package', 'Plugin renewal must provide a local policy and a renewal operation');
+  }
+  if ('naming' in value && value.naming !== undefined) {
+    const declaration = z.object({ fields: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/), z.string().min(1).max(80)) }).strict().safeParse(value.naming);
+    if (!declaration.success) throw new ExtensionError('invalid_package', 'Plugin naming fields are invalid');
   }
   if ('statistics' in value && value.statistics !== undefined) {
     const labels = z.record(z.string().min(1).max(64), z.string().min(1).max(80)).safeParse(value.statistics);

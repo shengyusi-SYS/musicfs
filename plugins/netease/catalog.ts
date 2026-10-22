@@ -81,9 +81,19 @@ async function songPage(client: NeteaseClient, tracks: unknown[], offset: number
     const media = candidate.variant.reference;
     const artists = item.song.ar ?? item.song.artists;
     if (!Array.isArray(artists)) fail('temporary', '网易云未返回完整歌曲名称信息。');
-    const artist = artists.map(value => label(object(value).name)).join('、');
+    const artistNames = artists.map(value => label(object(value).name));
+    const artist = artistNames.join('、');
+    const album = object(item.song.al ?? item.song.album);
+    const albumArtists = album.artists ?? (album.artist ? [album.artist] : undefined);
+    const albumArtist = Array.isArray(albumArtists) ? albumArtists.map(value => object(value).name).filter((value): value is string => typeof value === 'string' && !!value) : [];
+    const positive = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : undefined;
+    const track = positive(item.song.no); const disc = positive(item.song.cd);
+
     return { kind: 'file', entryId: `${item.position}:${item.songId}:${media.level}`,
       name: `${String(item.position).padStart(4, '0')}. ${label(item.song.name)} - ${artist} [${labels[media.level]}].${media.type}`,
+      naming: { identity: JSON.stringify([item.songId, media.level]), fields: { title: label(item.song.name), artist: artistNames,
+        ...(typeof album.name === 'string' && album.name ? { album: album.name } : {}), ...(albumArtist.length ? { albumArtist } : {}),
+        ...(track === undefined ? {} : { track }), ...(disc === undefined ? {} : { disc }), index: item.position, quality: labels[media.level], id: item.songId } },
       fileRef: client.ctx.cache?.putIfAbsent && file ? file.fileRef : deferredFileRef(media, candidate.key),
       ...(file ? { info: file.info } : { deferredInfo: true }) };
   };

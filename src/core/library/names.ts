@@ -11,7 +11,7 @@ export const portableName = (name: string) => {
 const key = (name: string) => name.normalize('NFC').toLowerCase();
 
 /** Duplicate occurrences keep distinct names regardless of upstream ordering. */
-export async function nameEntries<T extends { id: string; name: string }>(entries: T[]): Promise<(T & { pathName: string })[]> {
+export async function nameEntries<T extends { id: string; name: string; namingIdentity?: string }>(entries: T[]): Promise<(T & { pathName: string })[]> {
   if (new Set(entries.map(entry => entry.id)).size !== entries.length) throw new Error('Duplicate directory occurrence identity');
   const names = entries.map(entry => portableName(entry.name));
   const keys = names.map(key);
@@ -24,7 +24,7 @@ export async function nameEntries<T extends { id: string; name: string }>(entrie
     const missing: number[] = [];
     lengths.forEach((length, index) => { if (length && !hashes.has(index)) missing.push(index); });
     if (missing.length) await Promise.all(missing.map(async index => {
-      const bytes = await crypto.subtle.digest('SHA-256', encoder.encode(entries[index]!.id));
+      const bytes = await crypto.subtle.digest('SHA-256', encoder.encode(entries[index]!.namingIdentity ?? entries[index]!.id));
       hashes.set(index, Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join(''));
     }));
     const proposed = names.map((name, index) => {

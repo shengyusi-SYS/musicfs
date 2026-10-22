@@ -1,6 +1,8 @@
 import { SourceError } from '../../core/sources';
 import type { SourceStamp } from '../../core/sources';
-import type { Snapshot } from '../../core/library/types';
+import type { PublishedHeader, Snapshot } from '../../core/library/types';
+import type { FileNamingPolicy } from '../../contracts/file-naming';
+import type { ScheduleClaim } from '../../core/library/refresh-types';
 import type { RefreshPage, RefreshRecord } from '../../core/library/refresh-types';
 
 export type SqlValue = string | number | null;
@@ -8,7 +10,7 @@ export type SqlStatement = { sql: string; values: SqlValue[] };
 export type RefreshDocumentRow = { document: string };
 export type RefreshOutcome = 'committed' | 'stale' | 'duplicate_entry' | 'cyclic_cursor';
 export type SnapshotEntryRow = { document: string | null; error: string | null; published_attempt_id: string | null; entry: string | null };
-export type SnapshotHeaderRow = { stamp: string; id: string; kind: Snapshot['kind']; completed_at: string; content_modified_at?: string | null; statistics: string | null; pending_file_info?: number | null; error: string | null };
+export type SnapshotHeaderRow = { stamp: string; id: string; kind: Snapshot['kind']; completed_at: string; content_modified_at?: string | null; statistics: string | null; pending_file_info?: number | null; error: string | null; naming_policy?: string | null };
 const statement = (sql: string, ...values: SqlValue[]): SqlStatement => ({ sql, values });
 const active = "status IN ('queued', 'running')";
 const current = `EXISTS (SELECT 1 FROM instances i JOIN installations p ON p.id = i.plugin_id
@@ -28,17 +30,21 @@ export const snapshotEntriesSQL = `SELECT CASE WHEN e.ordinal = 0 OR e.ordinal I
   s.error, s.published_attempt_id, e.document AS entry
   FROM directory_snapshots s LEFT JOIN library_snapshot_entries e ON e.attempt_id = s.published_attempt_id
   WHERE s.instance_id = ? AND s.kind = ? AND s.ref = ? ORDER BY e.ordinal`;
-export const snapshotHeaderSQL = `SELECT json_extract(document, '$.stamp') AS stamp, json_extract(document, '$.id') AS id,
-  json_extract(document, '$.kind') AS kind, json_extract(document, '$.completedAt') AS completed_at,
-  json_extract(document, '$.contentModifiedAt') AS content_modified_at,
-  json_extract(document, '$.statistics') AS statistics, json_extract(document, '$.pendingFileInfo') AS pending_file_info, error FROM directory_snapshots
-  WHERE instance_id = ? AND kind = ? AND ref = ? AND document IS NOT NULL`;
+export const snapshotHeaderSQL = `SELECT json_extract(s.document, '$.stamp') AS stamp, json_extract(s.document, '$.id') AS id,
+  json_extract(s.document, '$.kind') AS kind, json_extract(s.document, '$.completedAt') AS completed_at,
+  json_extract(s.document, '$.contentModifiedAt') AS content_modified_at,
+  json_extract(s.document, '$.statistics') AS statistics, json_extract(s.document, '$.pendingFileInfo') AS pending_file_info,
+  s.error, CASE WHEN s.kind = 'directory' THEN COALESCE(d.policy, i.policy) END AS naming_policy FROM directory_snapshots s
+  LEFT JOIN file_naming_policies i ON i.instance_id = s.instance_id AND i.kind = 'instance' AND i.ref = ''
+  LEFT JOIN file_naming_policies d ON d.instance_id = s.instance_id AND d.kind = 'directory' AND d.ref = s.ref
+  WHERE s.instance_id = ? AND s.kind = ? AND s.ref = ? AND s.document IS NOT NULL`;
 
-export function snapshotHeaderFromRow(row: SnapshotHeaderRow | null | undefined): (Omit<Snapshot, 'items'> & { error: string | null }) | null {
+export function snapshotHeaderFromRow(row: SnapshotHeaderRow | null | undefined): PublishedHeader | null {
   return row ? { stamp: JSON.parse(row.stamp) as SourceStamp, id: row.id, kind: row.kind, completedAt: row.completed_at,
     ...(row.content_modified_at == null ? {} : { contentModifiedAt: row.content_modified_at }),
     ...(row.statistics === null ? {} : { statistics: JSON.parse(row.statistics) as Record<string, number> }),
-    ...(row.pending_file_info == null ? {} : { pendingFileInfo: row.pending_file_info }), error: row.error } : null;
+    ...(row.pending_file_info == null ? {} : { pendingFileInfo: row.pending_file_info }),
+    ...(row.naming_policy == null ? {} : { fileNamingPolicy: JSON.parse(row.naming_policy) as FileNamingPolicy }), error: row.error } : null;
 }
 
 export function refreshFromRow(row: RefreshDocumentRow | null | undefined): RefreshRecord | null {
@@ -84,7 +90,19 @@ function beginTask(record: RefreshRecord, guard: SqlStatement): SqlStatement | n
   record.stamp.id, task.key.kind, task.key.ref, task.attemptId, ...guard.values);
 }
 
-export function createRefreshPlan(record: RefreshRecord, replace: boolean): SqlStatement[] {
+/** Only identical or explicitly broader catalogue work can satisfy a rule. Audio preparation never does. */
+export function updateScopeCoveredSQL(job = 'r', rule = 's'): string {
+  const scope = (path: string) => `json_extract(${job}.document, '$.scope.${path}')`;
+  const target = (path: string) => `json_extract(${rule}.target, '$.${path}')`;
+  return `(${scope('kind')} = 'instance' OR (${scope('kind')} = 'directory' AND (
+    (${target('kind')} = 'roots' AND ${scope('directoryRef')} IS NULL) OR
+    (${target('kind')} = 'directory' AND ${scope('directoryRef')} = ${target('directoryRef')}
+      AND (COALESCE(${target('recursive')}, 0) = 0 OR ${scope('recursive')} = 1)))))`;
+}
+export function createRefreshPlan(record: RefreshRecord, replace: boolean, claim?: ScheduleClaim): SqlStatement[] {
+  const claimGuard = claim ? `EXISTS (SELECT 1 FROM automatic_update_rules s WHERE s.id = ? AND s.revision = ?
+    ${claim.manual ? '' : 'AND s.enabled = 1 AND s.next_run_at IS NOT NULL AND s.next_run_at <= ?'})` : '1';
+  const claimValues: SqlValue[] = claim ? [claim.ruleId, claim.revision, ...(claim.manual ? [] : [claim.now])] : [];
   const values = stampValues(record.stamp);
   const own = statement(`SELECT 1 FROM library_refresh_jobs r WHERE operation_id = ? AND ${active}
     AND revision = ? AND document = ? AND ${current}`, record.operationId, record.revision, JSON.stringify(record));
@@ -93,17 +111,29 @@ export function createRefreshPlan(record: RefreshRecord, replace: boolean): SqlS
       lease_token = NULL, lease_until = NULL, mutation_token = NULL,
       document = json_set(document, '$.status', 'superseded', '$.revision', revision + 1,
         '$.leaseToken', NULL, '$.leaseUntil', NULL, '$.updatedAt', ?)
-      WHERE instance_id = ? AND ${active} AND (? = 1 OR NOT ${current}) AND ${currentStamp}`,
-    record.updatedAt, record.stamp.id, replace ? 1 : 0, ...values),
+      WHERE instance_id = ? AND ${active} AND (? = 1 OR NOT ${current}) AND ${currentStamp} AND ${claimGuard}`,
+    record.updatedAt, record.stamp.id, replace ? 1 : 0, ...values, ...claimValues),
     statement(`INSERT INTO library_refresh_jobs (operation_id, instance_id, plugin_id, source_epoch, plugin_revision,
       plugin_generation, status, revision, lease_token, lease_until, document)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${currentStamp}
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${currentStamp} AND ${claimGuard}
       AND NOT EXISTS (SELECT 1 FROM library_refresh_jobs WHERE instance_id = ? AND ${active})
       ON CONFLICT(operation_id) DO NOTHING`,
-    record.operationId, ...values, record.status, record.revision, record.leaseToken, record.leaseUntil, JSON.stringify(record), ...values, record.stamp.id)
+    record.operationId, ...values, record.status, record.revision, record.leaseToken, record.leaseUntil, JSON.stringify(record), ...values, ...claimValues, record.stamp.id)
   ];
   const begin = beginTask(record, own); if (begin) plan.push(begin);
   plan.push(...cleanup(record.stamp.id, own));
+  if (claim) {
+    const covered = `SELECT r.operation_id FROM library_refresh_jobs r WHERE r.instance_id = s.instance_id
+      AND r.${active} AND ${current} AND ${updateScopeCoveredSQL()}`;
+    plan.push(statement(`UPDATE automatic_update_rules AS s SET operation_id = (${covered} LIMIT 1),
+      next_run_at = NULL, last_run_at = ?, settled = 0
+      WHERE id = ? AND revision = ? ${claim.manual ? '' : 'AND enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?'}
+      AND EXISTS (${covered})`, claim.now, claim.ruleId, claim.revision, ...(claim.manual ? [] : [claim.now])));
+    plan.push(statement(`SELECT r.document FROM automatic_update_rules s JOIN library_refresh_jobs r ON r.operation_id = s.operation_id
+      WHERE s.id = ? AND s.revision = ? AND s.settled = 0 AND r.${active} AND ${current} AND ${updateScopeCoveredSQL()}`,
+    claim.ruleId, claim.revision));
+    return plan;
+  }
   plan.push(statement(`SELECT document FROM library_refresh_jobs WHERE operation_id = ?
     UNION ALL SELECT document FROM library_refresh_jobs r WHERE instance_id = ? AND ${active}
       AND ${current} AND operation_id != ? LIMIT 1`, record.operationId, record.stamp.id, record.operationId));

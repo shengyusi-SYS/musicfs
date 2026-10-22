@@ -9,7 +9,8 @@ import type { Result, Connection, Status, PluginInstallation, SourceInstance, So
 import type { PluginChange } from '../../contracts/plugin-changes';
 import type { MountInput, MountManager } from '../../contracts/mounts';
 import type { RefreshView } from '../../contracts/refreshes';
-import type { RefreshPolicy } from '../../contracts/refresh-policy';
+import { updateRuleInput } from '../../core/library/update-timing';
+import type { UpdateRule, RefreshPolicy } from '../../contracts/refresh-policy';
 import type { DavAccess } from '../../contracts/dav-access';
 import { ExtensionError, type Extensions, type Installation } from '../../core/extensions';
 import { SourceError, type Sources } from '../../core/sources';
@@ -28,6 +29,7 @@ const refreshPolicyInput = z.object({ intervalMinutes: z.number().int().nonnegat
 const layoutInput = z.object({ expectedRevision: z.number().int().nonnegative(), nodes: z.json() }).strict();
 const refreshInput = z.union([
   z.object({ scope: z.literal('instance') }).strict(),
+  z.object({ scope: z.literal('directory'), directoryRef: z.string(), recursive: z.boolean().optional() }).strict(),
   z.object({ scope: z.enum(['file-info', 'metadata']), directoryRef: z.string() }).strict(),
   z.object({ directoryRef: z.string().optional() }).strict()
 ]);
@@ -200,6 +202,15 @@ export function createManagementApi(input: {
     return c.json(result(outcome), outcome.ok ? 200 : 422);
   });
   app.get('/api/instances/:id/roots', async c => c.json(await library.contentSources(c.req.param('id'), c.req.raw.signal)));
+  app.get('/api/update-rules', async c => c.json((await library.schedules.list()) satisfies UpdateRule[]));
+  app.post('/api/update-rules', async c => c.json(await library.schedules.create(updateRuleInput.parse(await json(c))), 201));
+  app.put('/api/update-rules/:id', async c => c.json(await library.schedules.update(c.req.param('id'), updateRuleInput.parse(await json(c)))));
+  app.delete('/api/update-rules/:id', async c => { await library.schedules.remove(c.req.param('id')); return c.body(null, 204); });
+  app.post('/api/update-rules/:id/run', async c => {
+    const operation = await library.schedules.run(c.req.param('id'), c.req.raw.signal);
+    c.header('X-MusicFS-Refresh', operation.operationId);
+    return c.json(operation satisfies RefreshView, 202);
+  });
   app.get('/api/instances/:id/refresh-policy', async c => c.json(
     (await library.schedules.get(c.req.param('id'), c.req.query('directoryRef'))) satisfies RefreshPolicy));
   app.put('/api/instances/:id/refresh-policy', async c => {
@@ -210,10 +221,19 @@ export function createManagementApi(input: {
     const directoryRef = z.string().parse(c.req.query('directoryRef'));
     return c.json(await library.directoryStatus(c.req.param('id'), directoryRef));
   });
+  app.get('/api/instances/:id/file-naming', async c => c.json(await library.naming.get(c.req.param('id'), c.req.query('directoryRef'))));
+  app.put('/api/instances/:id/file-naming', async c => {
+    const value = z.object({ revision: z.number().int().nonnegative(), policy: z.unknown() }).strict().parse(await json(c));
+    return c.json(await library.naming.set(c.req.param('id'), c.req.query('directoryRef'), value.revision, value.policy));
+  });
+  app.post('/api/instances/:id/file-naming/preview', async c => {
+    const value = z.object({ policy: z.unknown() }).strict().parse(await json(c));
+    return c.json(await library.naming.preview(c.req.param('id'), c.req.query('directoryRef'), value.policy));
+  });
   app.post('/api/instances/:id/refresh', async c => {
     const value = refreshInput.parse(await json(c));
     const operation = await library.refreshes.start(c.req.param('id'), 'scope' in value
-      ? value.scope === 'instance' ? { kind: 'instance' } : { kind: value.scope, directoryRef: value.directoryRef }
+      ? value.scope === 'instance' ? { kind: 'instance' } : { kind: value.scope, directoryRef: value.directoryRef, ...('recursive' in value && value.recursive ? { recursive: true } : {}) }
       : { kind: 'directory', ...(value.directoryRef === undefined ? {} : { directoryRef: value.directoryRef }) });
     c.header('X-MusicFS-Refresh', operation.operationId);
     return c.json(operation satisfies RefreshView, 202);
