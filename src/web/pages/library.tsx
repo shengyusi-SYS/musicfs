@@ -6,6 +6,7 @@ import type { Api } from '../api';
 import { Failure } from '../components/feedback';
 import { pendingRefreshId, RefreshProgress, usePersistentRefresh } from '../components/refresh';
 import { RefreshPolicyControl } from '../components/refresh-policy';
+import { FileNamingControl } from '../components/file-naming';
 import { LayoutEditor, type LayoutDraft } from './layout-editor';
 
 export default function Library({ api, path, setPath, draft, setDraft, showSources, showConnection }: {
@@ -35,7 +36,7 @@ function DirectoryBrowser({ api, path, setPath, showSources }: { api: Api; path:
   }, [directory.data?.entries, filter]);
   function open(next: string) { setFilter(''); setPath(next); }
   return <><div className="directory-toolbar"><Breadcrumb items={[{ title: <button className="text-button" onClick={() => open('/')}>全部音乐</button> }, ...segments.map((segment, index) => ({ title: <button className="text-button" onClick={() => open('/' + segments.slice(0, index + 1).join('/'))}>{segment}</button> }))]} />
-    {source && <Space wrap><RefreshPolicyControl key={source.instanceId + ':' + source.directoryRef} api={api} instanceId={source.instanceId} directoryRef={source.directoryRef} disabled={busy} />
+    {source && <Space wrap><RefreshPolicyControl key={source.instanceId + ':' + source.directoryRef} api={api} instanceId={source.instanceId} directoryRef={source.directoryRef} label={segments.at(-1) || '目录'} /><FileNamingControl key={source.instanceId + ':' + source.directoryRef} api={api} instanceId={source.instanceId} directoryRef={source.directoryRef} label={segments.at(-1) || '目录'} />
       <Button icon={<ReloadOutlined aria-hidden="true" />} disabled={busy} onClick={() => refresh.start({ kind: 'directory', directoryRef: source.directoryRef })}>更新</Button>
       {configuration.data?.metadataRefresh && directory.data?.entries.some(entry => entry.kind === 'file') && <Dropdown menu={{ items: [{ key: 'metadata', label: '重新获取音乐资料', onClick: () => refresh.start({ kind: 'metadata', directoryRef: source.directoryRef }) }] }}>
         <Button icon={<MoreOutlined aria-hidden="true" />} aria-label="更多更新选项" disabled={busy} />

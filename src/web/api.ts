@@ -6,10 +6,11 @@ import type { RefreshScope, RefreshView } from '../contracts/refreshes';
 import type { DesktopNetworkSettings, DesktopNetworkView, DesktopPreferences, DesktopPreferencesView } from '../contracts/desktop';
 import type { MountPrerequisitesView } from '../contracts/mount-prerequisites';
 import type { DesktopHttpsView } from '../contracts/desktop-https';
-import type { RefreshPolicy } from '../contracts/refresh-policy';
+import type { RefreshPolicy, UpdateRule, UpdateRuleInput } from '../contracts/refresh-policy';
 import type { ReadCacheSettings, ReadCacheStatus } from '../contracts/read-cache';
 import type { ManagementAccess, ManagementTicket } from '../contracts/management-auth';
 import type { DavCredentials } from '../contracts/dav-access';
+import type { FileNamingPolicy, FileNamingPreview, FileNamingSettings } from '../contracts/file-naming';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -104,6 +105,14 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
       : scope.kind === 'file-info' || scope.kind === 'metadata' ? { scope: scope.kind, directoryRef: scope.directoryRef }
       : scope.directoryRef === undefined ? {} : { directoryRef: scope.directoryRef })),
     currentRefresh: (id: string, signal: AbortSignal) => request<RefreshView | null>(`/instances/${encodeURIComponent(id)}/refresh`, { signal }),
+    fileNaming: (id: string, directoryRef: string | undefined, signal: AbortSignal) => request<FileNamingSettings>(`/instances/${encodeURIComponent(id)}/file-naming${directoryRef === undefined ? '' : '?directoryRef=' + encodeURIComponent(directoryRef)}`, { signal }),
+    saveFileNaming: (id: string, revision: number, policy: FileNamingPolicy | null, directoryRef?: string) => request<FileNamingSettings>(`/instances/${encodeURIComponent(id)}/file-naming${directoryRef === undefined ? '' : '?directoryRef=' + encodeURIComponent(directoryRef)}`, json('PUT', { revision, policy })),
+    previewFileNaming: (id: string, policy: FileNamingPolicy | null, directoryRef: string | undefined, signal: AbortSignal) => request<FileNamingPreview>(`/instances/${encodeURIComponent(id)}/file-naming/preview${directoryRef === undefined ? '' : '?directoryRef=' + encodeURIComponent(directoryRef)}`, { ...json('POST', { policy }), signal }),
+    updateRules: (signal?: AbortSignal) => request<UpdateRule[]>('/update-rules', signal ? { signal } : {}),
+    createUpdateRule: (input: UpdateRuleInput) => request<UpdateRule>('/update-rules', json('POST', input)),
+    saveUpdateRule: (id: string, input: UpdateRuleInput) => request<UpdateRule>(`/update-rules/${encodeURIComponent(id)}`, json('PUT', input)),
+    deleteUpdateRule: (id: string) => request<void>(`/update-rules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    runUpdateRule: (id: string) => request<RefreshView>(`/update-rules/${encodeURIComponent(id)}/run`, { method: 'POST' }),
     refreshPolicy: (id: string, directoryRef: string | undefined, signal: AbortSignal) => request<RefreshPolicy>(`/instances/${encodeURIComponent(id)}/refresh-policy${directoryRef === undefined ? '' : '?directoryRef=' + encodeURIComponent(directoryRef)}`, { signal }),
     saveRefreshPolicy: (id: string, intervalMinutes: number, directoryRef?: string) => request<RefreshPolicy>(`/instances/${encodeURIComponent(id)}/refresh-policy${directoryRef === undefined ? '' : '?directoryRef=' + encodeURIComponent(directoryRef)}`, json('PUT', { intervalMinutes })),
     refreshOperation: (id: string, signal: AbortSignal) => request<RefreshView>(`/refreshes/${encodeURIComponent(id)}`, { signal }),

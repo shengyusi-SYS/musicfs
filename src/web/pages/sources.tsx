@@ -7,6 +7,8 @@ import type { Api } from '../api';
 import { Failure } from '../components/feedback';
 import { SourceEditor } from '../components/source-editor';
 import { SourceContent } from '../components/source-content';
+import { UpdateRuleControlDialog } from '../components/update-rule-editor';
+import { FileNamingEditor } from '../components/file-naming';
 
 const Authentication = lazy(() => import('../components/authentication'));
 
@@ -17,6 +19,8 @@ export default function Sources({ api, showPlugins, showLibrary, initialPluginId
   const instances = useQuery({ queryKey: ['instances'], queryFn: ({ signal }) => api.instances(signal) });
   const plugins = useQuery({ queryKey: ['plugins'], queryFn: ({ signal }) => api.plugins(signal) });
   const [editing, setEditing] = useState<SourceInstance | 'create' | null>(() => initialPluginId ? 'create' : null);
+  const [updating, setUpdating] = useState<SourceInstance | null>(null);
+  const [naming, setNaming] = useState<SourceInstance | null>(null);
   const [inspecting, setInspecting] = useState<SourceInstance | null>(null);
   const [authenticating, setAuthenticating] = useState<{ instance: SourceInstance; needsReauthorization: boolean } | null>(null);
   const activePlugins = plugins.data?.filter(value => value.status === 'active' && instances.data?.some(instance => instance.pluginId === value.manifest.id)) ?? [];
@@ -48,6 +52,8 @@ export default function Sources({ api, showPlugins, showLibrary, initialPluginId
         <div className="instance-actions">{!available && <Tag>需要安装插件</Tag>}<Button disabled={!available} icon={<ArrowRightOutlined aria-hidden="true" />} onClick={() => setInspecting(instance)}>浏览内容</Button>
           <Dropdown trigger={['click']} menu={{ items: [
             { key: 'settings', label: '来源设置', disabled: !available, onClick: () => setEditing(instance) },
+            { key: 'update-rule', label: '自动更新', disabled: !available, onClick: () => setUpdating(instance) },
+            { key: 'file-naming', label: '文件命名', disabled: !available, onClick: () => setNaming(instance) },
             ...(withAuthentication.has(instance.pluginId) ? [
               { key: 'login', label: '重新登录', onClick: () => setAuthenticating({ instance, needsReauthorization: true }) },
               { key: 'logout', label: '退出登录', disabled: logout.isPending, onClick: () => modal.confirm({ title: '退出 ' + instance.name + '？', content: '重新登录后可继续读取，目录和设置会保留。', okText: '退出登录', cancelText: '取消', onOk: () => logout.mutateAsync(instance.id) }) }
@@ -56,6 +62,8 @@ export default function Sources({ api, showPlugins, showLibrary, initialPluginId
           ] }}><Button type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label={instance.name + '的更多操作'} /></Dropdown>
         </div></article>;
     })}</section>}
+    {updating && <UpdateRuleControlDialog api={api} instanceId={updating.id} label={updating.name} close={() => setUpdating(null)} />}
+    {naming && <FileNamingEditor api={api} instanceId={naming.id} label={naming.name} close={() => setNaming(null)} />}
     {editing && <SourceEditor api={api} {...(editing !== 'create' ? { instance: editing } : {})} initialPluginId={initialPluginId} close={closeEditor}
       showPlugins={() => { closeEditor(); showPlugins(); }} saved={(instance, authenticate) => { closeEditor(); if (authenticate) setAuthenticating({ instance, needsReauthorization: false }); else setInspecting(instance); }} />}
     <Drawer title={inspecting?.name ?? '浏览内容'} open={inspecting !== null} onClose={() => setInspecting(null)} size="large" destroyOnHidden>{inspecting && <SourceContent api={api} instance={inspecting}

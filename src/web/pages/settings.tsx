@@ -4,6 +4,7 @@ import type { DesktopPreferences } from '../../contracts/desktop';
 import type { Api } from '../api';
 import DesktopNetwork from '../components/desktop-network';
 import { Failure } from '../components/feedback';
+import { UpdateRules } from '../components/update-rules';
 
 export default function Settings({ api, desktop }: { api: Api; desktop: boolean }) {
   const client = useQueryClient(); const { message } = App.useApp();
@@ -11,7 +12,7 @@ export default function Settings({ api, desktop }: { api: Api; desktop: boolean 
   const [form] = Form.useForm<{ username: string; password: string }>();
   const account = useMutation({ mutationFn: (values: { username: string; password: string }) => api.saveAccount(values.username.trim(), values.password),
     onSuccess: value => { client.setQueryData(['access'], value); form.setFieldValue('password', ''); message.success('登录账号已保存'); } });
-  return <div className="settings-sections"><section className="surface"><div className="section-heading"><Typography.Title level={3}>登录账号</Typography.Title></div>
+  return <div className="settings-sections"><UpdateRules api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>登录账号</Typography.Title></div>
     <Failure error={access.error} retry={() => void access.refetch()} />
     {access.isPending ? <Skeleton active /> : <Form form={form} className="account-form" layout="vertical" initialValues={{ username: access.data?.passwordConfigured ? access.data.username : 'admin' }} onFinish={values => account.mutate(values)}>
       <Form.Item label="用户名" name="username" rules={[{ required: true, whitespace: true, message: '请输入用户名' }, { max: 64 }]}><Input autoComplete="username" maxLength={64} /></Form.Item>

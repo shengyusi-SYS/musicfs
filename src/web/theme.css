@@ -168,3 +168,28 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .phone-access-empty { padding-block: 12px; }
 .mount-auto { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 @media (max-width: 640px) { .sidebar .ant-menu { grid-template-columns: repeat(5, minmax(0,1fr)); } }
+.rule-form { padding-top: 12px; }
+.rule-time-grid { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; }
+.rule-time-grid .ant-picker { width: 100%; }
+.update-rule-row { display: flex; align-items: center; gap: 16px; padding-block: 18px; border-bottom: 1px solid var(--line); }
+.update-rule-row:first-child { padding-top: 0; }
+.update-rule-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.update-rule-identity { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.update-rule-identity .ant-tag { margin-left: 8px; }
+.update-rule-actions { justify-content: flex-end; }
+@media (max-width: 800px) { .update-rule-row { align-items: flex-start; flex-direction: column; gap: 12px; } .update-rule-actions { width: 100%; justify-content: flex-start; } }
+@media (max-width: 480px) { .rule-time-grid { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+.file-naming-form { padding-top: 12px; }
+.file-naming-form textarea { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.naming-field-picker { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 24px; }
+.naming-field-picker > span { padding-top: 3px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
+.naming-format-options { margin: -8px -12px 20px; }
+.naming-format-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+.naming-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.naming-preview-heading h5.ant-typography { margin: 0; }
+.naming-preview { max-height: 300px; overflow: auto; background: var(--canvas); border: 1px solid var(--line); border-radius: 8px; }
+.naming-preview .ant-list-item > div { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.naming-before { color: var(--muted); font-size: 12px; }
+.naming-after { color: var(--ink); }
+.naming-path-impact { margin-top: 12px; font-size: 12px; }
+@media (max-width: 480px) { .naming-field-picker { flex-direction: column; gap: 8px; } }

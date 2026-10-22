@@ -6,6 +6,7 @@ import type { Api } from '../api';
 import { Failure } from './feedback';
 import { pendingRefreshId, RefreshProgress, usePersistentRefresh } from './refresh';
 import { RefreshPolicyControl } from './refresh-policy';
+import { FileNamingControl } from './file-naming';
 
 export function SourceContent({ api, instance, reauthorize, showLibrary }: {
   api: Api; instance: SourceInstance; reauthorize?: (() => void) | undefined; showLibrary: () => void;
@@ -21,7 +22,7 @@ export function SourceContent({ api, instance, reauthorize, showLibrary }: {
     else message.success(result.scope.kind === 'file-info' ? '文件已准备' : result.scope.kind === 'metadata' ? '音乐资料已更新' : '内容已更新');
   } });
   const busy = refresh.active || refresh.starting || refresh.preparing || roots.isFetching;
-  return <><div className="page-actions"><Button onClick={showLibrary}>查看音乐目录</Button><Button icon={<ReloadOutlined aria-hidden="true" />} loading={refresh.starting || refresh.active && refresh.view?.scope.kind === 'instance'} disabled={busy} onClick={() => refresh.start({ kind: 'instance' })}>更新全部内容</Button></div>
+  return <><div className="page-actions"><Button onClick={showLibrary}>查看音乐目录</Button><Space wrap><RefreshPolicyControl api={api} instanceId={instance.id} label={instance.name} /><FileNamingControl api={api} instanceId={instance.id} label={instance.name} /><Button icon={<ReloadOutlined aria-hidden="true" />} loading={refresh.starting || refresh.active && refresh.view?.scope.kind === 'instance'} disabled={busy} onClick={() => refresh.start({ kind: 'instance' })}>更新全部内容</Button></Space></div>
     <Failure error={pending ? null : roots.error} retry={() => void roots.refetch()} reauthorize={reauthorize} /><Failure error={configuration.error} />
     <RefreshProgress operation={refresh} labels={configuration.data?.statistics} reload={() => refresh.view && refresh.start(refresh.view.scope)} reauthorize={reauthorize} />
     {roots.isPending ? <Skeleton active /> : roots.data?.length ? roots.data.map((root, index) => {
@@ -33,7 +34,7 @@ export function SourceContent({ api, instance, reauthorize, showLibrary }: {
         {status?.error && <Typography.Text type="warning">更新失败，仍显示上次内容</Typography.Text>}
         <Failure error={statuses[index]?.error ?? null} />
       </div><Space wrap>
-        <RefreshPolicyControl api={api} instanceId={instance.id} directoryRef={root.directoryRef} disabled={busy} />
+        <RefreshPolicyControl api={api} instanceId={instance.id} directoryRef={root.directoryRef} label={root.name} />
         {(status?.pendingFileInfo ?? 0) > 0 && <Button disabled={busy} onClick={() => refresh.start({ kind: 'file-info', directoryRef: root.directoryRef })}>准备文件</Button>}
         <Button icon={<ReloadOutlined aria-hidden="true" />} disabled={busy} loading={refresh.active && refresh.view?.scope.kind === 'directory' && refresh.view.scope.directoryRef === root.directoryRef} onClick={() => refresh.start({ kind: 'directory', directoryRef: root.directoryRef })}>{status ? '更新' : '加载歌曲'}</Button>
         {configuration.data?.metadataRefresh && (status?.statistics?.files ?? 0) > 0 && <Dropdown menu={{ items: [{ key: 'metadata', label: '重新获取音乐资料', onClick: () => refresh.start({ kind: 'metadata', directoryRef: root.directoryRef }) }] }}>
