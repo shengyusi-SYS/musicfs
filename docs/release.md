@@ -1,5 +1,11 @@
 # MusicFS 当前交付物
 
+## dev.17 WebDAV 连接设置
+
+应用 `0.1.0-dev.17`：WebDAV 支持自定义用户名和密码，保存后立即生效、重启保留；连接页提供明文携带凭据的通用导入二维码，桌面可选择局域网地址。
+
+[Windows x64](../dist/releases/0.1.0-dev.17/musicfs-0.1.0-dev.17-windows-x64.zip)、[源码](../dist/releases/0.1.0-dev.17/musicfs-0.1.0-dev.17-source.zip)、[清单](../dist/releases/0.1.0-dev.17/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.17/SHA256SUMS)。正常退出旧后台后，解压完整新版再启动；无需重装插件或刷新音乐目录。本次仅打包 Windows，未升级云端。凭据与 URL 编码已通过本地定向测试，具体播放器的扫码导入取决于其支持。
+
 ## dev.16 Windows 托盘交互
 
 应用 `0.1.0-dev.16`：Windows 托盘改为左键双击打开管理页，单击不打开，右键菜单保持。浏览器打开复用 GUI 辅助程序调用系统 URL 处理程序，移除中间 PowerShell，覆盖启动器、托盘和手机入口。
