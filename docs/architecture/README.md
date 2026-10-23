@@ -75,6 +75,7 @@ rclone RC 进程由桌面装配统一拥有，挂载和共享读取模块各管�
 |---|---|---|
 | HTTP / 页面 / 请求状态 | Hono、React/Vite、Ant Design、TanStack Query | 用例、交互和失效关系 |
 | 表单 / 校验 | RJSF AntD、Zod、Ajv standalone | 声明合同、来源语义与错误映射 |
+| 显示语言 / 格式 | i18next、react-i18next、浏览器语言检测、ajv-i18n；Ant Design / Day.js 区域包 | 文案所有权、客户端与运行机器的偏好范围、插件显示元数据 |
 | 日历 / 命名模板 | Croner、Mustache.js、sanitize-filename | 规则持久执行、来源字段、继承与同名身份 |
 | ZIP / 版本 | zip.js、npm semver；fflate 仅开发期独立编码互操作 | 包合同、兼容与安装切换 |
 | 标签与 MIME | node-taglib-sharp、multipart-parser，由选用的插件打包 | 最终表示计划、区段适配与来源请求 |

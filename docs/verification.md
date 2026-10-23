@@ -6,7 +6,7 @@
 
 dev.31源码完成中英文改造：页面与组件联动、插件自带显示翻译、动态错误/数量、终端与托盘标签；API0.1.12增加可选显示资料。内置浏览器确认语言切换、偏好保留及未保存输入保留，受影响离线检查、最小作者包示例和构建通过，见[国际化记录](verification/i18n.md)。当前下载仍为dev.30，尚未重打发行归档。
 
-源码已补齐无桌面/SSH 启动反馈、短期登录链接、独立网络 CLI 参数和前台服务模式；页面显示实际挂载设备，无桌面时隐藏不适用的桌面偏好。WSL 真实 HTTP 与内置浏览器核对、受影响回归、类型和页面构建通过，见[远程入口记录](verification/headless-access.md)。本次尚未重打发行包，当前下载仍为 dev.30。
+源码已补齐无桌面/SSH 启动反馈、短期登录链接、独立网络 CLI 参数和前台服务模式；页面显示实际挂载设备，无桌面时隐藏不适用的桌面偏好。WSL 真实 HTTP 与内置浏览器核对、受影响回归、类型和页面构建通过，见[远程入口记录](verification/headless-access.md)。
 
 dev.30 复核独立端口的扫码、播放器、本机挂载和启动恢复链路，修复扫码不沿用所选网卡的问题，二维码打开时读取当前本机网络信息。仅补验手机票据/Cookie 登录与本机挂载/自动恢复两条本地链路，并用内置浏览器核对两类二维码；三套类型与页面构建通过，见[消费链路记录](verification/network-access.md#dev30-消费链路核查)。其余独立端口机制沿用 dev.29 证据，音乐库流程见[工作区记录](verification/music-workspace.md)。Windows、离线 Worker、源码与作者包归档入口见[发行页](release.md)。
 
@@ -29,6 +29,8 @@ dev.22 复评少量增删：修正同目录旧版本挤掉其他LRU索引的问�
 | 主题 | 已有证据入口 | 适用边界 |
 |---|---|---|
 | 桌面常驻与管理访问 | [本轮核对](verification/desktop-access.md) | 本地会话、恢复与监听；Windows 正式包与用户协助菜单点击通过，其他目标环境边界单列 |
+| 无桌面与远程入口 | [入口核对](verification/headless-access.md) | WSL 正式 HTTP 与页面；未新增真实 SSH 隧道或反向代理部署结论 |
+| 中英文与插件显示 | [国际化核对](verification/i18n.md) | 运行时、表单与浏览器切换、作者包构建；原生桥接与离线编译不等于真实英文托盘点击 |
 | 界面与使用流程重构 | [树形音乐库](verification/music-workspace.md)、[早期页面走查](verification/ui-redesign.md)、[目录整理](verification/directory-workspace.md) | 最新源码使用独立演示数据走查；历史发行证据保留原版本范围 |
 | 局部性能优化 | [O2/O1/O3与应用场景核对](verification/performance-local-2026-10-22.md) | 正式模块、有界样本和Linux发行冒烟；未重测Windows或真实整库 |
 | 冷刷新与 SDK 请求减法 | [真实冷基线](verification/real-netease-cold-dev5.md)、[请求减法](verification/netease-cold-request-reduction.md)、[两阶段清单](verification/deferred-catalogue.md) | 完整清单、全库标签和全库入库是不同工作范围 |

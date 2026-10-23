@@ -8,7 +8,8 @@
 
 ```mermaid
 flowchart LR
-  UI[共用 WebUI] --> HTTP[Bearer 管理 HTTP]
+  UI[共用 WebUI] -->|浏览器会话| HTTP[管理 HTTP]
+  Scripts[部署与自动化] -->|管理 Bearer| HTTP
   HTTP --> Change[宿主插件变更与迁移用例]
   HTTP --> Core[extensions / sources / library]
   Change --> Core
@@ -22,6 +23,8 @@ flowchart LR
 ```
 
 缓存的完整调用链见[共享读取图](shared-read-cache.md#所有权与调用)，App 磁盘与 WebClient 两种入口见[挂载图](desktop-mounts.md)，自动更新与展示策略见[调度和命名图](updates-and-naming.md)。缓存只改变字节读取，不接管目录、认证或 HTTP 条件处理。
+
+管理与 WebDAV 的独立端口、手机管理和播放器导入分别见[访问入口图](management-access.md#桌面访问范围)；浏览器、插件及运行机器的语言归属见[国际化图](i18n.md#职责)。这些入口复用各自认证与领域合同。
 
 ## 模块依赖
 
@@ -302,16 +305,19 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  Launch[启动程序] --> Identity{已有健康后台}
-  Identity -->|是| UI[打开共用页面]
+  Launch[桌面 / headless / 前台启动] --> Identity{已有健康后台}
+  Identity -->|是| Entry[按当前入口签发登录链接]
   Identity -->|否| Start[锁与独立后台 读取设置和凭据]
-  Start --> Listen[HTTP SQLite 与共享 RC 装配]
-  Listen --> UI
-  UI --> Quit[请求退出 关闭直接读取入口]
+  Start --> Listen[SQLite 与资源装配 两个独立监听器就绪]
+  Listen --> Entry
+  Listen --> Restore[按偏好后台恢复挂载 有限重试]
+  Listen --> Integration[启用桌面集成时异步启动托盘]
+  Entry --> Feedback[桌面按偏好打开页面 / 终端打印访问方法]
+  Feedback --> Quit[请求退出 暂停恢复与新增直接读取]
   Quit --> Unmount[正常卸载所有挂载]
   Unmount -->|失败| Resume[恢复接收与可操作后台]
   Unmount -->|成功| Accept[202 接受]
   Accept --> Close[停止共享服务 再退出 RC 和后台]
 ```
 
-关闭网页不卸载后台。未用共享缓存的退出不启动 rclone；具体所有权见[桌面架构](desktop-mounts.md)和[共享读取](shared-read-cache.md#生命周期)。
+后台就绪不等待自动挂载或托盘完成；未使用的原生缓存进程按需启动。无桌面入口复用同一后台与登录会话，前台模式由外部服务管理器持有进程。关闭网页不卸载后台，退出登录也不退出服务。具体入口见[远程运行](../headless.md)，退出所有权见[桌面架构](desktop-mounts.md)和[共享读取](shared-read-cache.md#生命周期)。

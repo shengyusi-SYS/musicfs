@@ -35,7 +35,7 @@
 | 当前进展、ROI 候选与重开条件 | [实施计划](../outputs/musicfs-implementation-plan.md)、[缓存决定](../outputs/musicfs-cache-optimization-plan.md) |
 | 跨领域、实际场景的优化空间复评 | [六领域评估与主代理核查](../outputs/musicfs-performance-review.md) |
 | 整体复盘与工作量口径 | [方案复盘](../outputs/musicfs-effort-risk-roi-assessment.md) |
-| 可跨后续任务复用的结论 | [MusicFS 工程经验](engineering-lessons.md) |
+| 可跨后续任务复用的结论 | [MusicFS 工程经验](engineering-lessons.md)、[交互、访问与国际化](lessons/interface-and-access.md) |
 
 ## 证据与选型
 
