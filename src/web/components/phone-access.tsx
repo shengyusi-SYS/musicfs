@@ -22,7 +22,7 @@ export function PhoneAccess({ api, onClose, openSettings }: { api: Api; onClose(
   const url = address && entry.data ? new URL('/#' + new URLSearchParams({ ticket: entry.data.ticket }), address).href : '';
   return <Modal title="手机访问" open onCancel={onClose} footer={null} destroyOnHidden>
     <Failure error={network.error} retry={() => void network.refetch()} />
-    {network.isPending ? <Skeleton active /> : network.data && !address ? <div className="phone-access-empty"><Typography.Paragraph>{network.data.active.managementAccess === 'local' ? '先在设置中允许管理页面的局域网访问。' : network.data.restartRequired ? '局域网设置已保存，重新启动 MusicFS 后即可扫码。' : '暂未找到局域网地址，请连接网络后重试。'}</Typography.Paragraph>
+    {network.isPending ? <Skeleton active /> : network.data && !address ? <div className="phone-access-empty"><Typography.Paragraph>{network.data.active.managementAccess === 'local' ? '先在「设置 → 管理页面访问」允许局域网设备访问。' : network.data.restartRequired ? '局域网设置已保存，重新启动 MusicFS 后即可扫码。' : '暂未找到局域网地址，请连接网络后重试。'}</Typography.Paragraph>
       <Space><Button type="primary" onClick={openSettings}>打开设置</Button><Button onClick={() => void network.refetch()}>重新检测</Button></Space>
     </div> : address && <div className="phone-access-content">
       {addresses.length > 1 && <Select aria-label="手机访问地址" value={address} options={addresses.map(value => ({ label: value, value }))} onChange={select} />}

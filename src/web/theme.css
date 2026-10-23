@@ -72,12 +72,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .copy-field { margin-bottom: 24px; }
 .copy-field > label { display: block; margin-bottom: 9px; }
 .copy-field-input { display: flex; gap: 8px; }
+.copy-field-select { flex: 1; min-width: 0; }
 .copy-field-input .ant-input, .copy-field-input .ant-input-affix-wrapper { min-width: 0; }
 .copy-field-input > .ant-btn { flex-shrink: 0; }
 .credential-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .connection-options { margin: 8px -12px -12px; border-top: 1px solid var(--line); border-radius: 0; padding-top: 12px; }
 .settings-content { padding-top: 8px; }
 .settings-content .ant-form { max-width: 520px; }
+.network-port-options { margin: 0 -12px 16px; }
 .secondary-toolbar { margin-top: 16px; }
 .cache-summary { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 16px; }
 .cache-summary > strong { font-size: 28px; font-weight: 600; }

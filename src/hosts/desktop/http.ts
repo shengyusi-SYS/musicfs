@@ -16,6 +16,7 @@ const readCacheSettingsSchema = z.object({
   maxMiB: z.number().int().min(0).max(1_048_576),
   maxAgeHours: z.number().int().min(0).max(2_147_483)
 }).strict();
+const networkUpdateSchema = desktopNetworkSchema.partial().refine(value => Object.keys(value).length > 0);
 
 /** Desktop capabilities never enter the shared music domains or Worker host. */
 export function createDesktopHttp(input: {
@@ -56,14 +57,21 @@ export function createDesktopHttp(input: {
     return c.json(await input.readCache.configure(parsed.data));
   });
   app.delete('/api/desktop/read-cache', async c => input.readCache ? c.json(await input.readCache.clear()) : c.notFound());
-  app.put('/api/desktop/network', async c => {
-    const parsed = desktopNetworkSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: '请选择管理页面和 WebDAV 的访问范围，端口须为 0—65535 的整数。' }, 422);
-    if (input.configureNetwork) {
-      try { await input.configureNetwork(parsed.data); }
-      catch { return c.json({ error: 'network_failed', message: '监听地址未能切换，请检查端口是否被占用。原入口仍可使用。' }, 422); }
-    } else await writePrivateJson(join(input.directory, 'network.json'), parsed.data);
-    return c.json(await networkView());
+  let networkUpdate = Promise.resolve();
+  app.on(['PUT', 'PATCH'], '/api/desktop/network', async c => {
+    const parsed = (c.req.method === 'PATCH' ? networkUpdateSchema : desktopNetworkSchema).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: '请选择有效的访问范围，端口须为 0—65535 的整数。' }, 422);
+    // Each page submits only its own fields. Merge inside the same update queue
+    // so saving one entry cannot restore the other entry's earlier settings.
+    const updated = networkUpdate.then(async () => {
+      const settings = desktopNetworkSchema.parse({ ...await readDesktopNetworkSettings(input.directory), ...parsed.data });
+      if (input.configureNetwork) await input.configureNetwork(settings);
+      else await writePrivateJson(join(input.directory, 'network.json'), settings);
+      return networkView();
+    });
+    networkUpdate = updated.then(() => {}, () => {});
+    try { return c.json(await updated); }
+    catch { return c.json({ error: 'network_failed', message: '监听地址未能切换，请检查端口是否被占用。原入口仍可使用。' }, 422); }
   });
   app.get('/api/desktop/mount-prerequisites', async c => c.json(await input.prerequisites.inspect()));
   app.post('/api/desktop/mount-prerequisites/install', async c => c.json(await input.prerequisites.installWinFsp()));

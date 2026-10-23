@@ -6,6 +6,7 @@ import { connect } from 'node:net';
 import { startDesktopBackground } from '../src/hosts/desktop/launcher';
 import type { DesktopNetworkView } from '../src/contracts/desktop';
 import { readDesktopNetworkSettings } from '../src/hosts/desktop/network';
+import { createApi } from '../src/web/api';
 
 test('existing shared scopes retain their range and new settings persist independently', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-network-settings-'));
@@ -40,12 +41,22 @@ test('desktop network settings apply immediately, persist, and serve authenticat
     expect(initial.settings).toEqual({ managementAccess: 'local', davAccess: 'local', port: 0 }); expect(initial.restartRequired).toBe(false);
     expect(initial.davUrls).toEqual([`${backend!.origin}/dav/`]);
     expect(initial.managementUrls).toEqual([`${backend!.origin}/`]);
+    const api = createApi(credentials.adminToken, ((path: string | URL | Request, init?: RequestInit) => fetch(new URL(String(path), backend!.origin), init)) as typeof fetch);
     const invalid = await fetch(endpoint, { method: 'PUT', headers: auth, body: JSON.stringify({ managementAccess: 'local', davAccess: 'lan', port: -1 }) });
     expect(invalid.status).toBe(422); await invalid.body?.cancel();
     const fixedPort = initial.active.port;
     const scopes = { managementAccess: 'local', davAccess: 'lan', port: fixedPort } as const;
     const saved = await (await fetch(endpoint, { method: 'PUT', headers: auth, body: JSON.stringify(scopes) })).json() as DesktopNetworkView;
     expect(saved.settings).toEqual(scopes); expect(saved.active).toEqual(scopes); expect(saved.restartRequired).toBe(false);
+    // Independent forms merge their own fields without overwriting the other page or port.
+    // Start on a LAN listener so this checks concurrent settings, not a closing socket.
+    await Promise.all([api.saveDesktopNetwork({ managementAccess: 'lan' }), api.saveDesktopNetwork({ davAccess: 'local' })]);
+    const switchedScopes = { managementAccess: 'lan', davAccess: 'local', port: fixedPort } as const;
+    const both = await api.desktopNetwork(new AbortController().signal);
+    expect(both.settings).toEqual(switchedScopes); expect(both.active).toEqual(switchedScopes);
+    await api.saveDesktopNetwork({ managementAccess: 'local' });
+    expect((await api.desktopNetwork(new AbortController().signal)).settings).toEqual({ ...scopes, davAccess: 'local' });
+    await api.saveDesktopNetwork({ davAccess: 'lan' });
     expect((await stat(join(data, 'network.json'))).mode & 0o777).toBe(0o600);
     await backend!.close(); backend = undefined;
     backend = await startDesktopBackground({ directory: data, resourcesDirectory: resources });

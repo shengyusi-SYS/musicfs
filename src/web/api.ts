@@ -91,7 +91,7 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
     disableDesktopHttps: () => request<DesktopHttpsView>('/desktop/https', { method: 'DELETE' }),
     quitDesktop: () => request<{ stopping: true }>('/desktop/quit', { method: 'POST' }),
     desktopNetwork: (signal: AbortSignal) => request<DesktopNetworkView>('/desktop/network', { signal }),
-    saveDesktopNetwork: (settings: DesktopNetworkSettings) => request<DesktopNetworkView>('/desktop/network', json('PUT', settings)),
+    saveDesktopNetwork: (settings: Partial<DesktopNetworkSettings>) => request<DesktopNetworkView>('/desktop/network', json('PATCH', settings)),
     desktopPreferences: (signal?: AbortSignal) => request<DesktopPreferencesView>('/desktop/preferences', signal ? { signal } : {}),
     saveDesktopPreferences: (settings: DesktopPreferences) => request<DesktopPreferencesView>('/desktop/preferences', json('PUT', settings)),
     configuration: (id: string, signal: AbortSignal) => request<SourceConfiguration>(`/plugins/${encodeURIComponent(id)}/configuration`, { signal }),

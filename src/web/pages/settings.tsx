@@ -19,7 +19,7 @@ export default function Settings({ api, desktop }: { api: Api; desktop: boolean 
       <Form.Item label={access.data?.passwordConfigured ? '新密码' : '密码'} name="password" rules={[{ required: true, message: '请输入密码' }, { min: 8, max: 128, message: '密码须为 8—128 个字符' }]}><Input.Password autoComplete="new-password" /></Form.Item>
       <Failure error={account.error} /><Button type="primary" htmlType="submit" loading={account.isPending}>{access.data?.passwordConfigured ? '保存账号与密码' : '设置登录账号'}</Button>
     </Form>}
-  </section>{desktop && <><DesktopStartup api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>局域网访问</Typography.Title></div><DesktopNetwork api={api} /></section></>}</div>;
+  </section>{desktop && <><DesktopStartup api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>管理页面访问</Typography.Title></div><DesktopNetwork api={api} scope="management" /></section></>}</div>;
 }
 
 function DesktopStartup({ api }: { api: Api }) {

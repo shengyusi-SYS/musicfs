@@ -122,7 +122,7 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
     {status.isPending ? <Skeleton active /> : status.isSuccess && <ErrorBoundary resetKeys={[page]} fallbackRender={() => <Alert type="error" showIcon title="页面未能加载" action={<Button onClick={() => location.reload()}>重新打开</Button>} />}><Suspense fallback={<Skeleton active />}>
       <Activity mode={page === 'library' ? 'visible' : 'hidden'}><MusicWorkspace api={api} sidebar={librarySidebar} serviceControl={serviceControl} showPlugins={continueAdding => { setAddAfterInstall(!!continueAdding); setInstallRequested(true); navigate('plugins'); }} showConnection={() => navigate('connection')} initialPluginId={newPlugin} consumePlugin={() => setNewPlugin(null)} draft={draft} setDraft={setDraft} /></Activity>
       {page === 'plugins' && <Plugins api={api} addSource={addSource} startInstalling={installRequested} addAfterInstall={addAfterInstall} consumeInstall={() => { setInstallRequested(false); setAddAfterInstall(false); }} />}
-      {page === 'connection' && <Connection api={api} tab={connectionTab} setTab={setConnectionTab} openSettings={() => navigate('settings')} />}
+      {page === 'connection' && <Connection api={api} tab={connectionTab} setTab={setConnectionTab} />}
       {page === 'settings' && <Settings api={api} desktop={status.data.host === 'desktop'} />}
     </Suspense></ErrorBoundary>}</main></Layout>
     {phoneOpen && status.data?.host === 'desktop' && <PhoneAccess api={api} onClose={closePhone} openSettings={() => { closePhone(); navigate('settings'); }} />}
