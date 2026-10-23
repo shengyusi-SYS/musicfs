@@ -11,7 +11,7 @@ export function MusicInspector({ api, instance, directoryRef, label, close, show
 }) {
   const [tab, setTab] = useState(directoryRef === undefined ? 'source' : 'schedule');
   return <Drawer title={directoryRef === undefined ? instance.name : `${instance.name} / ${label}`} size={640} open onClose={close} mask={false} destroyOnHidden>
-    <Tabs activeKey={tab} onChange={setTab} destroyOnHidden items={[
+    <Tabs activeKey={tab} onChange={setTab} items={[
       { key: 'source', label: '来源设置', children: <SourceSettings api={api} instance={instance} close={close} showPlugins={showPlugins} saved={close} /> },
       { key: 'schedule', label: '自动更新', children: <UpdateRuleSettings api={api} instanceId={instance.id} label={label} close={close}
         target={directoryRef === undefined ? { kind: 'instance' } : { kind: 'directory', directoryRef, recursive: false }} /> },

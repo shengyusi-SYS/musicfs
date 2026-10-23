@@ -76,7 +76,7 @@ export default function MusicWorkspace({ api, sidebar, serviceControl, showPlugi
     setTreePanel(section); setTreeOpen(true);
   }
   function toggleOrganizer() { if (screens.lg) setOrganizer(!organizerOpen); else if (treeOpen && treePanel === 'layout') setTreeOpen(false); else showTree('layout'); }
-  function navigate(next: typeof location, keepTree = false) { open(next); if (!keepTree) setTreeOpen(false); closePanel(); }
+  function navigate(next: typeof location) { open(next); setTreeOpen(false); closePanel(); }
   function login(instance: SourceInstance) { setAuthenticating({ instance, needsReauthorization: true }); }
   function actions(source: { instanceId: string; directoryRef?: string }, authentication: boolean, metadata: { disabled: boolean; run(): void } | null) {
     const instance = instances.data?.find(value => value.id === source.instanceId);
@@ -95,11 +95,12 @@ export default function MusicWorkspace({ api, sidebar, serviceControl, showPlugi
       {!!items.length && <Dropdown trigger={['click']} menu={{ items }}><Button icon={<MoreOutlined />} aria-label="当前内容的更多操作" /></Dropdown>}
     </Space>;
   }
-  function copyToLayout(data: SourceDrag, parent: string | null) {
+  function copyToLayout(data: SourceDrag, parent: string | null, folderName?: string) {
     const additions = data.roots.map(root => ({ id: crypto.randomUUID(), name: root.name, kind: 'source' as const, instanceId: data.instanceId, sourceId: root.sourceId,
       ...(root.nested ? { directoryRef: root.directoryRef } : {}) }));
-    const next = appendNodes(nodes, parent, additions); layout.change(next); setLayoutReveal(layoutLocation(next, parent ?? ''));
-    if (screens.lg) setOrganizer(true); else message.success('已加入目录草稿');
+    const folder = folderName ? { id: crypto.randomUUID(), name: folderName, kind: 'group' as const, children: additions } : undefined;
+    const next = appendNodes(nodes, parent, folder ? [folder] : additions); layout.change(next); setLayoutReveal(layoutLocation(next, folder?.id ?? parent ?? ''));
+    showTree('layout');
   }
   const layoutOptions = <><Dropdown trigger={['click']} menu={{ items: [
     { key: 'automatic', label: '恢复按来源自动排列', disabled: layout.automatic || layout.disabled, onClick: () => { layout.change(null); open(exportedMusic); } },
@@ -133,8 +134,8 @@ export default function MusicWorkspace({ api, sidebar, serviceControl, showPlugi
       : <MusicPanes open={!!screens.lg && organizerOpen} layout={tree('layout')} content={layout.loading && location.target.kind === 'layout' ? <Skeleton className="music-content" active /> : <MusicBrowser key={locationKey(location)} api={api} instances={instances.data} location={location} open={navigate} actions={actions} login={login}
           nodes={nodes} views={browserViews} layoutActions={layoutActions} editingDisabled={layout.disabled} add={(instance, roots) => setAdding({ instance, roots })} />} />}
     <Drawer className="music-mobile-tree" title={treePanel === 'layout' ? '播放器目录' : '音乐来源'} open={treeOpen} onClose={() => setTreeOpen(false)} placement={treePanel === 'layout' ? 'right' : 'left'} size={320} destroyOnHidden>{tree(treePanel)}</Drawer>
-    {adding && <AddToFolder nodes={nodes} initial={parentId} count={adding.roots.length} close={() => setAdding(null)} add={parent => {
-      copyToLayout(sourceDrag(adding.instance.id, adding.roots), parent); setAdding(null);
+    {adding && <AddToFolder nodes={nodes} initial={parentId} names={adding.roots.map(root => root.name)} close={() => setAdding(null)} add={(parent, folderName) => {
+      copyToLayout(sourceDrag(adding.instance.id, adding.roots), parent, folderName); setAdding(null);
     }} />}
     {moving && <MoveFolder name={moving.node.name} current={moving.parentId} nodes={nodes} exclude={moving.node.id} close={() => layoutActions.setMoving(null)} move={parent => {
       const next = moveToFolder(nodes, moving.node.id, parent); layout.change(next); layoutActions.setMoving(null); setLayoutReveal(layoutLocation(next, parent ?? ''));

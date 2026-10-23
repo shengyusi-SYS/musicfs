@@ -15,7 +15,7 @@ import { MusicDropTarget, MusicLayoutDrag, MusicSourceDrag, sourceDrag, type Sou
 type Branch = { key: string; title: ReactNode; icon?: ReactNode; location?: MusicLocation; children?: Branch[]; isLeaf?: boolean; selectable?: boolean };
 export type MusicTreeView = { expanded: MusicLocation[]; filter: string; location: MusicLocation | null };
 export function MusicTree({ api, instances, selected, open, layout, actions, section, views, add, reveal, options }: {
-  api: Api; instances: SourceInstance[]; selected: MusicLocation; open(location: MusicLocation, keepTree?: boolean): void;
+  api: Api; instances: SourceInstance[]; selected: MusicLocation; open(location: MusicLocation): void;
   layout: LibraryLayout; actions: LayoutActions; section: 'sources' | 'layout'; add(data: SourceDrag, parentId: string | null): void;
   views: Map<string, MusicTreeView>;
   reveal: MusicLocation | null; options?: ReactNode;
@@ -79,14 +79,18 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
       {actions.renaming === node.id ? <RenameNode key={node.id} name={node.name} commit={name => { layout.change(editNode(nodes, node.id, item => ({ ...item, name }))); actions.setRenaming(null); }} cancel={() => actions.setRenaming(null)} />
         : <><span className="music-tree-name" title={node.name} onDoubleClick={event => { event.stopPropagation(); if (!layout.disabled) actions.rename(node); }}>{node.name}</span>{actions.button(node)}</>}
     </span></MusicLayoutDrag>;
-    return { ...result, title: <MusicDropTarget disabled={layout.disabled || !!actions.renaming} name={node.name} folder={node.kind === 'group'} add={data => add(data, node.id)} canMove={(id, placement) => canMove(nodes, id, node.id, placement)} move={(id, placement) => move(id, node.id, placement)}>{title}</MusicDropTarget> };
+    return { ...result, title: <MusicDropTarget disabled={layout.disabled || !!actions.renaming} name={node.name} folder={node.kind === 'group'}
+      expand={node.kind === 'group' && !expandedIds.has(locationKey(location)) ? () => expand(location) : undefined}
+      add={data => add(data, node.id)} canMove={(id, placement) => canMove(nodes, id, node.id, placement)} move={(id, placement) => move(id, node.id, placement)}>{title}</MusicDropTarget> };
   }
   function visible(node: Branch): Branch | null {
     const children = node.children?.flatMap(child => { const value = visible(child); return value ? [value] : []; });
     return !filter.trim() || node.location?.name.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase()) || children?.length
       ? { ...node, ...(children ? { children } : {}) } : null;
   }
-  const playerRoot: Branch = { key: locationKey(exportedMusic), location: exportedMusic, title: <MusicDropTarget disabled={layout.disabled || !!actions.renaming} name="播放器目录" folder root add={data => add(data, null)} canMove={id => !!locateNode(nodes, id)} move={id => move(id, '', 'inside')}>全部音乐</MusicDropTarget>,
+  const playerRoot: Branch = { key: locationKey(exportedMusic), location: exportedMusic, title: <MusicDropTarget disabled={layout.disabled || !!actions.renaming} name="播放器目录" folder root
+    expand={!expandedIds.has(locationKey(exportedMusic)) ? () => expand(exportedMusic) : undefined}
+    add={data => add(data, null)} canMove={id => !!locateNode(nodes, id)} move={id => move(id, '', 'inside')}>全部音乐</MusicDropTarget>,
     icon: <FolderOutlined />, children: nodes.map(layoutBranch) };
   const tree = (section === 'layout' ? [playerRoot] : instances.map(instance => branch(sourceLocation(instance)))).flatMap(node => {
     const value = visible(node); return value ? [value] : [];
@@ -105,7 +109,6 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
       onExpand={(_keys, info) => {
         const location = info.node.location; if (!location) return;
         setExpanded(current => info.expanded ? [...current.filter(value => locationKey(value) !== locationKey(location)), location] : current.filter(value => locationKey(value) !== locationKey(location)));
-        if (info.expanded && section === 'sources') open(location, true);
       }} />
     {!tree.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={section === 'sources' && !instances.length ? '尚未添加来源' : '没有匹配的目录'} />}
   </section>;

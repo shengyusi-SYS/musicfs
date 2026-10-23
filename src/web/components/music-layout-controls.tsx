@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
-import { Button, Input, Modal, TreeSelect } from 'antd';
-import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { Button, Input, Modal, TreeSelect, Typography } from 'antd';
+import { CheckOutlined, CloseOutlined, FolderAddOutlined } from '@ant-design/icons';
 import type { LayoutNode } from '../../contracts/management';
 import { folderOptions } from '../pages/layout-draft';
 
@@ -27,10 +27,18 @@ export function MoveFolder({ name, current, nodes, exclude, close, move }: { nam
   </Modal>;
 }
 
-export function AddToFolder({ nodes, initial, count, close, add }: { nodes: LayoutNode[]; initial: string | null; count: number; close(): void; add(parentId: string | null): void }) {
+export function AddToFolder({ nodes, initial, names, close, add }: { nodes: LayoutNode[]; initial: string | null; names: string[]; close(): void; add(parentId: string | null, folderName?: string): void }) {
   const [destination, setDestination] = useState(initial ?? '');
-  return <Modal title="添加到播放器目录" open onCancel={close} okText={'添加 ' + count + ' 项'} cancelText="取消" onOk={() => add(destination || null)}>
+  const [creating, setCreating] = useState(false); const [folderName, setFolderName] = useState('');
+  const valid = !creating || !!folderName.trim();
+  function submit() { if (valid) add(destination || null, creating ? folderName.trim() : undefined); }
+  return <Modal title="添加到播放器目录" open onCancel={close} okText={'添加 ' + names.length + ' 项'} cancelText="取消" okButtonProps={{ disabled: !valid }} onOk={submit}>
+    <Typography.Paragraph ellipsis={{ rows: 2, tooltip: names.join('、') }} type="secondary">{names.join('、')}</Typography.Paragraph>
     <div className="field-block"><label htmlFor="music-add-target">目标文件夹</label><TreeSelect id="music-add-target" value={destination} onChange={setDestination} treeDefaultExpandAll showSearch treeNodeFilterProp="title"
-      treeData={[{ value: '', title: '播放器目录', children: folderOptions(nodes) }]} /></div>
+      treeData={[{ value: '', title: '全部音乐', children: folderOptions(nodes) }]} /></div>
+    {creating ? <div className="field-block"><label htmlFor="music-add-folder">新文件夹名称</label><div className="music-add-folder">
+      <Input id="music-add-folder" autoFocus value={folderName} maxLength={500} onChange={event => setFolderName(event.target.value)} onPressEnter={submit} />
+      <Button type="text" aria-label="取消新建文件夹" icon={<CloseOutlined />} onClick={() => setCreating(false)} />
+    </div></div> : <Button type="link" icon={<FolderAddOutlined />} onClick={() => setCreating(true)}>新建文件夹</Button>}
   </Modal>;
 }

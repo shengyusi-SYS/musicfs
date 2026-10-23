@@ -39,28 +39,37 @@ export function MusicDragRow({ dragData, ...props }: HTMLAttributes<HTMLTableRow
   return <tr {...props} ref={ref} className={[props.className, dragData ? 'music-source-drag' : ''].filter(Boolean).join(' ')} />;
 }
 
-export function MusicDropTarget({ disabled, name, folder, root = false, children, add, canMove, move }: {
+export function MusicDropTarget({ disabled, name, folder, root = false, children, add, canMove, move, expand }: {
   disabled: boolean; name: string; folder: boolean; root?: boolean; children: ReactNode;
   add(data: SourceDrag): void; canMove(nodeId: string, placement: Placement): boolean; move(nodeId: string, placement: Placement): void;
+  expand?: (() => void) | undefined;
 }) {
   const ref = useRef<HTMLSpanElement>(null); const [over, setOver] = useState<Placement | null>(null);
-  const current = useRef({ add, canMove, move }); current.current = { add, canMove, move };
+  const current = useRef({ add, canMove, move, expand }); current.current = { add, canMove, move, expand };
   useEffect(() => {
     const element = ref.current; if (!element || disabled) return;
+    let expansion: ReturnType<typeof setTimeout> | undefined;
+    function clearExpansion() { clearTimeout(expansion); expansion = undefined; }
+    function hover(next: Placement) {
+      setOver(next);
+      if (next !== 'inside') clearExpansion();
+      else if (current.current.expand && expansion === undefined) expansion = setTimeout(() => current.current.expand?.(), 600);
+    }
     function placement(y: number): Placement {
       const bounds = element!.getBoundingClientRect(); const ratio = (y - bounds.top) / bounds.height;
       return root || folder && ratio >= .25 && ratio <= .75 ? 'inside' : ratio < .5 ? 'before' : 'after';
     }
-    return dropTargetForElements({ element,
+    const cleanup = dropTargetForElements({ element,
       canDrop: ({ source, input }) => isMusicDrag(source.data) && (source.data.type === 'music-source' ? folder : current.current.canMove(source.data.nodeId, placement(input.clientY))),
       getData: ({ source, input }) => ({ placement: source.data.type === 'music-source' ? 'inside' : placement(input.clientY) }),
       getDropEffect: ({ source }) => source.data.type === 'music-source' ? 'copy' : 'move',
-      onDragEnter: ({ self }) => setOver(self.data.placement as Placement), onDrag: ({ self }) => setOver(self.data.placement as Placement),
-      onDragLeave: () => setOver(null), onDrop: ({ source, self }) => {
-        setOver(null); if (!isMusicDrag(source.data)) return;
+      onDragEnter: ({ self }) => hover(self.data.placement as Placement), onDrag: ({ self }) => hover(self.data.placement as Placement),
+      onDragLeave: () => { clearExpansion(); setOver(null); }, onDrop: ({ source, self }) => {
+        clearExpansion(); setOver(null); if (!isMusicDrag(source.data)) return;
         if (source.data.type === 'music-source') current.current.add(source.data);
         else current.current.move(source.data.nodeId, self.data.placement as Placement);
       } });
+    return () => { clearExpansion(); cleanup(); };
   }, [disabled, folder, root]);
   return <span ref={ref} data-drop-folder={folder ? name : undefined} className={'music-drop-target' + (over ? ' music-drop-' + over : '')}>{children}</span>;
 }
