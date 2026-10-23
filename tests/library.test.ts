@@ -262,6 +262,7 @@ test('editable default layout retains exported paths and reads roots without sca
   expect(await library.layout()).toEqual({ revision: 0, nodes: null });
   const ids = template.flatMap(node => [node.id, ...(node.kind === 'group' ? node.children.map(child => child.id) : [])]);
   expect(new Set(ids).size).toBe(ids.length);
+  expect(await library.defaultLayout(signal())).toEqual(template);
   await library.saveLayout(0, template);
   expect((await library.files.list('/', signal())).map(entry => entry.path)).toEqual(before.map(entry => entry.path));
   for (const [index, entry] of before.entries()) expect((await library.files.list(entry.path, signal())).map(child => child.path)).toEqual(children[index]!.map(child => child.path));

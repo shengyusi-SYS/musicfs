@@ -405,9 +405,10 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
       const nodes: LayoutNode[] = [];
       for (const instance of instances.entries) {
         const roots = await children(instance.target, signal);
-        nodes.push({ kind: 'group', id: crypto.randomUUID(), name: instance.pathName,
-          children: roots.entries.map(root => ({ kind: 'source', id: crypto.randomUUID(), name: root.pathName,
-            instanceId: instance.id, sourceId: root.id })) });
+        nodes.push({ kind: 'group', id: 'instance:' + instance.id, name: instance.pathName,
+          children: await Promise.all(roots.entries.map(async root => ({ kind: 'source' as const,
+            id: 'source:' + await webSha256(new TextEncoder().encode(JSON.stringify([instance.id, root.id]))), name: root.pathName,
+            instanceId: instance.id, sourceId: root.id }))) });
       }
       return nodes;
     },
