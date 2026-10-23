@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "6.3.4",
+    "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
     "@hono/bun": "1.0.1",
     "@musicfs/plugin-api": "workspace:*",
     "@rjsf/antd": "6.11.0",

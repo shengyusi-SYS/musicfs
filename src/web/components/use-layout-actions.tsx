@@ -6,15 +6,15 @@ import { appendNodes, editNode, locateNode, moveNode } from '../pages/layout-dra
 import { layoutLocation, type MusicLocation } from './music-navigation';
 import type { LibraryLayout } from './use-library-layout';
 
-export function useLayoutActions(layout: LibraryLayout, open: (location: MusicLocation) => void, showTree: () => void) {
+export function useLayoutActions(layout: LibraryLayout, current: MusicLocation, open: (location: MusicLocation) => void, showTree: () => void) {
   const [renaming, setRenaming] = useState<string | null>(null); const [moving, setMoving] = useState<string | null>(null);
   const nodes = layout.nodes ?? [];
-  function reveal() { if (matchMedia('(max-width: 880px)').matches) showTree(); }
+  function reveal() { if (matchMedia('(max-width: 767px)').matches) showTree(); }
   function createFolder(parent: string | null) {
     const node = layout.createFolder(parent);
-    if (node) { open(layoutLocation(appendNodes(nodes, parent, [node]), node.id)); setRenaming(node.id); reveal(); }
+    if (node) { if (current.target.kind !== 'source') open(layoutLocation(appendNodes(nodes, parent, [node]), node.id)); setRenaming(node.id); reveal(); }
   }
-  function rename(node: LayoutNode) { open(layoutLocation(nodes, node.id)); setRenaming(node.id); reveal(); }
+  function rename(node: LayoutNode) { setRenaming(node.id); reveal(); }
   function menu(node: LayoutNode): NonNullable<MenuProps['items']> {
     const location = locateNode(nodes, node.id)!;
     return [
@@ -24,7 +24,7 @@ export function useLayoutActions(layout: LibraryLayout, open: (location: MusicLo
       { key: 'up', label: '上移', icon: <ArrowUpOutlined />, disabled: location.index === 0, onClick: () => layout.change(moveNode(nodes, node.id, location.siblings[location.index - 1]!.id, 'before')) },
       { key: 'down', label: '下移', icon: <ArrowDownOutlined />, disabled: location.index === location.siblings.length - 1, onClick: () => layout.change(moveNode(nodes, node.id, location.siblings[location.index + 1]!.id, 'after')) },
       { key: 'remove', label: '移除', danger: true, icon: <DeleteOutlined />, onClick: () => {
-        layout.change(editNode(nodes, node.id, () => null)); open(layoutLocation(nodes, location.parentId ?? ''));
+        layout.change(editNode(nodes, node.id, () => null)); if (current.target.kind !== 'source') open(layoutLocation(nodes, location.parentId ?? ''));
       } }
     ];
   }

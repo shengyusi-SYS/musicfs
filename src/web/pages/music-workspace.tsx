@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { Alert, App, Button, Drawer, Dropdown, Skeleton, Space, Typography } from 'antd';
-import { FolderAddOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, RedoOutlined, SettingOutlined, UndoOutlined } from '@ant-design/icons';
+import { FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, RedoOutlined, SettingOutlined, UndoOutlined, MenuOutlined, PartitionOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SourceInstance } from '../../contracts/management';
 import type { Api } from '../api';
@@ -8,8 +8,10 @@ import { Failure } from '../components/feedback';
 import { SourceEditor } from '../components/source-editor';
 import { MusicInspector } from '../components/music-inspector';
 import { MusicTree } from '../components/music-tree';
+import { MusicPanes } from '../components/music-panes';
+import { sourceDrag, type SourceDrag } from '../components/music-drag';
 import { MusicBrowser } from '../components/music-browser';
-import { currentLayoutLocation, exportedMusic, layoutLocation, locationKey, sourceLocation, useMusicNavigation } from '../components/music-navigation';
+import { currentLayoutLocation, exportedMusic, layoutLocation, locationKey, sourceLocation, useMusicNavigation, type MusicLocation } from '../components/music-navigation';
 import { useLibraryLayout } from '../components/use-library-layout';
 import { useLayoutActions } from '../components/use-layout-actions';
 import { AddToFolder, MoveFolder } from '../components/music-layout-controls';
@@ -31,7 +33,9 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
   const layout = useLibraryLayout(api, instances.data ?? [], draft, setDraft);
   const nodes = layout.nodes ?? []; const location = currentLayoutLocation(nodes, navigation.location);
   const [treeOpen, setTreeOpen] = useState(false);
-  const layoutActions = useLayoutActions(layout, open, () => setTreeOpen(true));
+  const [treePanel, setTreePanel] = useState<'sources' | 'layout'>('sources');
+  const [layoutReveal, setLayoutReveal] = useState<MusicLocation | null>(null);
+  const layoutActions = useLayoutActions(layout, location, open, () => showTree('layout'));
   const [adding, setAdding] = useState<{ instance: SourceInstance; roots: SourceRoot[] } | null>(null);
   const selectedNode = location.target.kind === 'layout' ? locateNode(nodes, location.target.nodeId) : undefined;
   const parentId = selectedNode ? selectedNode.node.kind === 'group' ? selectedNode.node.id : selectedNode.parentId : null;
@@ -50,6 +54,7 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
   } });
   function add() { if (plugins.data && !plugins.data.some(plugin => plugin.status === 'active')) showPlugins(); else setPanel({ kind: 'create' }); }
   function closePanel() { setPanel(null); consumePlugin(); }
+  function showTree(section: 'sources' | 'layout') { setTreePanel(section); setTreeOpen(true); }
   function navigate(next: typeof location, keepTree = false) { open(next); if (!keepTree) setTreeOpen(false); closePanel(); }
   function login(instance: SourceInstance) { setAuthenticating({ instance, needsReauthorization: true }); }
   function actions(source: { instanceId: string; directoryRef?: string }, authentication: boolean, metadata: { disabled: boolean; run(): void } | null) {
@@ -69,13 +74,22 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
       {!!items.length && <Dropdown trigger={['click']} menu={{ items }}><Button icon={<MoreOutlined />} aria-label="当前内容的更多操作" /></Dropdown>}
     </Space>;
   }
-  const tree = <MusicTree key={instances.data?.map(instance => `${instance.id}:${instance.epoch}`).join('|')} api={api} instances={instances.data ?? []} selected={location} open={navigate} layout={layout} actions={layoutActions} />;
+  function copyToLayout(data: SourceDrag, parent: string | null) {
+    const additions = data.roots.map(root => ({ id: crypto.randomUUID(), name: root.name, kind: 'source' as const, instanceId: data.instanceId, sourceId: root.sourceId }));
+    const next = appendNodes(nodes, parent, additions); layout.change(next); setLayoutReveal(layoutLocation(next, parent ?? ''));
+    message.success('已添加 ' + additions.length + ' 项');
+  }
+  const layoutOptions = <Dropdown trigger={['click']} menu={{ items: [{ key: 'automatic', label: '恢复按来源自动排列', disabled: layout.automatic || layout.disabled, onClick: () => { layout.change(null); open(exportedMusic); } }] }}><Button size="small" type="text" aria-label="播放器目录选项" icon={<MoreOutlined />} /></Dropdown>;
+  function tree(section: 'sources' | 'layout') {
+    return <MusicTree key={section + ':' + instances.data?.map(instance => `${instance.id}:${instance.epoch}`).join('|')} api={api} instances={instances.data ?? []} selected={location} open={navigate}
+      layout={layout} actions={layoutActions} section={section} add={copyToLayout} reveal={layoutReveal} options={layoutOptions} />;
+  }
   const selectedSourceId = location.target.kind === 'source' ? location.target.instanceId : layoutSource(nodes, location)?.instanceId;
   const selectedSource = instances.data?.find(instance => instance.id === selectedSourceId);
   const missingPlugin = selectedSource && plugins.isSuccess && !plugins.data.some(plugin => plugin.manifest.id === selectedSource.pluginId && plugin.status === 'active');
   return <><div className="music-workspace-toolbar"><Space wrap><Button icon={<PlusOutlined />} onClick={add}>添加来源</Button>
-    <Button icon={<FolderAddOutlined />} disabled={layout.disabled} onClick={() => layoutActions.createFolder(parentId)}>新建文件夹</Button>
-    <Dropdown trigger={['click']} menu={{ items: [{ key: 'automatic', label: '恢复按来源自动排列', disabled: layout.automatic || layout.disabled, onClick: () => { layout.change(null); open(exportedMusic); } }] }}><Button aria-label="音乐库选项" icon={<MoreOutlined />} /></Dropdown>
+    <Button className="music-sources-toggle" icon={<MenuOutlined />} onClick={() => showTree('sources')}>来源</Button>
+    <Button className="music-layout-toggle" icon={<PartitionOutlined />} onClick={() => showTree('layout')}>播放器目录</Button>
   </Space><Button type="primary" icon={<LinkOutlined />} onClick={showConnection}>连接播放器</Button></div>
     {(draft || layout.history.future.length > 0) && <div className="music-save-bar"><span>{draft ? '目录有未保存的修改' : '已撤销修改'}</span><Space wrap>
       <Button size="small" icon={<UndoOutlined />} disabled={layout.saving || layout.conflicted || !layout.history.past.length} onClick={layout.undo}>撤销</Button>
@@ -89,17 +103,14 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
     {missingPlugin && <Alert className="feedback" type="info" showIcon title="此来源需要安装插件" action={<Button size="small" onClick={showPlugins}>安装插件</Button>} />}
     {instances.isPending ? <Skeleton active /> : instances.isError ? null : !instances.data?.length ? <section className="surface welcome-surface"><div className="welcome-symbol"><FolderOpenOutlined /></div><Typography.Title level={2}>把喜欢的音乐放在一起</Typography.Title>
       <Typography.Paragraph type="secondary">连接音乐账号，交给你常用的播放器。</Typography.Paragraph><Button type="primary" onClick={add}>添加音乐来源</Button></section>
-      : <div className="music-workspace"><aside className="music-explorer">{layout.loading ? <Skeleton active /> : tree}</aside>
-        {layout.loading && location.target.kind === 'layout' ? <Skeleton className="music-content" active /> : <MusicBrowser key={locationKey(location)} api={api} instances={instances.data} location={location} open={navigate} showTree={() => setTreeOpen(true)} actions={actions} login={login}
-          nodes={nodes} layoutActions={layoutActions} editingDisabled={layout.disabled} add={(instance, roots) => setAdding({ instance, roots })} />}
-      </div>}
-    <Drawer className="music-mobile-tree" title="音乐库" open={treeOpen} onClose={() => setTreeOpen(false)} placement="left" size={320} destroyOnHidden>{tree}</Drawer>
+      : <MusicPanes sources={tree('sources')} layout={tree('layout')} content={layout.loading && location.target.kind === 'layout' ? <Skeleton className="music-content" active /> : <MusicBrowser key={locationKey(location)} api={api} instances={instances.data} location={location} open={navigate} actions={actions} login={login}
+          nodes={nodes} layoutActions={layoutActions} editingDisabled={layout.disabled} add={(instance, roots) => setAdding({ instance, roots })} />} />}
+    <Drawer className="music-mobile-tree" title={treePanel === 'layout' ? '播放器目录' : '音乐来源'} open={treeOpen} onClose={() => setTreeOpen(false)} placement={treePanel === 'layout' ? 'right' : 'left'} size={320} destroyOnHidden>{tree(treePanel)}</Drawer>
     {adding && <AddToFolder nodes={nodes} initial={parentId} count={adding.roots.length} close={() => setAdding(null)} add={parent => {
-      const additions = adding.roots.map(root => ({ id: crypto.randomUUID(), name: root.name, kind: 'source' as const, instanceId: adding.instance.id, sourceId: root.sourceId }));
-      layout.change(appendNodes(nodes, parent, additions)); setAdding(null); open(layoutLocation(appendNodes(nodes, parent, additions), parent ?? ''));
+      copyToLayout(sourceDrag(adding.instance.id, adding.roots), parent); setAdding(null);
     }} />}
     {moving && <MoveFolder name={moving.node.name} current={moving.parentId} nodes={nodes} exclude={moving.node.id} close={() => layoutActions.setMoving(null)} move={parent => {
-      const next = moveToFolder(nodes, moving.node.id, parent); layout.change(next); layoutActions.setMoving(null); open(layoutLocation(next, moving.node.id));
+      const next = moveToFolder(nodes, moving.node.id, parent); layout.change(next); layoutActions.setMoving(null); setLayoutReveal(layoutLocation(next, parent ?? ''));
     }} />}
     {panel?.kind === 'create' && <SourceEditor api={api} initialPluginId={initialPluginId} close={closePanel}
       showPlugins={() => { closePanel(); showPlugins(); }} saved={(instance, authenticate) => { closePanel(); open(sourceLocation(instance)); if (authenticate) setAuthenticating({ instance, needsReauthorization: false }); }} />}
