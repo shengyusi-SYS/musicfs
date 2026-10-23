@@ -109,11 +109,16 @@ export async function copyProjectSource(directory: string, identity: ReleaseIden
     await cp(file, destination, { preserveTimestamps: true });
     await chmod(destination, info.mode & 0o7777);
   }
-  await Bun.write(join(directory, 'SOURCE.md'), '# MusicFS 对应源码\n\n'
+  await Bun.write(join(directory, 'SOURCE.md'), '# MusicFS 对应源码\n\n[English](SOURCE.en.md)\n\n'
     + '本包包含下列发行版本的项目源码、公开 API、插件、构建工具、测试与文档，原文件保持不变。'
     + '开发环境与从源码构建步骤见[开发说明](docs/development.md#从源码发行包构建)。'
     + '源码包不包含原仓库的 `.git`；请先按该节建立本地 Git 构建身份，再运行既有构建命令。\n\n'
     + '以下身份记录原发行的输入与插件修订；本地构建会记录自己的 Git 身份：\n\n```json\n'
+    + JSON.stringify(identity, null, 2) + '\n```\n');
+  await Bun.write(join(directory, 'SOURCE.en.md'), '# MusicFS corresponding source\n\n[简体中文](SOURCE.md)\n\n'
+    + 'This package contains the project source, public API, plugins, build tools, tests and documentation for the release below. '
+    + 'Follow [the source-build guide](docs/en/development.md#build-from-a-source-archive), beginning with a local Git snapshot. '
+    + 'The original repository history is not included. Local builds record their own Git identity.\n\n```json\n'
     + JSON.stringify(identity, null, 2) + '\n```\n');
 }
 

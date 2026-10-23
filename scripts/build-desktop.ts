@@ -7,6 +7,7 @@ import { createReleaseIdentity } from './helpers/release-identity';
 import { writeBundleLicenses } from './helpers/bundle-licenses';
 import { copyWinFspPrerequisite } from './helpers/winfsp';
 import { buildDesktopNative, writeDesktopNativeLicenses } from './build-desktop-native';
+import { writePackageDocumentation } from './helpers/documentation';
 
 const targets = {
   'linux-x64': { compile: 'bun-linux-x64', rclone: 'linux-amd64', executable: 'musicfs' },
@@ -128,7 +129,7 @@ for (const selectedTarget of selected as Target[]) {
 <plist version="1.0"><dict><key>CFBundleExecutable</key><string>MusicFS</string><key>CFBundleIdentifier</key><string>org.musicfs.desktop</string><key>CFBundleName</key><string>MusicFS</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>${identity.version.split('-')[0]}</string><key>LSUIElement</key><true/></dict></plist>\n`);
   const plugins = join(releaseDirectory, 'plugins'); await mkdir(plugins, { recursive: true });
   for (const [id, source] of pluginInputs) await cp(source, join(plugins, `${id}.zip`));
-  await cp('docs/user-guide.md', join(releaseDirectory, 'README.md'));
+  await writePackageDocumentation(releaseDirectory, 'desktop');
   if (await Bun.file('LICENSE').exists()) await cp('LICENSE', join(releaseDirectory, 'LICENSE'));
   await cp('package.json', join(releaseDirectory, 'dependencies.json')); await cp('bun.lock', join(releaseDirectory, 'bun.lock'));
   const licenses = join(releaseDirectory, 'licenses');

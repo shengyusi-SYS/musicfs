@@ -1,6 +1,7 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { createReleaseIdentity } from './helpers/release-identity';
+import { writePackageDocumentation } from './helpers/documentation';
 
 /** The actual public sources and build tooling, without the MusicFS application or its dependencies. */
 export async function buildAuthorKit(): Promise<string> {
@@ -9,8 +10,7 @@ export async function buildAuthorKit(): Promise<string> {
   await mkdir(directory, { recursive: true });
   const files = ['packages/plugin-api/package.json', 'packages/plugin-api/src/index.ts', 'scripts/build-plugin.ts', 'scripts/build-sample.ts',
     'plugins/sample/index.ts', 'plugins/sample/manifest.json', 'plugins/sample/config.schema.json', 'plugins/sample/translations.json',
-    'plugins/sample/generated-config.d.mts', 'plugins/sample/LICENSE.txt', 'plugins/sample/README.md',
-    'docs/plugin-authoring.md', 'docs/architecture/plugin-interface.md', 'docs/architecture/i18n.md'];
+    'plugins/sample/generated-config.d.mts', 'plugins/sample/LICENSE.txt', 'plugins/sample/README.md', 'plugins/sample/README.en.md'];
   if (await Bun.file('LICENSE').exists()) files.push('LICENSE');
   for (const file of files) {
     const destination = join(directory, file); await mkdir(dirname(destination), { recursive: true });
@@ -31,7 +31,7 @@ export async function buildAuthorKit(): Promise<string> {
     verbatimModuleSyntax: true, resolveJsonModule: true, skipLibCheck: true, noEmit: true
   }, include: ['packages', 'plugins', 'scripts'] }, null, 2) + '\n');
   await Bun.write(join(directory, '.gitignore'), 'node_modules/\ndist/\nplugins/sample/generated-config.mjs\n');
-  await Bun.write(join(directory, 'README.md'), '# MusicFS 插件作者包\n\n从[作者指南](docs/plugin-authoring.md)开始。\n\n在本目录执行：\n\n```sh\nbun install --frozen-lockfile\nbun run build\nbun run typecheck\n```\n\n修改 `plugins/sample/manifest.json` 的 ID、名称与版本后重新构建；输出为 `dist/plugins/<插件ID>.zip`。把 ZIP 安装到已有 MusicFS，不需要重新编译核心或页面。公开接口由随包的本地 `packages/plugin-api` 提供，尚未发布 npm SDK。\n');
+  await writePackageDocumentation(directory, 'author');
   // A separate minimal lockfile avoids shipping the application's WebUI/SDK dependencies to authors.
   const lock = Bun.spawn([process.execPath, 'install', '--lockfile-only', '--ignore-scripts', '--prefer-offline'], {
     cwd: directory, stdout: 'pipe', stderr: 'pipe'

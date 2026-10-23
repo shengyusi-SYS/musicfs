@@ -6,6 +6,7 @@ import { workerModuleType } from '../src/hosts/worker/publisher';
 import { createReleaseIdentity, type ReleaseIdentity } from './helpers/release-identity';
 import { writeBundleLicenses } from './helpers/bundle-licenses';
 import { workerCrypto } from './helpers/worker-crypto';
+import { writePackageDocumentation } from './helpers/documentation';
 
 export type WorkerBundle = {
   formatVersion: 1; mainModule: string; entrypoint: string; identity: ReleaseIdentity;
@@ -55,8 +56,7 @@ export async function buildWorker(input: { directory?: string; pluginArchives?: 
     for (const [index, item] of prepared.entries()) await cp(archives[index]!, join(directory, 'plugin-packages', `${item.manifest.id}.zip`));
   }
   if (await Bun.file('dist/web/index.html').exists()) await cp('dist/web', join(directory, 'web'), { recursive: true });
-  await cp('docs/user-guide.md', join(directory, 'README.md'));
-  await cp('docs/worker.md', join(directory, 'WORKER.md'));
+  await writePackageDocumentation(directory, 'worker');
   await cp('package.json', join(directory, 'dependencies.json')); await cp('bun.lock', join(directory, 'bun.lock'));
   if (await Bun.file('LICENSE').exists()) await cp('LICENSE', join(directory, 'LICENSE'));
   await writeBundleLicenses(build.metafile, join(directory, 'licenses', 'core'));
