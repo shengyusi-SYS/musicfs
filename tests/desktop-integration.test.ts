@@ -9,6 +9,7 @@ test.skipIf(process.platform === 'win32')('desktop bridge passes tray actions, c
   const helper = join(resources, 'desktop-helper'); const recorded = join(resources, 'startup.json');
   await Bun.write(helper, `#!${process.execPath}
 if (process.argv[2] === 'tray') {
+  await Bun.write(${JSON.stringify(join(resources, 'tray-labels.json'))}, process.argv[3]);
   console.log(JSON.stringify({type:'ready'}));
   console.log(JSON.stringify({type:'action',action:'phone'}));
   process.stdin.resume(); process.stdin.on('end', () => process.exit(0));
@@ -19,6 +20,8 @@ if (process.argv[2] === 'tray') {
 `);
   await chmod(helper, 0o755);
   let integration: Awaited<ReturnType<typeof startDesktopIntegration>> | undefined;
+  const previousLanguage = process.env.MUSICFS_LANGUAGE;
+  process.env.MUSICFS_LANGUAGE = 'zh-CN';
   try {
     let received: () => void;
     const action = new Promise<void>(resolve => { received = resolve; });
@@ -26,6 +29,7 @@ if (process.argv[2] === 'tray') {
     integration = await startDesktopIntegration({ resourcesDirectory: resources,
       onAction(value) { expect(value).toBe('phone'); received(); }, onError(error) { errors.push(error); } });
     await action;
+    expect(JSON.parse(await readFile(join(resources, 'tray-labels.json'), 'utf8'))).toEqual({ open: '打开管理页面', phone: '手机访问', quit: '退出 MusicFS' });
     await integration.close(); await integration.close();
     expect(errors).toEqual([]);
     const command = ['/home/音乐 Files/MusicFS', '--data', '/home/音乐 Files/data', '--autostart'];
@@ -34,7 +38,10 @@ if (process.argv[2] === 'tray') {
     const url = 'http://127.0.0.1:8787/?phone=1#ticket=a-b_%E9%9F%B3%E4%B9%90';
     await openDesktopBrowser({ resourcesDirectory: resources, url });
     expect(JSON.parse(await readFile(recorded, 'utf8'))).toBe(url);
-  } finally { await integration?.close(); await rm(resources, { recursive: true, force: true }); }
+  } finally {
+    await integration?.close(); await rm(resources, { recursive: true, force: true });
+    if (previousLanguage === undefined) delete process.env.MUSICFS_LANGUAGE; else process.env.MUSICFS_LANGUAGE = previousLanguage;
+  }
 });
 
 test('missing native helper reports startup failure without leaving a pending integration', async () => {

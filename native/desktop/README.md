@@ -5,7 +5,9 @@ music-source code, credentials or browser UI.
 
 ## Interface
 
-- `desktop-helper tray`: newline-delimited JSON on stdout: `{"type":"ready"}`,
+- `desktop-helper tray [labels-json]`: optional labels are `{"open":"…","phone":"…","quit":"…"}`,
+  supplied by the backend's selected language. Without labels, the helper uses English.
+  Emits newline-delimited JSON on stdout: `{"type":"ready"}`,
   then `{"type":"action","action":"open"|"phone"|"quit"}`. Keep stdin open while
   the parent is alive; closing the pipe removes the tray and exits. The backend
   decides what each action does, including whether quitting is currently possible.

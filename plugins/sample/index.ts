@@ -1,5 +1,6 @@
 import type { Context, FileInfo, Json, Outcome, SourcePlugin } from '@musicfs/plugin-api';
 import schema from './config.schema.json';
+import translations from './translations.json';
 import validate from './generated-config.mjs';
 
 // A small, deterministic 16-bit mono WAV. The plugin has no account or quality model.
@@ -22,7 +23,7 @@ const missing = <T>(): Outcome<T> => ({ ok: false, error: { kind: 'not_found', m
 const label = (ctx: Context) => (ctx.config as { label: string }).label;
 
 const plugin: SourcePlugin = {
-  configuration: { schema },
+  configuration: { schema, translations },
   async validateConfig(_ctx, candidate: Json) {
     return validate(candidate) ? { ok: true, value: candidate } : {
       ok: false, error: { kind: 'invalid_config', message: 'Invalid source settings',

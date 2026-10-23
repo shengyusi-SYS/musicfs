@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useState } from 'react';
 import type { LayoutNode, SourceInstance } from '../../contracts/management';
 import { nodeTrail } from '../pages/layout-draft';
@@ -7,7 +8,7 @@ export type MusicTarget = { kind: 'export'; path: string } | { kind: 'source'; i
 export type MusicCrumb = { target: MusicTarget; name: string };
 export type MusicLocation = MusicCrumb & { ancestors: MusicCrumb[] };
 export type MusicEntry = { name: string; kind: 'file' | 'directory'; modifiedAt: string; location?: MusicLocation };
-export const exportedMusic: MusicLocation = { target: { kind: 'layout', nodeId: '' }, name: '播放器目录', ancestors: [] };
+export const exportedMusic: MusicLocation = { target: { kind: 'layout', nodeId: '' }, get name() { return t("播放器目录"); }, ancestors: [] };
 export const locationKey = (location: MusicCrumb) => JSON.stringify(location.target);
 export function layoutLocation(nodes: LayoutNode[], id: string): MusicLocation {
   const trail = nodeTrail(nodes, id);
@@ -36,10 +37,10 @@ function readLocation(): MusicLocation {
   if (history.state?.musicLocation) return history.state.musicLocation;
   const params = new URLSearchParams(location.search);
   const nodeId = params.get('node'); const directoryRef = params.get('directory');
-  if (nodeId !== null) return { name: params.get('name') ?? '播放器目录', target: { kind: 'layout', nodeId, ...(directoryRef === null ? {} : { directoryRef }) }, ancestors: [] };
+  if (nodeId !== null) return { name: params.get('name') ?? t("播放器目录"), target: { kind: 'layout', nodeId, ...(directoryRef === null ? {} : { directoryRef }) }, ancestors: [] };
   const instanceId = params.get('source');
   if (!instanceId) return exportedLocation(params.get('path') ?? '/');
-  const root: MusicCrumb = { name: '音乐来源', target: { kind: 'source', instanceId } };
+  const root: MusicCrumb = { name: t("音乐来源"), target: { kind: 'source', instanceId } };
   const sourceId = params.get('root');
   return { name: params.get('name') ?? root.name, target: { kind: 'source', instanceId, ...(directoryRef === null ? {} : { directoryRef }), ...(sourceId === null ? {} : { sourceId }) }, ancestors: directoryRef === null ? [] : [root] };
 }

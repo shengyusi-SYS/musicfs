@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { App, Button, Form, Input, Skeleton, Switch, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DesktopPreferences } from '../../contracts/desktop';
@@ -11,34 +12,34 @@ export default function Settings({ api, desktop }: { api: Api; desktop: boolean 
   const access = useQuery({ queryKey: ['access'], queryFn: () => api.access() });
   const [form] = Form.useForm<{ username: string; password: string }>();
   const account = useMutation({ mutationFn: (values: { username: string; password: string }) => api.saveAccount(values.username.trim(), values.password),
-    onSuccess: value => { client.setQueryData(['access'], value); form.setFieldValue('password', ''); message.success('登录账号已保存'); } });
-  return <div className="settings-sections"><UpdateRules api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>登录账号</Typography.Title></div>
+    onSuccess: value => { client.setQueryData(['access'], value); form.setFieldValue('password', ''); message.success(t("登录账号已保存")); } });
+  return <div className="settings-sections"><UpdateRules api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("登录账号")}</Typography.Title></div>
     <Failure error={access.error} retry={() => void access.refetch()} />
     {access.isPending ? <Skeleton active /> : <Form form={form} className="account-form" layout="vertical" initialValues={{ username: access.data?.passwordConfigured ? access.data.username : 'admin' }} onFinish={values => account.mutate(values)}>
-      <Form.Item label="用户名" name="username" rules={[{ required: true, whitespace: true, message: '请输入用户名' }, { max: 64 }]}><Input autoComplete="username" maxLength={64} /></Form.Item>
-      <Form.Item label={access.data?.passwordConfigured ? '新密码' : '密码'} name="password" rules={[{ required: true, message: '请输入密码' }, { min: 8, max: 128, message: '密码须为 8—128 个字符' }]}><Input.Password autoComplete="new-password" /></Form.Item>
-      <Failure error={account.error} /><Button type="primary" htmlType="submit" loading={account.isPending}>{access.data?.passwordConfigured ? '保存账号与密码' : '设置登录账号'}</Button>
+      <Form.Item label={t("用户名")} name="username" rules={[{ required: true, whitespace: true, message: t("请输入用户名") }, { max: 64 }]}><Input autoComplete="username" maxLength={64} /></Form.Item>
+      <Form.Item label={access.data?.passwordConfigured ? t("新密码") : t("密码")} name="password" rules={[{ required: true, message: t("请输入密码") }, { min: 8, max: 128, message: t("密码须为 8—128 个字符") }]}><Input.Password autoComplete="new-password" /></Form.Item>
+      <Failure error={account.error} /><Button type="primary" htmlType="submit" loading={account.isPending}>{access.data?.passwordConfigured ? t("保存账号与密码") : t("设置登录账号")}</Button>
     </Form>}
-  </section>{desktop && <><DesktopStartup api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>管理页面访问</Typography.Title></div><DesktopNetwork api={api} scope="management" /></section></>}</div>;
+  </section>{desktop && <><DesktopStartup api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("管理页面访问")}</Typography.Title></div><DesktopNetwork api={api} scope="management" /></section></>}</div>;
 }
 
 function DesktopStartup({ api }: { api: Api }) {
   const client = useQueryClient(); const { message } = App.useApp();
   const preferences = useQuery({ queryKey: ['desktop-preferences'], queryFn: ({ signal }) => api.desktopPreferences(signal) });
   const save = useMutation({ mutationFn: (settings: DesktopPreferences) => api.saveDesktopPreferences(settings), onSuccess: value => {
-    client.setQueryData(['desktop-preferences'], value); message.success('设置已保存');
+    client.setQueryData(['desktop-preferences'], value); message.success(t("设置已保存"));
   } });
   const desktopIntegration = preferences.data?.integration.enabled !== false;
   const rows: { key: keyof DesktopPreferences; label: string }[] = [
     ...(desktopIntegration ? [
-      { key: 'launchAtLogin' as const, label: '登录系统后启动 MusicFS' },
-      { key: 'openOnLaunch' as const, label: '手动启动时打开管理页面' },
-      { key: 'openOnLogin' as const, label: '登录系统自启时打开管理页面' }
+      { key: 'launchAtLogin' as const, label: t("登录系统后启动 MusicFS") },
+      { key: 'openOnLaunch' as const, label: t("手动启动时打开管理页面") },
+      { key: 'openOnLogin' as const, label: t("登录系统自启时打开管理页面") }
     ] : []),
-    { key: 'autoMount', label: '启动时恢复自动挂载' },
-    { key: 'retryAutoMount', label: '挂载暂时失败后自动重试' }
+    { key: 'autoMount', label: t("启动时恢复自动挂载") },
+    { key: 'retryAutoMount', label: t("挂载暂时失败后自动重试") }
   ];
-  return <section className="surface"><div className="section-heading"><Typography.Title level={3}>启动与挂载</Typography.Title></div>
+  return <section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("启动与挂载")}</Typography.Title></div>
     <Failure error={preferences.error} retry={() => void preferences.refetch()} /><Failure error={save.error} />
     {preferences.data?.integration.error && <Typography.Paragraph type="secondary">{preferences.data.integration.error}</Typography.Paragraph>}
     {preferences.isPending ? <Skeleton active /> : preferences.data && rows.map(row => <div className="setting-row" key={row.key}>

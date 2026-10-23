@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useState } from 'react';
 import { App } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,7 +18,7 @@ export function useLibraryLayout(api: Api, instances: SourceInstance[], draft: L
   const displayed = nodes === null ? defaults.data : nodes;
   const save = useMutation({ mutationFn: (value: LayoutDraft) => api.saveLayout(value.base, value.nodes), onSuccess: async value => {
     client.setQueryData(['layout'], value); setDraft(null); setHistory({ past: [], future: [] });
-    await client.invalidateQueries({ queryKey: ['library'] }); message.success('目录已保存');
+    await client.invalidateQueries({ queryKey: ['library'] }); message.success(t("目录已保存"));
   }, onError: error => { if (error instanceof ApiError && error.status === 409) void client.invalidateQueries({ queryKey: ['layout'] }); } });
   const conflicted = !!draft && !!layout.data && draft.base !== layout.data.revision;
   const disabled = save.isPending || !displayed || conflicted;
@@ -42,7 +43,7 @@ export function useLibraryLayout(api: Api, instances: SourceInstance[], draft: L
     if (disabled || !displayed) return;
     const parent = parentId ? locateNode(displayed, parentId)?.node : undefined;
     const names = (parent?.kind === 'group' ? parent.children : displayed).map(node => node.name);
-    let name = '新建文件夹'; let suffix = 2; while (names.includes(name)) name = '新建文件夹 ' + suffix++;
+    let name = t("新建文件夹"); let suffix = 2; while (names.includes(name)) name = t("新建文件夹 ") + suffix++;
     const node: LayoutNode = { id: crypto.randomUUID(), kind: 'group', name, children: [] };
     change(appendNodes(displayed, parentId, [node])); return node;
   }

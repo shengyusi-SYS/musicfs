@@ -37,7 +37,10 @@ export function resolveFileNamingPolicy(policies: FileNamingPolicies): FileNamin
 function templateFields(writer: Mustache.Writer, template: string): string[] {
   let tokens: ReturnType<Mustache.Writer['parse']>;
   try { tokens = writer.parse(template); }
-  catch (error) { throw new LibraryError('invalid_layout', `命名模板语法有误：${error instanceof Error ? error.message : String(error)}`); }
+  catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new LibraryError('invalid_layout', `命名模板语法有误：${reason}`, undefined, { key: '命名模板语法有误：{{value0}}', values: { value0: reason } });
+  }
   const fields = new Set<string>();
   const inspect = (items: typeof tokens) => {
     for (const token of items) {
@@ -59,7 +62,8 @@ export function parseFileNamingPolicy(value: unknown, availableFields?: Record<s
   if (parsed.data.mode === 'template') {
     const fields = templateFields(new Mustache.Writer(), parsed.data.template);
     const unknown = availableFields && fields.filter(field => !Object.hasOwn(availableFields, field));
-    if (unknown?.length) throw new LibraryError('invalid_layout', `此来源不支持命名字段：${unknown.join('、')}`);
+    if (unknown?.length) throw new LibraryError('invalid_layout', `此来源不支持命名字段：${unknown.join('、')}`, undefined,
+      { key: '此来源不支持命名字段：{{value0}}', values: { value0: unknown.join(', ') } });
   }
   return parsed.data;
 }

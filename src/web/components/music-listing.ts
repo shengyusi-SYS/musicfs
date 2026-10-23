@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useQuery } from '@tanstack/react-query';
 import type { DirectoryStatus, LayoutNode, SourceInstance } from '../../contracts/management';
 import type { Api } from '../api';
@@ -65,7 +66,7 @@ export function useMusicListing(api: Api, location: MusicLocation, instances: So
   const query = listingQuery(api, location, instances, nodes, roots.data);
   const listing = useQuery(query); const group = groupListing(nodes, location);
   const missing = alias && roots.isSuccess && !roots.data.some(root => root.sourceId === alias.sourceId);
-  const error = instanceId && !instance ? new Error('此音乐来源已删除') : roots.error ?? (missing ? new Error('此音乐内容已不在来源中') : listing.error);
+  const error = instanceId && !instance ? new Error(t("此音乐来源已删除")) : roots.error ?? (missing ? new Error(t("此音乐内容已不在来源中")) : listing.error);
   return { ...listing, data: group ?? listing.data, roots: roots.data,
     source: listing.data?.source ?? query.source,
     isPending: !group && listing.isPending && !error,

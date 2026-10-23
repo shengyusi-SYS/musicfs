@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { X509Certificate } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -37,7 +38,7 @@ export async function createDesktopHttps(options: {
   };
   try { state = stateSchema.parse(JSON.parse(await readFile(statePath, 'utf8'))); }
   catch (cause) {
-    if (!(cause instanceof Error && 'code' in cause && cause.code === 'ENOENT')) error = '本机 HTTPS 配置无法读取，请检查数据目录。';
+    if (!(cause instanceof Error && 'code' in cause && cause.code === 'ENOENT')) error = t("本机 HTTPS 配置无法读取，请检查数据目录。");
   }
 
   async function readCertificate() {
@@ -81,7 +82,7 @@ export async function createDesktopHttps(options: {
     let native: Awaited<ReturnType<typeof windows.inspect>> = { trusted: false, webClient: null,
       fileSizeLimitBytes: null, originalFileSizeLimitBytes: null, canRestoreFileSizeLimit: false };
     try { native = await windows.inspect(certificate?.fingerprint256); windowsError = null; }
-    catch { windowsError = '无法读取 Windows 连接设置，请检查 Windows PowerShell 后重新检测。'; }
+    catch { windowsError = t("无法读取 Windows 连接设置，请检查 Windows PowerShell 后重新检测。"); }
     return { platform, enabled: state.enabled, davUrl: server ? `https://127.0.0.1:${state.port}/dav/` : null,
       certificate: certificate ? { fingerprintSha256: certificate.fingerprint256, expiresAt: new Date(certificate.validTo).toISOString() } : null,
       ...native, error: error ?? windowsError };
@@ -89,7 +90,7 @@ export async function createDesktopHttps(options: {
   try {
     await readCertificate();
     if (state.enabled) { await start(); await writePrivateJson(statePath, state); }
-  } catch { error = '本机 HTTPS 未能恢复；主程序仍可使用，请检查端口或证书后重新启用。'; }
+  } catch { error = t("本机 HTTPS 未能恢复；主程序仍可使用，请检查端口或证书后重新启用。"); }
 
   return {
     inspect: () => serialize(inspect),
@@ -97,21 +98,21 @@ export async function createDesktopHttps(options: {
       try {
         await start(); state.enabled = true; await writePrivateJson(statePath, state); error = null;
         return inspect();
-      } catch { throw new DesktopHttpsError('https_failed', '无法启用本机 HTTPS，请检查本机端口与数据目录后重试。'); }
+      } catch { throw new DesktopHttpsError('https_failed', t("无法启用本机 HTTPS，请检查本机端口与数据目录后重试。")); }
     }),
     trust: () => serialize(async () => {
-      if (platform !== 'win32') throw new DesktopHttpsError('unsupported_platform', '自动信任证书仅用于 Windows。');
-      if (!state.enabled || !server || !certificate) throw new DesktopHttpsError('trust_failed', '请先启用本机 HTTPS，再完成 Windows 连接设置。');
+      if (platform !== 'win32') throw new DesktopHttpsError('unsupported_platform', t("自动信任证书仅用于 Windows。"));
+      if (!state.enabled || !server || !certificate) throw new DesktopHttpsError('trust_failed', t("请先启用本机 HTTPS，再完成 Windows 连接设置。"));
       try {
         await windows.prepare({ path: certificatePath, fingerprint: certificate.fingerprint256 });
         error = null;
         return inspect();
-      } catch (cause) { throw new DesktopHttpsError('trust_failed', cause instanceof Error ? cause.message : 'Windows 连接设置未完成，请重试。'); }
+      } catch (cause) { throw new DesktopHttpsError('trust_failed', cause instanceof Error ? cause.message : t("Windows 连接设置未完成，请重试。")); }
     }),
     restoreFileSizeLimit: () => serialize(async () => {
-      if (platform !== 'win32') throw new DesktopHttpsError('unsupported_platform', '恢复原生 WebDAV 设置仅用于 Windows。');
+      if (platform !== 'win32') throw new DesktopHttpsError('unsupported_platform', t("恢复原生 WebDAV 设置仅用于 Windows。"));
       try { await windows.restoreFileSizeLimit(); return inspect(); }
-      catch (cause) { throw new DesktopHttpsError('trust_failed', cause instanceof Error ? cause.message : '恢复原文件上限未完成，请重试。'); }
+      catch (cause) { throw new DesktopHttpsError('trust_failed', cause instanceof Error ? cause.message : t("恢复原文件上限未完成，请重试。")); }
     }),
     disable: () => serialize(async () => {
       if (server) { await server.stop(true); server = undefined; }

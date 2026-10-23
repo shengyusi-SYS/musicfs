@@ -1,10 +1,12 @@
+import { t } from './locale';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 
 export class MountError extends Error {
   override readonly name = 'MountError';
-  constructor(public readonly code: 'invalid_mount' | 'dependency_missing' | 'disk_full' | 'mount_failed' | 'mount_busy' | 'not_found', message: string) {
+  constructor(public readonly code: 'invalid_mount' | 'dependency_missing' | 'disk_full' | 'mount_failed' | 'mount_busy' | 'not_found', message: string,
+    public readonly translation?: import('@musicfs/plugin-api').MessageTranslation) {
     super(message);
   }
 }
@@ -17,7 +19,7 @@ export interface RcloneControl {
 
 const runtimeSchema = z.object({ pid: z.number().int().positive(), port: z.number().int().min(1).max(65535), password: z.string().min(32) }).strict();
 type Runtime = z.infer<typeof runtimeSchema>;
-const diskFull = () => new MountError('disk_full', '磁盘空间不足；请释放 MusicFS 数据目录或挂载缓存所在磁盘的空间后重试。');
+const diskFull = () => new MountError('disk_full', t("磁盘空间不足；请释放 MusicFS 数据目录或挂载缓存所在磁盘的空间后重试。"));
 
 export async function writePrivateJson(path: string, value: unknown) {
   const staging = `${path}.${crypto.randomUUID()}.tmp`;
@@ -49,11 +51,11 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       const error = z.object({ error: z.string() }).safeParse(body);
       // Never return rclone's raw message: it can contain remote URLs or credentials.
       if (error.success && /\bENOSPC\b|no space left on device|\bdisk (?:is )?full\b/i.test(error.data.error)) throw diskFull();
-      if (error.success && /busy|already mounted|not empty/i.test(error.data.error)) throw new MountError('mount_busy', '挂载路径正在使用；请关闭占用文件的程序后重试。');
+      if (error.success && /busy|already mounted|not empty/i.test(error.data.error)) throw new MountError('mount_busy', t("挂载路径正在使用；请关闭占用文件的程序后重试。"));
       if (error.success && /fusermount|libfuse|winfsp|mount type|not registered|cannot find|executable file not found/i.test(error.data.error)) {
-        throw new MountError('dependency_missing', '系统挂载依赖不可用。Linux 请检查 FUSE/fusermount，Windows 请安装 WinFsp；macOS 请检查系统 NFS 挂载权限。');
+        throw new MountError('dependency_missing', t("系统挂载依赖不可用。Linux 请检查 FUSE/fusermount，Windows 请安装 WinFsp；macOS 请检查系统 NFS 挂载权限。"));
       }
-      throw new MountError('mount_failed', 'rclone 操作失败，请检查远程地址、读取凭据、网络及本机 rclone 日志。');
+      throw new MountError('mount_failed', t("rclone 操作失败，请检查远程地址、读取凭据、网络及本机 rclone 日志。"));
     }
     return body as T;
   }
@@ -68,7 +70,7 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       try {
         saved = runtimeSchema.parse(JSON.parse(await readFile(runtimePath, 'utf8')));
       } catch (error) {
-        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new MountError('mount_failed', 'rclone 运行记录无法读取，请保留文件并核对实际系统挂载。');
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new MountError('mount_failed', t("rclone 运行记录无法读取，请保留文件并核对实际系统挂载。"));
       }
       if (saved) {
         try {
@@ -78,14 +80,14 @@ export function createRcloneControl(input: { directory: string; binary: string; 
         let alive = true;
         try { process.kill(saved.pid, 0); }
         catch (error) { if (error instanceof Error && 'code' in error && error.code === 'ESRCH') alive = false; }
-        if (alive) throw new MountError('mount_failed', '旧挂载进程仍在运行但身份暂不可确认，未创建替代进程；请检查本机挂载与 rclone 日志后重试。');
+        if (alive) throw new MountError('mount_failed', t("旧挂载进程仍在运行但身份暂不可确认，未创建替代进程；请检查本机挂载与 rclone 日志后重试。"));
       }
-      if (!await Bun.file(input.binary).exists()) throw new MountError('dependency_missing', '发行包缺少 rclone，请重新解压完整发行包。');
+      if (!await Bun.file(input.binary).exists()) throw new MountError('dependency_missing', t("发行包缺少 rclone，请重新解压完整发行包。"));
       // The OS chooses the control port. A competing bind causes startup to fail, never reuse an unknown server.
       const reservation = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response(null, { status: 503 }) });
       const port = reservation.port;
       await reservation.stop(true);
-      if (!port) throw new MountError('mount_failed', '无法为本地挂载控制分配端口。');
+      if (!port) throw new MountError('mount_failed', t("无法为本地挂载控制分配端口。"));
       const password = crypto.randomUUID() + crypto.randomUUID();
       const logPath = join(input.directory, 'rclone.log');
       if (!await Bun.file(configPath).exists()) await writeFile(configPath, '', { mode: 0o600 });
@@ -98,12 +100,12 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       const current = { pid: child.pid, port, password };
       const deadline = Date.now() + (input.startupTimeoutMs ?? 8_000);
       while (Date.now() < deadline) {
-        if (child.exitCode !== null) throw new MountError('dependency_missing', 'rclone 未能启动，请检查发行包与系统依赖。');
+        if (child.exitCode !== null) throw new MountError('dependency_missing', t("rclone 未能启动，请检查发行包与系统依赖。"));
         let identity: { pid: number } | undefined;
         try { identity = await request<{ pid: number }>(current, 'core/pid', {}, 500); }
         catch { /* rclone may listen before its authenticated RC handlers are ready. */ }
         if (identity) {
-          if (identity.pid !== child.pid) { child.kill('SIGTERM'); await child.exited; throw new MountError('mount_failed', '挂载控制进程身份不匹配。'); }
+          if (identity.pid !== child.pid) { child.kill('SIGTERM'); await child.exited; throw new MountError('mount_failed', t("挂载控制进程身份不匹配。")); }
           await writePrivateJson(runtimePath, current);
           return runtime = current;
         }
@@ -111,7 +113,7 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       }
       child.kill('SIGTERM');
       await child.exited;
-      throw new MountError('mount_failed', '等待本地 rclone 启动超时。');
+      throw new MountError('mount_failed', t("等待本地 rclone 启动超时。"));
     })();
     try { return await starting; }
     catch (error) {
@@ -126,7 +128,7 @@ export function createRcloneControl(input: { directory: string; binary: string; 
     catch (error) {
       if (error instanceof MountError) throw error;
       runtime = undefined;
-      throw new MountError('mount_failed', '与本地 rclone 的连接中断，请查看挂载状态后重试。');
+      throw new MountError('mount_failed', t("与本地 rclone 的连接中断，请查看挂载状态后重试。"));
     }
   }
 
@@ -150,7 +152,7 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       const current = runtime;
       // Callers unmount first; do not terminate a process which still owns a filesystem.
       const mounted = await request<{ mountPoints: unknown[] }>(current, 'mount/listmounts');
-      if (mounted.mountPoints.length) throw new MountError('mount_busy', '仍有活动挂载，后台暂不能退出。');
+      if (mounted.mountPoints.length) throw new MountError('mount_busy', t("仍有活动挂载，后台暂不能退出。"));
       await request(current, 'core/quit');
       if (child) await child.exited;
       else {

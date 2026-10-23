@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { closeSync, openSync } from 'node:fs';
 import { chmod, mkdir, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -49,7 +50,7 @@ async function acquireBackgroundLock(directory: string): Promise<(() => Promise<
     try { return await lock(directory, { realpath: false, stale: lockStaleMs, update: 10_000, retries: 0 }); }
     catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'ELOCKED')) throw error;
-      if (Date.now() >= deadline) throw new Error('MusicFS 后台锁暂不可用，请稍后重试并查看 launcher.log。');
+      if (Date.now() >= deadline) throw new Error(t("MusicFS 后台锁暂不可用，请稍后重试并查看 launcher.log。"));
     }
     // proper-lockfile alone owns the lock and its stale decision; the host only
     // coordinates bounded retries with the authenticated readiness handshake.
@@ -86,7 +87,7 @@ export async function launchDesktop(input: {
       if (existing) break;
       await Bun.sleep(75);
     }
-    if (!existing) throw new Error(`MusicFS 后台未能启动，请查看 ${join(directory, 'launcher.log')}。`);
+    if (!existing) throw new Error(t("MusicFS 后台未能启动，请查看 {{value0}}。", { value0: join(directory, 'launcher.log') }));
   }
   if (input.network) existing = await configureDesktopEntry(directory, input.network);
   const preferences = await readDesktopPreferences(directory);
@@ -100,7 +101,7 @@ export async function launchDesktop(input: {
   if (openBrowser) {
     const { url } = await desktopLogin(existing);
     try { await (input.browser ?? (url => openDesktopPage(url, input.resourcesDirectory)))(url); }
-    catch { throw new Error(`后台已运行，系统浏览器未能打开。可重新点击启动器；诊断目录：${directory}。`); }
+    catch { throw new Error(t("后台已运行，系统浏览器未能打开。可重新点击启动器；诊断目录：{{value0}}。", { value0: directory })); }
   }
   return { origin: existing.runtime.origin, reused };
 }
@@ -126,12 +127,12 @@ export async function startDesktopBackground(input: { directory?: string; resour
     let credentials: DesktopCredentials;
     try { credentials = credentialsSchema.parse(JSON.parse(await readFile(credentialsPath, 'utf8'))); }
     catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error('本机凭据无法读取，请保留数据并检查 credentials.json。');
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error(t("本机凭据无法读取，请保留数据并检查 credentials.json。"));
       credentials = { instanceId: crypto.randomUUID(), adminToken: crypto.randomUUID() + crypto.randomUUID(), username: 'musicfs', password: crypto.randomUUID() + crypto.randomUUID() };
       await writePrivateJson(credentialsPath, credentials);
     }
     const resources = resolve(input.resourcesDirectory);
-    if (!await Bun.file(join(resources, 'web', 'index.html')).exists()) throw new Error('发行包缺少共用管理页面，请重新解压完整发行包。');
+    if (!await Bun.file(join(resources, 'web', 'index.html')).exists()) throw new Error(t("发行包缺少共用管理页面，请重新解压完整发行包。"));
     const storedNetwork = await readDesktopNetworkState(directory);
     const network = input.network ? desktopNetworkSchema.parse({ ...storedNetwork.settings, ...input.network }) : storedNetwork.settings;
     let preferences = await readDesktopPreferences(directory);
@@ -217,11 +218,11 @@ export async function startDesktopBackground(input: { directory?: string; resour
               const response = await fetch(new URL('/api/desktop/quit', origin), { method: 'POST', headers: { Authorization: `Bearer ${credentials.adminToken}` } });
               await response.body?.cancel();
               if (!response.ok) await openManagement(false, true);
-            })().catch(() => { integrationState.error = '桌面操作未完成，请重新打开管理页面。'; });
+            })().catch(() => { integrationState.error = t("桌面操作未完成，请重新打开管理页面。"); });
           }
         });
         integrationState.available = !integrationState.error;
-      })().catch(() => { integrationState.error = '托盘未能启动，可再次运行 MusicFS 打开管理页面。'; });
+      })().catch(() => { integrationState.error = t("托盘未能启动，可再次运行 MusicFS 打开管理页面。"); });
     }
     async function close() {
       if (closing) return closing;

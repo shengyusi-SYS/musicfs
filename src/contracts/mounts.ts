@@ -24,7 +24,7 @@ export type MountView = {
   fileCacheMaxAgeHours: number;
   source: { kind: 'local' } | { kind: 'remote'; url: string };
   state: 'starting' | 'mounted' | 'unmounting' | 'stopped' | 'error';
-  error?: { code: string; message: string };
+  error?: { code: string; message: string; translation?: import('@musicfs/plugin-api').MessageTranslation };
 };
 
 export type MountCacheSettings = { directoryCacheSeconds: number; fileCacheMaxMiB?: number; fileCacheMaxAgeHours?: number };

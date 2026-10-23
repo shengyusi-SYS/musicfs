@@ -1,4 +1,5 @@
-import type { Json, PluginFault } from '@musicfs/plugin-api';
+import { t, registerPluginTranslations } from './i18n';
+import type { Json, PluginFault, MessageTranslation } from '@musicfs/plugin-api';
 import type { Status, SourceInstance, PluginInstallation, PluginInspection, SourceConfiguration, ContentSources, DirectoryStatus, DirectoryListing, Layout, LayoutNode, ViewEntry, Result, Connection, AuthenticationAction, AuthenticationSession } from '../contracts/management';
 import type { PluginChange } from '../contracts/plugin-changes';
 import type { MountCacheSettings, MountCacheStatus, MountInput, MountView } from '../contracts/mounts';
@@ -16,13 +17,22 @@ export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
     const fault = typeof detail === 'object' && detail !== null && 'error' in detail && typeof detail.error === 'object' && detail.error !== null && 'message' in detail.error ? detail.error : detail;
     super(typeof fault === 'object' && fault !== null && 'message' in fault && typeof fault.message === 'string'
-      ? fault.message : `请求失败（${status}）`);
+      ? fault.message : t("请求失败（{{value0}}）", { value0: status }));
   }
   get fault(): PluginFault | undefined {
     const detail = this.detail;
     if (typeof detail !== 'object' || detail === null) return;
     const fault = 'sourceError' in detail ? detail.sourceError : 'error' in detail ? detail.error : undefined;
     return typeof fault === 'object' && fault !== null && 'kind' in fault ? fault as PluginFault : undefined;
+  }
+  get translation(): MessageTranslation | undefined {
+    if (this.fault?.translation) return this.fault.translation;
+    const detail = this.detail;
+    if (typeof detail === 'object' && detail !== null && 'translation' in detail) return detail.translation as MessageTranslation;
+    const fault = typeof detail === 'object' && detail !== null && 'error' in detail && typeof detail.error === 'object' && detail.error !== null ? detail.error : detail;
+    if (!(typeof fault === 'object' && fault !== null && 'message' in fault && typeof fault.message === 'string'))
+      return { key: '请求失败（{{value0}}）', values: { value0: this.status } };
+    return undefined;
   }
   get code(): string | undefined {
     return typeof this.detail === 'object' && this.detail !== null && 'error' in this.detail && typeof this.detail.error === 'string'
@@ -94,7 +104,10 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
     saveDesktopNetwork: (settings: Partial<DesktopNetworkSettings>) => request<DesktopNetworkView>('/desktop/network', json('PATCH', settings)),
     desktopPreferences: (signal?: AbortSignal) => request<DesktopPreferencesView>('/desktop/preferences', signal ? { signal } : {}),
     saveDesktopPreferences: (settings: DesktopPreferences) => request<DesktopPreferencesView>('/desktop/preferences', json('PUT', settings)),
-    configuration: (id: string, signal: AbortSignal) => request<SourceConfiguration>(`/plugins/${encodeURIComponent(id)}/configuration`, { signal }),
+    configuration: async (id: string, signal: AbortSignal) => {
+      const value = await request<SourceConfiguration>(`/plugins/${encodeURIComponent(id)}/configuration`, { signal });
+      registerPluginTranslations(id, value.configuration); return value;
+    },
     createInstance: (pluginId: string, name: string, config: Json) => request<Result<SourceInstance>>('/instances', json('POST', { pluginId, name, config })),
     configure: (id: string, config: Json) => request<Result<Json>>(`/instances/${encodeURIComponent(id)}/config`, json('PUT', { config })),
     deleteInstance: (id: string) => request<void>(`/instances/${encodeURIComponent(id)}`, { method: 'DELETE' }),

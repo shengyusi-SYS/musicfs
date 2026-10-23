@@ -6,12 +6,16 @@ export type ByteRange = { start: number; end: number };
 /** statistics are additive, nonnegative integer counters for this page, never running totals. */
 export type WorkProgress = { completed: number; total: number; unit: string };
 export type Page<T> = { items: T[]; nextCursor?: string; statistics?: Record<string, number>; progress?: WorkProgress };
-export type FieldError = { path: string; message: string };
+export type MessageTranslation = { key: string; values?: Record<string, string | number> };
+export type DisplayMessage = { message: string; translation?: MessageTranslation | undefined };
+export type FieldError = DisplayMessage & { path: string };
 
 export interface PluginManifest {
   formatVersion: 1;
   id: string;
   name: string;
+  /** Optional localized plugin names; instance names and filesystem paths remain user data. */
+  nameTranslations?: Record<string, string>;
   version: string;
   apiRange: string;
   hosts: Partial<Record<HostKind, string>>;
@@ -20,10 +24,9 @@ export interface PluginManifest {
   files: string[];
 }
 
-export interface PluginFault {
+export interface PluginFault extends DisplayMessage {
   kind: 'invalid_config' | 'needs_auth' | 'not_found' | 'unavailable'
     | 'rate_limited' | 'temporary' | 'not_supported' | 'content_changed';
-  message: string;
   retryAfterSeconds?: number;
   fields?: FieldError[];
 }
@@ -65,6 +68,8 @@ export interface PluginCache {
 
 export interface Configuration {
   schema: JsonObject;
+  /** Optional plugin-owned display translations, keyed by BCP 47 language and original message. */
+  translations?: Record<string, Record<string, string>>;
   ui?: { order?: string[]; widgets?: Record<string, 'password' | 'textarea' | 'uri'> };
 }
 

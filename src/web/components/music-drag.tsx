@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { setCustomNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview';
@@ -19,7 +20,8 @@ function useMusicDrag<T extends HTMLElement>(data: MusicDrag | undefined) {
       onGenerateDragPreview: ({ nativeSetDragImage }) => setCustomNativeDragPreview({ nativeSetDragImage, render: ({ container }) => {
         const preview = document.createElement('div'); preview.className = 'music-drag-preview';
         const value = current.current!;
-        preview.textContent = value.type === 'music-layout' ? '移动「' + value.name + '」' : value.roots.length === 1 ? '添加「' + value.roots[0]!.name + '」' : '添加 ' + value.roots.length + ' 项';
+        preview.textContent = value.type === 'music-layout' ? t('移动「{{name}}」', { name: value.name }) : value.roots.length === 1
+          ? t('添加「{{name}}」', { name: value.roots[0]!.name }) : t('添加 {{count, number}} 项', { count: value.roots.length });
         container.append(preview);
       } }) });
   }, [enabled]);

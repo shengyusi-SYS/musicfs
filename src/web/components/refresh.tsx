@@ -1,3 +1,4 @@
+import { t, currentLanguage, messageText } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Progress, Space, Typography } from 'antd';
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -119,40 +120,40 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
   const waiting = operation.active && value?.retryAt && Date.parse(value.retryAt) > Date.now();
   const progress = value?.current?.progress;
   const waitingTitle = value?.error?.sourceFault?.kind === 'temporary'
-    ? '来源暂时请求失败，稍后从当前进度继续' : '来源限流，等待后自动继续';
-  const title = !value ? '正在读取准备状态' : waiting ? waitingTitle
-    : updatingMetadata ? value.status === 'queued' ? '音乐资料已加入更新队列'
-      : value.status === 'running' ? '正在重新获取音乐资料'
-      : value.status === 'completed' ? '音乐资料已更新'
-      : value.status === 'cancelled' ? '资料更新已取消'
-      : value.status === 'superseded' ? '资料更新已被较新的操作替代'
-      : '音乐资料更新失败，已保留上次成功内容'
-    : value.status === 'queued' ? preparingFiles ? '文件已加入准备队列' : '目录清单已加入准备队列'
-    : value.status === 'running' ? preparingFiles ? '正在准备文件' : '正在更新目录清单'
-    : value.status === 'completed' ? preparingFiles ? (value.failures.length ? '文件准备完成，部分目录仍需重试' : '文件已准备')
-      : value.failures.length ? '清单更新完成，部分目录保留上次内容' : '清单已更新'
-    : value.status === 'cancelled' ? preparingFiles ? '文件准备已取消' : '清单更新已取消'
-    : value.status === 'superseded' ? '准备任务已被较新的操作替代'
-    : preparingFiles ? '文件准备失败，请重试' : '清单更新失败，已保留上次成功内容';
+    ? t("来源暂时请求失败，稍后从当前进度继续") : t("来源限流，等待后自动继续");
+  const title = !value ? t("正在读取准备状态") : waiting ? waitingTitle
+    : updatingMetadata ? value.status === 'queued' ? t("音乐资料已加入更新队列")
+      : value.status === 'running' ? t("正在重新获取音乐资料")
+      : value.status === 'completed' ? t("音乐资料已更新")
+      : value.status === 'cancelled' ? t("资料更新已取消")
+      : value.status === 'superseded' ? t("资料更新已被较新的操作替代")
+      : t("音乐资料更新失败，已保留上次成功内容")
+    : value.status === 'queued' ? preparingFiles ? t("文件已加入准备队列") : t("目录清单已加入准备队列")
+    : value.status === 'running' ? preparingFiles ? t("正在准备文件") : t("正在更新目录清单")
+    : value.status === 'completed' ? preparingFiles ? (value.failures.length ? t("文件准备完成，部分目录仍需重试") : t("文件已准备"))
+      : value.failures.length ? t("清单更新完成，部分目录保留上次内容") : t("清单已更新")
+    : value.status === 'cancelled' ? preparingFiles ? t("文件准备已取消") : t("清单更新已取消")
+    : value.status === 'superseded' ? t("准备任务已被较新的操作替代")
+    : preparingFiles ? t("文件准备失败，请重试") : t("清单更新失败，已保留上次成功内容");
   return <>
     {(operation.active || operation.starting || operation.preparing || value?.status === 'failed' || !!value?.failures.length) && <Alert className="feedback" showIcon
       type={value?.status === 'failed' ? 'error' : value?.failures.length ? 'warning' : value?.status === 'completed' ? 'success' : 'info'}
-      title={operation.starting ? '正在开始更新' : title}
+      title={operation.starting ? t("正在开始更新") : title}
       description={value && <>
-        {value.current && !progress && operation.active && <div>已处理 {value.current.entries.toLocaleString()} 项</div>}
-        {progress && <div>已处理 {progress.completed.toLocaleString()} / {progress.total.toLocaleString()} {progress.unit}
+        {value.current && !progress && operation.active && <div>{t('已处理 {{count, number}} 项', { count: value.current.entries })}</div>}
+        {progress && <div>{t("已处理")} {progress.completed.toLocaleString(currentLanguage())} / {progress.total.toLocaleString(currentLanguage())} {t(progress.unit)}
           <Progress size="small" percent={progress.total ? Math.floor(progress.completed / progress.total * 100) : 100} status={waiting ? 'normal' : operation.active ? 'active' : 'normal'} />
         </div>}
-        {waiting && <div>预计 {new Date(value.retryAt!).toLocaleTimeString()} 继续，可关闭页面。</div>}
+        {waiting && <div>{t("预计 {{value0}} 继续，可关闭页面。", { value0: new Date(value.retryAt!).toLocaleTimeString(currentLanguage()) })}</div>}
         {value.current?.statistics && value.status !== 'completed' && <Space wrap>{Object.entries(labels ?? {}).flatMap(([key, label]) => {
-          const count = value.current?.statistics?.[key]; return count === undefined ? [] : [<Typography.Text key={key}>{label}：{count}</Typography.Text>];
+          const count = value.current?.statistics?.[key]; return count === undefined ? [] : [<Typography.Text key={key}>{t(label)}: {count}</Typography.Text>];
         })}</Space>}
-        {value.error && <div role="alert">{value.error.message}</div>}
-        {value.failures.length > 0 && <div role="alert">{value.failures.length} 个目录失败：{[...new Set(value.failures.map(item => item.error.message))].join('；')}</div>}
+        {value.error && <div role="alert">{messageText(value.error.sourceFault ?? value.error)}</div>}
+        {value.failures.length > 0 && <div role="alert">{t('{{count, number}} 个目录失败：{{reason}}', { count: value.failures.length, reason: [...new Set(value.failures.map(item => messageText(item.error.sourceFault ?? item.error)))].join('; ') })}</div>}
       </>}
-      action={operation.active ? <Button size="small" loading={operation.cancelling} onClick={operation.cancel}>{preparingFiles ? '取消准备' : '取消刷新'}</Button>
-        : needsAuth && reauthorize ? <Button size="small" onClick={reauthorize}>重新授权</Button>
-        : value && value.status !== 'completed' && reload ? <Button size="small" loading={operation.starting} onClick={reload}>{preparingFiles ? '重新准备文件' : updatingMetadata ? '重新获取音乐资料' : '重新读取目录'}</Button> : undefined} />}
+      action={operation.active ? <Button size="small" loading={operation.cancelling} onClick={operation.cancel}>{preparingFiles ? t("取消准备") : t("取消刷新")}</Button>
+        : needsAuth && reauthorize ? <Button size="small" onClick={reauthorize}>{t("重新授权")}</Button>
+        : value && value.status !== 'completed' && reload ? <Button size="small" loading={operation.starting} onClick={reload}>{preparingFiles ? t("重新准备文件") : updatingMetadata ? t("重新获取音乐资料") : t("重新读取目录")}</Button> : undefined} />}
     <Failure error={operation.error} retry={operation.retry} reauthorize={reauthorize} />
   </>;
 }

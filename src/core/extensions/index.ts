@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { valid, validRange, satisfies } from 'semver';
 import type { HostKind, PluginManifest, SourcePlugin } from '@musicfs/plugin-api';
 
-export const PLUGIN_API_VERSION = '0.1.11';
+export const PLUGIN_API_VERSION = '0.1.12';
 
 export class ExtensionError extends Error {
   constructor(public readonly code: 'invalid_package' | 'incompatible' | 'revision_conflict' | 'missing_plugin' | 'host_not_configured' | 'change_in_progress', message: string) {
@@ -23,6 +23,7 @@ const manifestSchema = z.object({
   formatVersion: z.literal(1),
   id: z.string().regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/),
   name: z.string().min(1).max(120),
+  nameTranslations: z.record(z.string(), z.string().min(1).max(120)).optional(),
   version: z.string().refine(v => valid(v) !== null, 'Invalid semantic version'),
   apiRange: z.string().min(1).refine(v => validRange(v) !== null, 'Invalid API range'),
   hosts: z.object({ desktop: packagePath.optional(), worker: packagePath.optional() }).strict(),
@@ -49,7 +50,8 @@ export function parsePackageManifest(input: unknown): PluginManifest {
   const hosts: PluginManifest['hosts'] = {};
   if (manifest.hosts.desktop) hosts.desktop = manifest.hosts.desktop;
   if (manifest.hosts.worker) hosts.worker = manifest.hosts.worker;
-  return { ...manifest, hosts };
+  const { nameTranslations, ...declaration } = manifest;
+  return { ...declaration, ...(nameTranslations ? { nameTranslations } : {}), hosts };
 }
 
 export function pluginCompatibility(manifest: PluginManifest, host: HostKind) {

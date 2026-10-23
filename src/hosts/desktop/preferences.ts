@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -16,7 +17,7 @@ export async function readDesktopPreferences(directory: string): Promise<Desktop
   try { return desktopPreferencesSchema.parse(JSON.parse(await readFile(join(directory, 'preferences.json'), 'utf8'))); }
   catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return desktopPreferencesSchema.parse({});
-    throw new Error('本机偏好无法读取，请检查 preferences.json。');
+    throw new Error(t("本机偏好无法读取，请检查 preferences.json。"));
   }
 }
 

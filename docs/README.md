@@ -28,6 +28,7 @@
 | 各类缓存和目录周期更新 | [缓存策略](architecture/cache-policy.md) |
 | App 挂载和直接 DAV 的字节缓存 | [挂载设计](architecture/desktop-mounts.md)、[共享读取](architecture/shared-read-cache.md) |
 | 共用页面责任和视觉基线 | [WebUI 设计](architecture/web-ui.md) |
+| 中英文、插件文案和终端语言 | [国际化设计](architecture/i18n.md) |
 | 管理登录、浏览器会话与手机扫码 | [管理访问](architecture/management-access.md) |
 | 使用流程、备选交互和取舍 | [UI / UX 决定](../outputs/musicfs-ui-ux-decisions.md) |
 | 性能主线执行与完成标准 | [Codex 目标](codex-goal.md) |

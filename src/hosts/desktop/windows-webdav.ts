@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { spawn } from 'node:child_process';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -29,7 +30,7 @@ const powershell: PowerShell = async script => {
   const code = await new Promise<number>((accept, reject) => {
     child.once('error', reject); child.once('close', value => accept(value ?? -1));
   });
-  if (code !== 0) throw new Error('Windows 连接设置未完成；请确认系统权限提示，关闭正在使用的原生 WebDAV 文件后重试。');
+  if (code !== 0) throw new Error(t("Windows 连接设置未完成；请确认系统权限提示，关闭正在使用的原生 WebDAV 文件后重试。"));
   return stdout.trim().replace(/^\uFEFF/, '');
 };
 
@@ -42,7 +43,7 @@ export function createWindowsWebDav(input: { directory: string; platform?: NodeJ
     try { return backupSchema.parse(JSON.parse(await readFile(backupPath, 'utf8'))); }
     catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return;
-      throw new Error('原生 WebDAV 原设置记录无法读取，请检查本机数据目录。');
+      throw new Error(t("原生 WebDAV 原设置记录无法读取，请检查本机数据目录。"));
     }
   }
   async function read(fingerprint = '') {
@@ -94,9 +95,9 @@ try {
   return {
     inspect,
     async prepare(certificate: { path: string; fingerprint: string }) {
-      if (platform !== 'win32') throw new Error('自动连接设置仅用于 Windows。');
+      if (platform !== 'win32') throw new Error(t("自动连接设置仅用于 Windows。"));
       const current = await read(certificate.fingerprint);
-      if (current.webClient === 'missing') throw new Error('此 Windows 未提供 WebClient 服务；可使用 App 的本机挂载。');
+      if (current.webClient === 'missing') throw new Error(t("此 Windows 未提供 WebClient 服务；可使用 App 的本机挂载。"));
       let saved = await backup();
       const changeLimit = current.configuredLimit !== WINDOWS_WEBDAV_FILE_LIMIT;
       const applyLimit = changeLimit || saved?.applied === false;
@@ -121,12 +122,12 @@ ${applyLimit ? "else { Restart-Service -Name WebClient }" : ''}
 `);
       const actual = await read(certificate.fingerprint);
       if (!actual.trusted || actual.webClient !== 'running' || actual.configuredLimit !== WINDOWS_WEBDAV_FILE_LIMIT) {
-        throw new Error('Windows 连接设置尚未生效，请重试应用设置。');
+        throw new Error(t("Windows 连接设置尚未生效，请重试应用设置。"));
       }
       if (saved && applyLimit) await writePrivateJson(backupPath, { ...saved, applied: true });
     },
     async restoreFileSizeLimit() {
-      if (platform !== 'win32') throw new Error('恢复原生 WebDAV 设置仅用于 Windows。');
+      if (platform !== 'win32') throw new Error(t("恢复原生 WebDAV 设置仅用于 Windows。"));
       const saved = await backup();
       if (!saved) return;
       const current = await read();
@@ -135,7 +136,7 @@ ${applyLimit ? "else { Restart-Service -Name WebClient }" : ''}
 $service = Get-Service -Name WebClient
 if ($service.Status -eq 'Running') { Restart-Service -Name WebClient }
 `);
-        if ((await read()).configuredLimit !== saved.original) throw new Error('原文件上限尚未恢复，请重试。');
+        if ((await read()).configuredLimit !== saved.original) throw new Error(t("原文件上限尚未恢复，请重试。"));
       }
       await rm(backupPath, { force: true });
     }

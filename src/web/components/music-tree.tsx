@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Empty, Input, Tree, Tooltip } from 'antd';
 import { ApiOutlined, FolderAddOutlined, FolderOutlined, LoadingOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
@@ -56,9 +57,9 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
     const visited = new Set([...parents, locationKey(location)]);
     const value = results.get(locationKey(location));
     const children: Branch[] = value?.data?.entries.flatMap(entry => entry.location ? [branch(entry.location, visited)] : [])
-      ?? [{ key: locationKey(location) + ':loading', title: value?.isError ? '未能加载' : '加载中…', selectable: false, isLeaf: true }];
+      ?? [{ key: locationKey(location) + ':loading', title: value?.isError ? t("未能加载") : t("加载中…"), selectable: false, isLeaf: true }];
     if (value?.isError) children.push({ key: locationKey(location) + ':retry', selectable: false, isLeaf: true,
-      title: <Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => { open(location); void value.refetch(); }}>重新加载</Button> });
+      title: <Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => { open(location); void value.refetch(); }}>{t("重新加载")}</Button> });
     const target = location.target;
     const instanceId = target.kind === 'source' ? target.instanceId : layoutSource(nodes, location)?.instanceId;
     const root = instanceId ? sourceDirectory(location, roots.get(instanceId), nodes) : undefined;
@@ -88,9 +89,9 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
     return !filter.trim() || node.location?.name.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase()) || children?.length
       ? { ...node, ...(children ? { children } : {}) } : null;
   }
-  const playerRoot: Branch = { key: locationKey(exportedMusic), location: exportedMusic, title: <MusicDropTarget disabled={layout.disabled || !!actions.renaming} name="播放器目录" folder root
+  const playerRoot: Branch = { key: locationKey(exportedMusic), location: exportedMusic, title: <MusicDropTarget disabled={layout.disabled || !!actions.renaming} name={t("播放器目录")} folder root
     expand={!expandedIds.has(locationKey(exportedMusic)) ? () => expand(exportedMusic) : undefined}
-    add={data => add(data, null)} canMove={id => !!locateNode(nodes, id)} move={id => move(id, '', 'inside')}>全部音乐</MusicDropTarget>,
+    add={data => add(data, null)} canMove={id => !!locateNode(nodes, id)} move={id => move(id, '', 'inside')}>{t("全部音乐")}</MusicDropTarget>,
     icon: <FolderOutlined />, children: nodes.map(layoutBranch) };
   const tree = (section === 'layout' ? [playerRoot] : instances.map(instance => branch(sourceLocation(instance)))).flatMap(node => {
     const value = visible(node); return value ? [value] : [];
@@ -98,18 +99,18 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
   const expandedKeys = expanded.map(locationKey);
   const target = lastLocation.current?.target; const selection = target?.kind === 'layout' ? locateNode(nodes, target.nodeId) : undefined;
   const parentId = selection?.node.kind === 'group' ? selection.node.id : selection?.parentId ?? null;
-  return <section className={'music-tree-pane music-tree-' + section} aria-label={section === 'layout' ? '播放器目录' : '音乐来源导航'}>
-    <header className="music-pane-heading"><h2>{section === 'layout' ? '播放器目录' : '音乐来源'}</h2>
-      <span>{section === 'layout' && <Tooltip title="新建文件夹"><Button type="text" size="small" icon={<FolderAddOutlined />} aria-label="新建播放器文件夹" disabled={layout.disabled} onClick={() => actions.createFolder(parentId)} /></Tooltip>}{options}</span>
+  return <section className={'music-tree-pane music-tree-' + section} aria-label={section === 'layout' ? t("播放器目录") : t("音乐来源导航")}>
+    <header className="music-pane-heading"><h2>{section === 'layout' ? t("播放器目录") : t("音乐来源")}</h2>
+      <span>{section === 'layout' && <Tooltip title={t("新建文件夹")}><Button type="text" size="small" icon={<FolderAddOutlined />} aria-label={t("新建播放器文件夹")} disabled={layout.disabled} onClick={() => actions.createFolder(parentId)} /></Tooltip>}{options}</span>
     </header>
-    <Input className="music-tree-filter" size="small" prefix={<SearchOutlined />} placeholder="筛选目录" aria-label={section === 'layout' ? '筛选播放器目录' : '筛选来源目录'} allowClear value={filter} onChange={event => setFilter(event.target.value)} />
-    <Tree<Branch> className="music-tree" aria-label={section === 'layout' ? '播放器目录树' : '来源目录树'} showIcon blockNode treeData={tree} selectedKeys={[key]}
+    <Input className="music-tree-filter" size="small" prefix={<SearchOutlined />} placeholder={t("筛选目录")} aria-label={section === 'layout' ? t("筛选播放器目录") : t("筛选来源目录")} allowClear value={filter} onChange={event => setFilter(event.target.value)} />
+    <Tree<Branch> className="music-tree" aria-label={section === 'layout' ? t("播放器目录树") : t("来源目录树")} showIcon blockNode treeData={tree} selectedKeys={[key]}
       expandedKeys={filter ? [...expandedKeys, ...instances.map(sourceLocation).map(locationKey), ...groupIds(nodes).map(id => locationKey(layoutLocation(nodes, id)))] : expandedKeys} autoExpandParent={false}
       onSelect={(_keys, info) => { if (info.node.location) open(info.node.location); }}
       onExpand={(_keys, info) => {
         const location = info.node.location; if (!location) return;
         setExpanded(current => info.expanded ? [...current.filter(value => locationKey(value) !== locationKey(location)), location] : current.filter(value => locationKey(value) !== locationKey(location)));
       }} />
-    {!tree.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={section === 'sources' && !instances.length ? '尚未添加来源' : '没有匹配的目录'} />}
+    {!tree.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={section === 'sources' && !instances.length ? t("尚未添加来源") : t("没有匹配的目录")} />}
   </section>;
 }

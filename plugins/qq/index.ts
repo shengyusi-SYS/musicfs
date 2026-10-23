@@ -1,6 +1,7 @@
 import type { Json, JsonObject, SourcePlugin } from '@musicfs/plugin-api';
 import { handleRequest } from './upstream';
 import schema from './config.schema.json';
+import translations from './translations.json';
 import validate from './generated-config.mjs';
 import { authenticate } from './authentication';
 import { catalogueContext, migrateState, renewalNeeded, run, validateState, type QqHandler } from './client';
@@ -18,7 +19,7 @@ export function createQqPlugin(handler: QqHandler = handleRequest): SourcePlugin
     migrateState: input => migrateState(input.fromVersion, input.state),
     validateState: input => validateState(input.state),
     renewal: { needed: renewalNeeded, renew: ctx => run(ctx, handler, client => client.renew()) },
-    configuration: { schema: schema as JsonObject, ui: { order: ['label', 'channel', 'audio', 'metadataCacheDays'] } },
+    configuration: { schema: schema as JsonObject, translations, ui: { order: ['label', 'channel', 'audio', 'metadataCacheDays'] } },
     async validateConfig(ctx, candidate) {
       const config: Json = normalizeConfig(candidate);
       if (!validate(config)) return { ok: false, error: { kind: 'invalid_config', message: '请检查 QQ 实例配置。',

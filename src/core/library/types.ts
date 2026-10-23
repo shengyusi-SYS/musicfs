@@ -16,7 +16,7 @@ export type Snapshot = { stamp: SourceStamp; id: string; completedAt: string; co
 export type DirectoryStatus = { completedAt: string; statistics: Record<string, number> | null; error: string | null; pendingFileInfo?: number };
 /** Display settings travel with the existing header query, never with immutable source snapshots. */
 export type PublishedHeader = Omit<Snapshot, 'items'> & { error: string | null; fileNamingPolicy?: FileNamingPolicy };
-export type InstanceRefresh = { refreshedDirectories: number; failures: { directoryRef: string; error: { code: string; message: string; sourceFault?: PluginFault } }[] };
+export type InstanceRefresh = { refreshedDirectories: number; failures: { directoryRef: string; error: { code: string; message: string; translation?: import('@musicfs/plugin-api').MessageTranslation; sourceFault?: PluginFault } }[] };
 type Stored<T> = T | Promise<T>;
 export interface LibraryStore {
   layout(): Stored<Layout>;
@@ -45,7 +45,8 @@ export interface FileView {
 
 export class LibraryError extends Error {
   constructor(public readonly code: 'not_found' | 'not_directory' | 'invalid_layout' | 'conflict' | 'stale_call'
-    | 'source_failed' | 'invalid_source' | 'range_unsupported' | 'content_changed' | 'refresh_pending', message: string, public readonly sourceFault?: PluginFault) {
+    | 'source_failed' | 'invalid_source' | 'range_unsupported' | 'content_changed' | 'refresh_pending', message: string, public readonly sourceFault?: PluginFault,
+    public readonly translation?: import('@musicfs/plugin-api').MessageTranslation) {
     super(message); this.name = 'LibraryError';
   }
 }

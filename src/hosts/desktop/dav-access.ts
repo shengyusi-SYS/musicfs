@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DavAccess, DavCredentials } from '../../contracts/dav-access';
@@ -8,9 +9,9 @@ export async function createDesktopDavAccess(directory: string, defaults: DavCre
   const path = join(directory, 'dav.json');
   let current = { ...defaults };
   try { current = JSON.parse(await readFile(path, 'utf8')) as DavCredentials; }
-  catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error('WebDAV 连接设置无法读取，请检查 dav.json。'); }
+  catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error(t("WebDAV 连接设置无法读取，请检查 dav.json。")); }
   if (typeof current.username !== 'string' || !current.username || current.username.includes(':') || typeof current.password !== 'string' || !current.password) {
-    throw new Error('WebDAV 连接设置无效，请检查 dav.json。');
+    throw new Error(t("WebDAV 连接设置无效，请检查 dav.json。"));
   }
   return {
     get: () => ({ ...current }),

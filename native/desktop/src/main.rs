@@ -56,11 +56,22 @@ fn emit_action(action: &str) {
 }
 
 fn create_tray() -> Result<TrayIcon> {
+    let labels: std::collections::HashMap<String, String> = std::env::args()
+        .nth(2)
+        .map(|value| serde_json::from_str(&value))
+        .transpose()?
+        .unwrap_or_default();
+    let label = |id: &str, fallback: &str| {
+        labels
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| fallback.to_owned())
+    };
     let menu = Menu::new();
     menu.append_items(&[
-        &MenuItem::with_id("open", "打开管理页面", true, None),
-        &MenuItem::with_id("phone", "手机访问", true, None),
-        &MenuItem::with_id("quit", "退出 MusicFS", true, None),
+        &MenuItem::with_id("open", label("open", "Open management page"), true, None),
+        &MenuItem::with_id("phone", label("phone", "Mobile access"), true, None),
+        &MenuItem::with_id("quit", label("quit", "Quit MusicFS"), true, None),
     ])?;
     // A transparent music note stays legible in both light and dark system trays.
     let mut rgba = vec![0; 32 * 32 * 4];

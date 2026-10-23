@@ -53,3 +53,5 @@ ssh -N -L 39123:127.0.0.1:39123 san@my-nas
 使用 `./musicfs --foreground --data /你的/数据目录`，程序留在前台，Ctrl+C 或 SIGTERM 正常停止；自动挂载仍在后台异步恢复。systemd 等服务管理器使用同一命令和固定的数据目录即可，不再由 MusicFS 注册桌面自启。管理器负责进程启动，MusicFS 负责已保存挂载的恢复。
 
 如果同一数据目录已有服务在运行，`--foreground` 显示现有入口后退出，不再启动第二个后台。完整选项见 `./musicfs --help`。
+
+终端和托盘语言可用 `--language en` 或 `--language zh-CN` 指定，例如 `./musicfs --headless --language en`。管理页面首次跟随浏览器语言，也可以在页面独立切换。

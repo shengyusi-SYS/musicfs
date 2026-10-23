@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useId, useState } from 'react';
 import { App, Button, Form, Input, Modal, QRCode, Select, Skeleton, Space, Typography } from 'antd';
 import { CopyOutlined, EditOutlined, QrcodeOutlined } from '@ant-design/icons';
@@ -12,12 +13,12 @@ import { Failure } from './feedback';
 function CopyField({ label, value, options, onChange }: { label: string; value: string; options?: string[]; onChange?: (value: string) => void }) {
   const id = useId(); const { message } = App.useApp();
   async function copy() {
-    try { await navigator.clipboard.writeText(value); message.success('已复制' + label); }
-    catch { message.error('复制失败，请手动选择并复制'); }
+    try { await navigator.clipboard.writeText(value); message.success(t('已复制{{label}}', { label })); }
+    catch { message.error(t("复制失败，请手动选择并复制")); }
   }
   return <div className="copy-field"><label htmlFor={id}>{label}</label><div className="copy-field-input">
     {options && options.length > 1 && onChange ? <Select id={id} className="copy-field-select" value={value} options={options.map(address => ({ value: address, label: address }))} onChange={onChange} /> : <Input id={id} value={value} readOnly autoComplete="off" />}
-    <Button icon={<CopyOutlined aria-hidden="true" />} aria-label={'复制' + label} onClick={() => void copy()}>复制</Button></div></div>;
+    <Button icon={<CopyOutlined aria-hidden="true" />} aria-label={t('复制{{label}}', { label })} onClick={() => void copy()}>{t("复制")}</Button></div></div>;
 }
 
 export function DavConnectionDetails({ api, value, desktop }: { api: Api; value: Connection; desktop: boolean }) {
@@ -30,10 +31,10 @@ export function DavConnectionDetails({ api, value, desktop }: { api: Api; value:
   const address = addresses.includes(selected) ? selected : addresses.find(address => !['localhost', '127.0.0.1', '[::1]'].includes(new URL(address).hostname)) ?? addresses[0] ?? '';
   return <>
     <Failure error={network.error} retry={() => void network.refetch()} />
-    {desktop && network.isPending ? <Skeleton.Input active block /> : <CopyField label={localOnly ? '本机 WebDAV 地址' : 'WebDAV 地址'} value={address} options={addresses} onChange={select} />}
-    <div className="credential-grid"><CopyField label="用户名" value={value.username} /><CopyField label="密码" value={value.password} /></div>
-    <Space wrap className="dav-actions"><Button type="primary" icon={<QrcodeOutlined aria-hidden="true" />} onClick={() => setScanning(true)}>扫码导入</Button>
-      <Button icon={<EditOutlined aria-hidden="true" />} onClick={() => setEditing(true)}>修改账号密码</Button></Space>
+    {desktop && network.isPending ? <Skeleton.Input active block /> : <CopyField label={localOnly ? t("本机 WebDAV 地址") : t("WebDAV 地址")} value={address} options={addresses} onChange={select} />}
+    <div className="credential-grid"><CopyField label={t("用户名")} value={value.username} /><CopyField label={t("密码")} value={value.password} /></div>
+    <Space wrap className="dav-actions"><Button type="primary" icon={<QrcodeOutlined aria-hidden="true" />} onClick={() => setScanning(true)}>{t("扫码导入")}</Button>
+      <Button icon={<EditOutlined aria-hidden="true" />} onClick={() => setEditing(true)}>{t("修改账号密码")}</Button></Space>
     {editing && <DavCredentialsDialog api={api} value={value} close={() => setEditing(false)} />}
     {scanning && <DavImportDialog api={api} value={value} desktop={desktop} preferredAddress={address} selectAddress={select} close={() => setScanning(false)} />}
   </>;
@@ -42,13 +43,13 @@ export function DavConnectionDetails({ api, value, desktop }: { api: Api; value:
 function DavCredentialsDialog({ api, value, close }: { api: Api; value: Connection; close(): void }) {
   const client = useQueryClient(); const { message } = App.useApp();
   const save = useMutation({ mutationFn: (credentials: DavCredentials) => api.saveConnection(credentials),
-    onSuccess: next => { client.setQueryData(['connection'], next); message.success('WebDAV 账号密码已保存'); close(); } });
-  return <Modal title="WebDAV 账号密码" open onCancel={close} footer={null} destroyOnHidden>
-    <Typography.Paragraph type="secondary">保存后，已有播放器需更新连接信息。</Typography.Paragraph>
+    onSuccess: next => { client.setQueryData(['connection'], next); message.success(t("WebDAV 账号密码已保存")); close(); } });
+  return <Modal title={t("WebDAV 账号密码")} open onCancel={close} footer={null} destroyOnHidden>
+    <Typography.Paragraph type="secondary">{t("保存后，已有播放器需更新连接信息。")}</Typography.Paragraph>
     <Form<DavCredentials> layout="vertical" initialValues={{ username: value.username, password: value.password }} onFinish={credentials => save.mutate({ ...credentials, username: credentials.username.trim() })} disabled={save.isPending}>
-      <Form.Item label="用户名" name="username" rules={[{ required: true, whitespace: true, message: '请输入用户名' }, { max: 128 }, { pattern: /^[^:\u0000-\u001f\u007f]+$/, message: '用户名不能包含冒号或控制字符' }]}><Input autoComplete="off" autoFocus maxLength={128} /></Form.Item>
-      <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }, { max: 256 }, { pattern: /^[^\u0000-\u001f\u007f]+$/, message: '密码不能包含换行等控制字符' }]}><Input autoComplete="off" maxLength={256} /></Form.Item>
-      <Failure error={save.error} /><Space><Button type="primary" htmlType="submit" loading={save.isPending}>保存</Button><Button onClick={close}>取消</Button></Space>
+      <Form.Item label={t("用户名")} name="username" rules={[{ required: true, whitespace: true, message: t("请输入用户名") }, { max: 128 }, { pattern: /^[^:\u0000-\u001f\u007f]+$/, message: t("用户名不能包含冒号或控制字符") }]}><Input autoComplete="off" autoFocus maxLength={128} /></Form.Item>
+      <Form.Item label={t("密码")} name="password" rules={[{ required: true, message: t("请输入密码") }, { max: 256 }, { pattern: /^[^\u0000-\u001f\u007f]+$/, message: t("密码不能包含换行等控制字符") }]}><Input autoComplete="off" maxLength={256} /></Form.Item>
+      <Failure error={save.error} /><Space><Button type="primary" htmlType="submit" loading={save.isPending}>{t("保存")}</Button><Button onClick={close}>{t("取消")}</Button></Space>
     </Form>
   </Modal>;
 }
@@ -60,16 +61,16 @@ function DavImportDialog({ api, value, desktop, preferredAddress, selectAddress,
     ? network.data.davUrls.filter(address => !['localhost', '127.0.0.1', '[::1]'].includes(new URL(address).hostname)) : [] : [current];
   const address = addresses.includes(preferredAddress) ? preferredAddress : addresses[0];
   const url = address ? davImportUrl(address, value) : '';
-  return <Modal title="扫码导入 WebDAV" open onCancel={close} footer={null} destroyOnHidden>
+  return <Modal title={t("扫码导入 WebDAV")} open onCancel={close} footer={null} destroyOnHidden>
     <Failure error={network.error} retry={() => void network.refetch()} />
     {desktop && (network.isPending || network.isFetching) ? <Skeleton active /> : address ? <>
-      {addresses.length > 1 && <Select className="dav-address-select" aria-label="WebDAV 扫码地址" value={address} options={addresses.map(item => ({ value: item, label: item }))} onChange={selectAddress} />}
-      <div className="dav-qr"><ErrorBoundary fallback={<Typography.Text>连接信息较长，请手动填入播放器。</Typography.Text>}><QRCode value={url} size={240} marginSize={4} /></ErrorBoundary></div>
-      <Typography.Paragraph type="secondary">用支持连接地址导入的播放器扫码，二维码包含用户名和密码。</Typography.Paragraph>
-      <CopyField label="含账号密码的连接地址" value={url} />
+      {addresses.length > 1 && <Select className="dav-address-select" aria-label={t("WebDAV 扫码地址")} value={address} options={addresses.map(item => ({ value: item, label: item }))} onChange={selectAddress} />}
+      <div className="dav-qr"><ErrorBoundary fallback={<Typography.Text>{t("连接信息较长，请手动填入播放器。")}</Typography.Text>}><QRCode value={url} size={240} marginSize={4} /></ErrorBoundary></div>
+      <Typography.Paragraph type="secondary">{t("用支持连接地址导入的播放器扫码，二维码包含用户名和密码。")}</Typography.Paragraph>
+      <CopyField label={t("含账号密码的连接地址")} value={url} />
     </> : !network.isError && <>
-      <Typography.Paragraph>{network.data?.active.davAccess === 'local' ? '先在当前页面将访问设备设为「局域网设备」。' : '暂未找到局域网地址，请连接网络后重试。'}</Typography.Paragraph>
-      <Space><Button type="primary" onClick={close}>返回连接设置</Button><Button onClick={() => void network.refetch()}>重新检测</Button></Space>
+      <Typography.Paragraph>{network.data?.active.davAccess === 'local' ? t("先在当前页面将访问设备设为「局域网设备」。") : t("暂未找到局域网地址，请连接网络后重试。")}</Typography.Paragraph>
+      <Space><Button type="primary" onClick={close}>{t("返回连接设置")}</Button><Button onClick={() => void network.refetch()}>{t("重新检测")}</Button></Space>
     </>}
   </Modal>;
 }

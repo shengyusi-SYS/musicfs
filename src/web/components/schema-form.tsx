@@ -1,18 +1,23 @@
+import { t, currentLanguage, localizedSchema, pluginText, messageText } from '../i18n';
 import { useMemo } from 'react';
 import { Button } from 'antd';
 import { generateForm } from '@rjsf/antd';
 import { customizeValidator } from '@rjsf/validator-ajv8';
-import type { ErrorSchema, RJSFSchema, UiSchema } from '@rjsf/utils';
+import localizeZh from 'ajv-i18n/localize/zh';
+import localizeEn from 'ajv-i18n/localize/en';
+import { replaceStringParameters, type ErrorSchema, type RJSFSchema, type UiSchema } from '@rjsf/utils';
 import type { Configuration, Json } from '@musicfs/plugin-api';
 import { ApiError } from '../api';
 
 const JsonForm = generateForm<unknown>();
-const validator = customizeValidator<unknown>();
 
 /** Translate the finite public hints here; RJSF-specific options never enter a plugin. */
-export default function SchemaForm({ configuration, value, pending, error, onSubmit, submitLabel = '保存配置' }: {
+export default function SchemaForm({ configuration, value, pending, error, onSubmit, submitLabel = t("保存配置") }: {
   configuration: Configuration; value: Json; pending: boolean; error: Error | null; onSubmit: (config: Json) => void; submitLabel?: string;
 }) {
+  const language = currentLanguage();
+  const validator = useMemo(() => customizeValidator<unknown>({}, language === 'en' ? localizeEn : localizeZh), [language]);
+  const schema = useMemo(() => localizedSchema(configuration.schema, key => pluginText(configuration, key)) as RJSFSchema, [configuration, language]);
   const ui = useMemo(() => {
     const hints: UiSchema<unknown> = Object.create(null) as UiSchema<unknown>;
     if (configuration.ui?.order) hints['ui:order'] = [...configuration.ui.order, '*'];
@@ -39,12 +44,13 @@ export default function SchemaForm({ configuration, value, pending, error, onSub
         if (!Object.hasOwn(target, part)) Object.defineProperty(target, part, { value: Object.create(null), enumerable: true });
         target = target[part] as Record<string, unknown>;
       }
-      target.__errors = [...(target.__errors as string[] | undefined ?? []), field.message];
+      target.__errors = [...(target.__errors as string[] | undefined ?? []), messageText(field)];
     }
     return errors;
-  }, [error]);
-  return <JsonForm schema={configuration.schema as RJSFSchema} uiSchema={ui} validator={validator} formData={value}
-    templates={{ DescriptionFieldTemplate: ({ id, description }) => description ? <details id={id} className="field-description"><summary>说明</summary><div>{description}</div></details> : null }}
+  }, [error, language]);
+  return <JsonForm schema={schema} uiSchema={ui} validator={validator} formData={value}
+    translateString={(key, params) => replaceStringParameters(t(key), params)}
+    templates={{ DescriptionFieldTemplate: ({ id, description }) => description ? <details id={id} className="field-description"><summary>{t("说明")}</summary><div>{description}</div></details> : null }}
     disabled={pending} extraErrors={extraErrors} extraErrorsBlockSubmit={false} omitExtraData={false} showErrorList={false}
     onSubmit={({ formData }) => onSubmit((formData ?? null) as Json)}>
     <Button type="primary" htmlType="submit" loading={pending}>{submitLabel}</Button>

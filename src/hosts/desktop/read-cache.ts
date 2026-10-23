@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { LRUCache } from 'lru-cache';
@@ -34,7 +35,7 @@ export async function createDesktopReadCache(input: {
     if (saved.cacheDefaultsVersion === undefined) await persistSettings(settings);
   }
   catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new MountError('mount_failed', 'WebDAV 读取缓存设置无法读取，请保留数据并检查设置文件。');
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new MountError('mount_failed', t("WebDAV 读取缓存设置无法读取，请保留数据并检查设置文件。"));
     settings = { ...defaults }; await persistSettings(settings);
   }
   const cacheDirectory = join(input.controlDirectory, 'cache', 'vfs', remote);
@@ -131,10 +132,10 @@ export async function createDesktopReadCache(input: {
       const stats = statsSchema.parse(await input.control.call('vfs/stats', { fs: `${remote}:` }));
       result.state = 'active'; result.actualMode = stats.opt.CacheMode === 3 || stats.opt.CacheMode === 'full' ? 'full' : 'off';
       if (stats.diskCache) { result.directory = stats.diskCache.path; result.bytesUsed = stats.diskCache.bytesUsed; result.files = stats.diskCache.files; }
-    } catch { result.state = 'unavailable'; result.message = '原生缓存状态暂不可用，请稍后查询。'; }
+    } catch { result.state = 'unavailable'; result.message = t("原生缓存状态暂不可用，请稍后查询。"); }
     return result;
   };
-  const assertIdle = () => { if (active) throw new MountError('mount_busy', '仍有 WebDAV 音频正在读取，请停止播放或扫描后重试。'); };
+  const assertIdle = () => { if (active) throw new MountError('mount_busy', t("仍有 WebDAV 音频正在读取，请停止播放或扫描后重试。")); };
   const files: FileView = { ...input.view, async open(file, range, signal): Promise<ReadResult> {
     if (!accepting) throw new LibraryError('source_failed', 'Desktop is stopping');
     const key = settings.maxMiB === 0 ? undefined : keyFor(file);

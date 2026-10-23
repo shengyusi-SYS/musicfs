@@ -1,3 +1,4 @@
+import { t, currentLanguage } from '../i18n';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { LRUCache } from 'lru-cache';
 import type { GetRef } from 'antd';
@@ -51,26 +52,26 @@ export function MusicBrowser({ api, instances, location, open, actions, login, n
     const target = crumb.target;
     return target.kind === 'source' && target.directoryRef === undefined ? instances.find(value => value.id === target.instanceId)?.name ?? crumb.name : crumb.name;
   }
-  return <section className="music-content" aria-label="音乐内容">
+  return <section className="music-content" aria-label={t("音乐内容")}>
     <div className={'music-breadcrumb' + (!location.ancestors.length ? ' music-breadcrumb-root' : '')}>
       {!!location.ancestors.length && <Breadcrumb items={crumbs.map((crumb, index) => ({ title: index === crumbs.length - 1 ? crumbName(crumb) : <button className="text-button" onClick={() => open({ ...crumb, ancestors: crumbs.slice(0, index) })}>{crumbName(crumb)}</button> }))} />}
     </div>
     <header className="music-content-heading"><div><Typography.Title level={2}><MusicSourceDrag data={currentDirectory && instance && !editingDisabled ? sourceDrag(instance.id, [currentDirectory]) : undefined}>
         {currentDirectory && <HolderOutlined className="music-title-drag-handle" />}{location.target.kind === 'source' && location.target.directoryRef === undefined ? instance?.name ?? location.name : location.name}</MusicSourceDrag></Typography.Title>
-      <div className="music-content-meta">{listing.data ? `${listing.data.entries.length.toLocaleString()} 项` : listing.isPending ? '正在载入' : ''}
-        {listing.data?.status?.completedAt && ` · 更新于 ${new Date(listing.data.status.completedAt).toLocaleString()}`}</div></div>
-      <Space wrap>{layoutNode && layoutActions.button(layoutNode)}{currentDirectory && instance && !selectedDirectories.length && <Button icon={<PlusOutlined />} disabled={editingDisabled} onClick={() => add(instance, [currentDirectory])}>添加到…</Button>}{source && <>{(listing.data?.status?.pendingFileInfo ?? 0) > 0 && <Button disabled={busy} onClick={() => refresh.start({ kind: 'file-info', directoryRef: source.directoryRef! })}>准备文件</Button>}
-        <Button icon={<ReloadOutlined />} loading={busy} onClick={() => refresh.start(source.directoryRef === undefined ? { kind: 'instance' } : { kind: 'directory', directoryRef: source.directoryRef })}>更新</Button>
+      <div className="music-content-meta">{listing.data ? t('{{count, number}} 项', { count: listing.data.entries.length }) : listing.isPending ? t("正在载入") : ''}
+        {listing.data?.status?.completedAt && t(" · 更新于 {{value0}}", { value0: new Date(listing.data.status.completedAt).toLocaleString(currentLanguage()) })}</div></div>
+      <Space wrap>{layoutNode && layoutActions.button(layoutNode)}{currentDirectory && instance && !selectedDirectories.length && <Button icon={<PlusOutlined />} disabled={editingDisabled} onClick={() => add(instance, [currentDirectory])}>{t("添加到…")}</Button>}{source && <>{(listing.data?.status?.pendingFileInfo ?? 0) > 0 && <Button disabled={busy} onClick={() => refresh.start({ kind: 'file-info', directoryRef: source.directoryRef! })}>{t("准备文件")}</Button>}
+        <Button icon={<ReloadOutlined />} loading={busy} onClick={() => refresh.start(source.directoryRef === undefined ? { kind: 'instance' } : { kind: 'directory', directoryRef: source.directoryRef })}>{t("更新")}</Button>
         {actions(source, !!configuration.data?.authentication, configuration.data?.metadataRefresh && source.directoryRef !== undefined && listing.data?.entries.some(entry => entry.kind === 'file')
           ? { disabled: busy, run: () => refresh.start({ kind: 'metadata', directoryRef: source.directoryRef! }) } : null)}
       </>}</Space>
     </header>
     <div className="music-content-feedback"><Failure error={pending ? null : listing.error} retry={() => void listing.refetch()} reauthorize={reauthorize} />
       <RefreshProgress operation={refresh} labels={configuration.data?.statistics} reload={() => refresh.view && refresh.start(refresh.view.scope)} reauthorize={reauthorize} />
-      {listing.data?.status?.error && !refresh.active && <Alert className="feedback" type="warning" showIcon title="上次更新未完成" action={<Button size="small" onClick={() => refresh.start({ kind: 'directory', directoryRef: source!.directoryRef! })}>重试</Button>} />}
+      {listing.data?.status?.error && !refresh.active && <Alert className="feedback" type="warning" showIcon title={t("上次更新未完成")} action={<Button size="small" onClick={() => refresh.start({ kind: 'directory', directoryRef: source!.directoryRef! })}>{t("重试")}</Button>} />}
     </div>
-    <div className="music-list-toolbar"><Input prefix={<SearchOutlined />} placeholder="搜索当前目录" aria-label="搜索当前目录" allowClear value={filter} onChange={event => update({ filter: event.target.value, page: 1, scrollTop: 0 })} />
-      {selectedDirectories.length > 0 && instance ? <Button disabled={editingDisabled} onClick={() => add(instance, selectedDirectories)}>添加 {selectedDirectories.length} 项到…</Button> : filter && <Typography.Text type="secondary">{entries.length} 项</Typography.Text>}
+    <div className="music-list-toolbar"><Input prefix={<SearchOutlined />} placeholder={t("搜索当前目录")} aria-label={t("搜索当前目录")} allowClear value={filter} onChange={event => update({ filter: event.target.value, page: 1, scrollTop: 0 })} />
+      {selectedDirectories.length > 0 && instance ? <Button disabled={editingDisabled} onClick={() => add(instance, selectedDirectories)}>{t('添加 {{count, number}} 项到…', { count: selectedDirectories.length })}</Button> : filter && <Typography.Text type="secondary">{t('{{count, number}} 项', { count: entries.length })}</Typography.Text>}
     </div>
     {listing.isPending ? <Skeleton className="music-list-loading" active paragraph={{ rows: 6 }} /> : listing.data && <Table<MusicEntry> ref={table} className="music-file-table" size="middle" dataSource={entries} components={{ body: { row: MusicDragRow } }}
       onScroll={event => { currentView.current = { ...currentView.current, scrollTop: event.currentTarget.scrollTop }; views.set(viewKey, currentView.current); }}
@@ -78,12 +79,12 @@ export function MusicBrowser({ api, instances, location, open, actions, login, n
         const root = entryDirectory(entry); const chosen = selectedDirectories.some(item => item.sourceId === root?.sourceId && item.directoryRef === root?.directoryRef) ? selectedDirectories : root ? [root] : [];
         return { className: '', dragData: !editingDisabled && instance && chosen.length ? sourceDrag(instance.id, chosen) : undefined };
       }}
-      {...(selectingDirectories ? { rowSelection: { selectedRowKeys: selected, preserveSelectedRowKeys: true, onChange: keys => update({ selected: keys }), getCheckboxProps: (entry: MusicEntry) => ({ disabled: editingDisabled || !entryDirectory(entry), 'aria-label': '选择' + entry.name }) } } : {})}
+      {...(selectingDirectories ? { rowSelection: { selectedRowKeys: selected, preserveSelectedRowKeys: true, onChange: keys => update({ selected: keys }), getCheckboxProps: (entry: MusicEntry) => ({ disabled: editingDisabled || !entryDirectory(entry), 'aria-label': t("选择") + entry.name }) } } : {})}
       rowKey={entry => entry.location ? locationKey(entry.location) : entry.name} scroll={{ y: '100%' }} pagination={{ current: view.page, onChange: page => update({ page, scrollTop: 0 }), pageSize: 50, hideOnSinglePage: true, showSizeChanger: false, simple: true }}
-      locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter ? '没有匹配的名称' : '此目录为空'}>
-        {!filter && location.target.kind === 'layout' && <Button onClick={() => layoutActions.createFolder(layoutNode?.kind === 'group' ? layoutNode.id : null)} disabled={editingDisabled}>新建文件夹</Button>}
+      locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter ? t("没有匹配的名称") : t("此目录为空")}>
+        {!filter && location.target.kind === 'layout' && <Button onClick={() => layoutActions.createFolder(layoutNode?.kind === 'group' ? layoutNode.id : null)} disabled={editingDisabled}>{t("新建文件夹")}</Button>}
       </Empty> }} columns={[
-        { title: '名称', key: 'name', render: (_value, entry) => entry.location
+        { title: t("名称"), key: 'name', render: (_value, entry) => entry.location
           ? <button className="music-folder-link" onClick={() => open(entry.location!)}><FolderOutlined /><span>{entry.name}</span></button>
           : <span className="music-file-name"><FileOutlined /><span>{entry.name}</span></span> },
         ...(editableListing ? [{ title: '', key: 'actions', width: 48, render: (_value: unknown, entry: MusicEntry) => {

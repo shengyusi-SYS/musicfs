@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { createPluginActivation, needsMigration, terminalChange, type PluginChangeRecord, type PluginChangeStore } from '../../application/change-plugin';
 import { assertInstallationCandidate, ExtensionError, type Extensions, type InstallationStore, type PreparedPackage } from '../../core/extensions';
 import { preparePluginMigration } from '../../core/sources';
@@ -19,7 +20,7 @@ export function createDesktopChanges(input: { store: PluginChangeStore & Install
       signal.throwIfAborted();
       await input.plugins.prepare(prepared);
       signal.throwIfAborted();
-      if (!await input.store.createChange(record)) throw new ExtensionError('change_in_progress', '另一个插件变更仍在进行，请等待完成后重试。');
+      if (!await input.store.createChange(record)) throw new ExtensionError('change_in_progress', t("另一个插件变更仍在进行，请等待完成后重试。"));
       return record.view;
     },
     async get(id: string) { return (await input.store.changeRecord(id))?.view ?? null; },
@@ -38,7 +39,7 @@ export function createDesktopChanges(input: { store: PluginChangeStore & Install
         await activation.step(lease, module, AbortSignal.any([signal, AbortSignal.timeout(25_000)]));
       } catch {
         signal.throwIfAborted();
-        if (lease) await activation.fail(lease, 'candidate_failed', '无法准备候选插件，原安装和实例数据保持不变。');
+        if (lease) await activation.fail(lease, 'candidate_failed', t("无法准备候选插件，原安装和实例数据保持不变。"));
       } finally { await input.store.releaseChange(id, token); }
       return true;
     }

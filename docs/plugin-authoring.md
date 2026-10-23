@@ -2,7 +2,7 @@
 
 这份指南从独立作者包开始，完成修改插件 ID、构建 ZIP、安装和创建两个实例。示例只提供一份 16,044 字节的 WAV，不需要账号、歌单或音质概念。它使用与网易云、QQ 相同的公开合同。
 
-**作者需要 Bun，使用插件的人不需要构建工具。** 作者提前生成 ZIP；使用者在现有 MusicFS WebUI 安装，核心程序和页面都不需要重新编译。本文对应开发期 API 0.1.6，精确定义以随包的[公开类型](../packages/plugin-api/src/index.ts)和[插件合同](architecture/plugin-interface.md)为准。
+**作者需要 Bun，使用插件的人不需要构建工具。** 作者提前生成 ZIP；使用者在现有 MusicFS WebUI 安装，核心程序和页面都不需要重新编译。本文对应开发期 API 0.1.12，精确定义以随包的[公开类型](../packages/plugin-api/src/index.ts)和[插件合同](architecture/plugin-interface.md)为准。
 
 ## 准备一个独立目录
 
@@ -86,6 +86,7 @@ bun run typecheck
 |---|---|
 | [index.ts](../plugins/sample/index.ts) | 默认导出的 `SourcePlugin`，配置检查、入口、目录、描述和实际读取 |
 | [config.schema.json](../plugins/sample/config.schema.json) | 实例配置字段与结构约束，直接供通用页面显示 |
+| [translations.json](../plugins/sample/translations.json) | 可选显示翻译，编入配置声明；不改动配置值和目录名 |
 | [manifest.json](../plugins/sample/manifest.json) | 插件身份、版本、API 范围、宿主入口、结构版本和包内文件清单 |
 | [generated-config.d.mts](../plugins/sample/generated-config.d.mts) | 生成验证器的类型声明；生成的 `.mjs` 不手改 |
 | [LICENSE.txt](../plugins/sample/LICENSE.txt) | 当前示例的许可；发布自己的派生代码和依赖时保留适用声明 |
@@ -106,5 +107,24 @@ bun run typecheck
 - **可选更新控制：** API0.1.10的`contentConfiguration`可排除纯保留策略，避免只调整缓存天数就使整库失效。声明`metadataRefresh: true`后，`list`需识别`ctx.metadataRefresh`操作ID，重新取得资料并跨页复用本轮结果；已发布计划保持不可变。细节见[插件合同](architecture/plugin-interface.md#保留策略与资料更新)。
 - **可选命名资料：** API0.1.11可声明`naming: {fields: {title: '歌名', artist: '歌手'}}`，文件条目提供`naming: {identity: '来源歌曲:实际音质', fields: {title: '歌名', artist: ['歌手']}}`。资料来自当前清单，不为模板补取音频；identity不使用整歌单位置。核心负责模板、扩展名和同名处理，旧插件可继续只提供`name`。详见[命名职责](architecture/updates-and-naming.md#模板与插件合同)。
 - **更新与迁移：** 发布版本与 `configVersion`、`stateVersion` 是不同概念。只有结构变化才提升相应结构版本，提供需要的纯转换及 `validateState`；宿主准备候选并整体激活，失败保留旧状态。无需认证、续期或迁移时不声明对应可选能力。
+
+## 显示翻译
+
+API0.1.12可在清单加入 `"nameTranslations": { "en": "My source" }`，保留 `name` 作为默认名称。使用这个新字段时将 `apiRange` 下限设为0.1.12。
+
+配置声明可自带词典，不需要插件依赖 React、i18next 或宿主源码：
+
+```ts
+configuration: {
+  schema: { type: 'object', properties: { server: { type: 'string', title: '服务器地址' } } },
+  translations: {
+    en: { '服务器地址': 'Server URL', '请先授权。': 'Sign in first.' }
+  }
+}
+```
+
+界面按插件命名空间翻译配置注释、授权提示和错误；没有词典时保留原文。不要翻译 `const`、`enum`、`default`、歌曲名或文件引用。带参数的错误可返回原消息和可选的 `translation: { key: '请求失败（{{status}}）', values: { status: 503 } }`，并在词典中定义对应键；缺少翻译时回退到 `message`。
+
+## 开源许可
 
 MusicFS自行编写的公开类型、构建工具和示例代码采用GPL-3.0-only，正文见作者包根目录的[LICENSE](../LICENSE)。第三方依赖保留各自原许可和署名。发布自己的代码、使用或修改随包代码时，应保留相应适用声明；作者包不替你选择第三方组件的许可。

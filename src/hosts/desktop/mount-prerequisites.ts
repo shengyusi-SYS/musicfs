@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -92,27 +93,27 @@ export function createMountPrerequisites(input: {
   let restartRequired = false;
 
   async function inspect(): Promise<MountPrerequisitesView> {
-    if (platform !== 'win32') return { kind: 'none', state: 'not_required', canInstall: false, message: '此平台无需 WinFsp。' };
+    if (platform !== 'win32') return { kind: 'none', state: 'not_required', canInstall: false, message: t("此平台无需 WinFsp。") };
     const canInstall = await Bun.file(installerPath).exists();
     try {
       const result = await powershell(inspectScript);
       if (result.exitCode !== 0) throw new Error('PowerShell detection failed');
       const probe = probeSchema.parse(JSON.parse(result.stdout.trim().replace(/^\uFEFF/, '')));
       if (restartRequired) return { kind: 'winfsp', state: 'restart_required', canInstall: false,
-        message: 'WinFsp 安装完成，Windows 要求重启；请重启电脑后再挂载。', ...(probe.version ? { version: probe.version } : {}) };
-      if (probe.ready) return { kind: 'winfsp', state: 'ready', canInstall: false, message: 'WinFsp 已就绪，可直接挂载。',
+        message: t("WinFsp 安装完成，Windows 要求重启；请重启电脑后再挂载。"), ...(probe.version ? { version: probe.version } : {}) };
+      if (probe.ready) return { kind: 'winfsp', state: 'ready', canInstall: false, message: t("WinFsp 已就绪，可直接挂载。"),
         ...(probe.version ? { version: probe.version } : {}) };
       return { kind: 'winfsp', state: 'missing', canInstall,
-        message: canInstall ? '本机挂载需要 WinFsp。可在此安装随包官方运行组件，Windows 会请求一次安装权限。'
-          : '未检测到可用的 WinFsp，且发行包缺少安装器；请重新解压完整 Windows 发行包。' };
+        message: canInstall ? t("本机挂载需要 WinFsp。可在此安装随包官方运行组件，Windows 会请求一次安装权限。")
+          : t("未检测到可用的 WinFsp，且发行包缺少安装器；请重新解压完整 Windows 发行包。") };
     } catch {
       return { kind: 'winfsp', state: 'error', canInstall,
-        message: '无法检测 WinFsp；请检查 Windows PowerShell 是否可用，再重新检测。' };
+        message: t("无法检测 WinFsp；请检查 Windows PowerShell 是否可用，再重新检测。") };
     }
   }
 
   async function install(): Promise<MountPrerequisitesView> {
-    if (platform !== 'win32') throw new MountError('dependency_missing', 'WinFsp 安装仅用于 Windows。');
+    if (platform !== 'win32') throw new MountError('dependency_missing', t("WinFsp 安装仅用于 Windows。"));
     const current = await inspect();
     if (current.state === 'ready' || current.state === 'restart_required') return current;
     if (current.state === 'error') throw new MountError('dependency_missing', current.message);
@@ -122,14 +123,15 @@ export function createMountPrerequisites(input: {
       const result = await powershell(installScript, { MUSICFS_WINFSP_MSI: installerPath });
       if (result.exitCode !== 0) throw new Error('PowerShell installer failed');
       code = installationSchema.parse(JSON.parse(result.stdout.trim().replace(/^\uFEFF/, ''))).exitCode;
-    } catch { throw new MountError('mount_failed', '无法启动 WinFsp 安装器；请确认桌面可交互后重试。'); }
-    if (code === 1602 || code === 1223) throw new MountError('mount_failed', '已取消 WinFsp 安装；可稍后在本页重试。');
-    if (code === -2) throw new MountError('mount_failed', 'WinFsp 安装包校验失败；请重新解压完整 Windows 发行包。');
-    if (code !== 0 && code !== 3010) throw new MountError('mount_failed', `WinFsp 安装未完成（退出码 ${code}）；请关闭安装窗口后重试。`);
+    } catch { throw new MountError('mount_failed', t("无法启动 WinFsp 安装器；请确认桌面可交互后重试。")); }
+    if (code === 1602 || code === 1223) throw new MountError('mount_failed', t("已取消 WinFsp 安装；可稍后在本页重试。"));
+    if (code === -2) throw new MountError('mount_failed', t("WinFsp 安装包校验失败；请重新解压完整 Windows 发行包。"));
+    if (code !== 0 && code !== 3010) throw new MountError('mount_failed', t("WinFsp 安装未完成（退出码 {{value0}}）；请关闭安装窗口后重试。", { value0: code }),
+      { key: 'WinFsp 安装未完成（退出码 {{value0}}）；请关闭安装窗口后重试。', values: { value0: code } });
     restartRequired = code === 3010;
     const result = await inspect();
     if (result.state !== 'ready' && result.state !== 'restart_required') {
-      throw new MountError('dependency_missing', 'WinFsp 安装器已结束，但运行组件尚未就绪；请重新检测或检查 Windows 安装结果。');
+      throw new MountError('dependency_missing', t("WinFsp 安装器已结束，但运行组件尚未就绪；请重新检测或检查 Windows 安装结果。"));
     }
     return result;
   }

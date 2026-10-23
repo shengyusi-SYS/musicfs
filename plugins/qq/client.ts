@@ -22,7 +22,7 @@ export const object = (value: unknown): Record<string, unknown> => typeof value 
 export class QqFailure extends Error {
   constructor(readonly fault: PluginFault) { super(fault.message); }
 }
-export function fail(kind: PluginFault['kind'], message: string): never { throw new QqFailure({ kind, message }); }
+export function fail(kind: PluginFault['kind'], message: string, translation?: PluginFault['translation']): never { throw new QqFailure({ kind, message, ...(translation ? { translation } : {}) }); }
 export class QqRequestBudgetFailure extends QqFailure {
   constructor() { super({ kind: 'temporary', message: '本页 QQ 请求较多，暂未完成准备，请稍后重试。' }); }
 }
@@ -151,7 +151,8 @@ export class QqClient {
         const seconds = Number(response.headers.get('retry-after'));
         throw new QqFailure({ kind: 'rate_limited', message: 'QQ 请求过于频繁，请稍后重试。', ...(Number.isFinite(seconds) && seconds > 0 ? { retryAfterSeconds: seconds } : {}) });
       }
-      fail('temporary', `QQ 请求暂未成功（HTTP ${response.status}），请稍后重试。`);
+      fail('temporary', `QQ 请求暂未成功（HTTP ${response.status}），请稍后重试。`,
+        { key: 'QQ 请求暂未成功（HTTP {{value0}}），请稍后重试。', values: { value0: response.status } });
     }
     let data: unknown;
     try { data = await response.json(); } catch { fail('temporary', 'QQ 返回了无法识别的数据。'); }

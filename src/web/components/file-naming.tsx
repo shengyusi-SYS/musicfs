@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useId, useState } from 'react';
 import { App, Button, Collapse, Empty, Form, Input, InputNumber, List, Select, Skeleton, Space, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -31,7 +32,7 @@ function NamingForm({ api, instanceId, directoryRef, settings, close }: {
     queryFn: ({ signal }) => api.previewFileNaming(instanceId, previewPolicy, directoryRef, signal) });
   const save = useMutation({ mutationFn: () => api.saveFileNaming(instanceId, revision, policy, directoryRef), onSuccess: async () => {
     await Promise.all([client.invalidateQueries({ queryKey: ['file-naming', instanceId] }), client.invalidateQueries({ queryKey: ['file-naming-preview', instanceId], refetchType: 'none' }), client.invalidateQueries({ queryKey: ['library'] })]);
-    message.success(mode === 'inherit' ? '已恢复来源命名设置' : '文件命名已保存'); close();
+    message.success(mode === 'inherit' ? t("已恢复来源命名设置") : t("文件命名已保存")); close();
   } });
   const dirtyPreview = policyKey !== JSON.stringify(previewPolicy);
   function insertField(field: string) {
@@ -40,34 +41,34 @@ function NamingForm({ api, instanceId, directoryRef, settings, close }: {
     setTemplate(current => ({ ...current, template: current.template.slice(0, start) + value + current.template.slice(end) }));
     requestAnimationFrame(() => { input?.focus(); input?.setSelectionRange(start + value.length, start + value.length); });
   }
-  const fields = Object.entries(settings.fields);
+  const fields = Object.entries(settings.fields).map(([key, label]) => [key, t(label)] as const);
   return <Form layout="vertical" onFinish={() => save.mutate()} className="file-naming-form">
-    <Form.Item label={directoryRef === undefined ? '来源默认命名' : '此目录命名'}><Select aria-label="文件命名方式" value={mode} onChange={setMode} options={[
-      ...(directoryRef === undefined ? [] : [{ value: 'inherit', label: '跟随来源设置' }]),
-      { value: 'original', label: '插件原文件名' }, { value: 'template', label: '自定义模板' }
+    <Form.Item label={directoryRef === undefined ? t("来源默认命名") : t("此目录命名")}><Select aria-label={t("文件命名方式")} value={mode} onChange={setMode} options={[
+      ...(directoryRef === undefined ? [] : [{ value: 'inherit', label: t("跟随来源设置") }]),
+      { value: 'original', label: t("插件原文件名") }, { value: 'template', label: t("自定义模板") }
     ]} /></Form.Item>
-    {mode === 'template' && <><Form.Item label="文件名模板" htmlFor={templateId} extra="扩展名自动追加。" required>
+    {mode === 'template' && <><Form.Item label={t("文件名模板")} htmlFor={templateId} extra={t("扩展名自动追加。")} required>
       <Input.TextArea id={templateId} value={template.template} autoSize={{ minRows: 2, maxRows: 5 }} placeholder="{{title}} - {{artist}}" onChange={event => setTemplate(current => ({ ...current, template: event.target.value }))} />
-    </Form.Item><div className="naming-field-picker"><span>插入字段</span><Space wrap size={[6, 6]}>{fields.map(([field, fieldLabel]) => <Button key={field} size="small" onClick={() => insertField(field)}>{fieldLabel}</Button>)}</Space></div>
-      <Form.Item label="从示例开始"><Select<string> aria-label="命名模板示例" placeholder="选择后可继续编辑" value={null} options={[
-        { value: '{{title}} - {{artist}}', label: '歌名 - 歌手', fields: ['title', 'artist'] },
-        { value: '{{originalName}}', label: '原文件名', fields: ['originalName'] },
-        { value: '{{artist}} - {{title}} [{{quality}}]', label: '歌手 - 歌名 [音质]', fields: ['artist', 'title', 'quality'] },
-        { value: '{{index}}. {{title}}', label: '序号. 歌名', fields: ['index', 'title'] },
-        { value: '{{#track}}{{track}} - {{/track}}{{title}}', label: '曲号 - 歌名（缺曲号时省略）', fields: ['track', 'title'] }
+    </Form.Item><div className="naming-field-picker"><span>{t("插入字段")}</span><Space wrap size={[6, 6]}>{fields.map(([field, fieldLabel]) => <Button key={field} size="small" onClick={() => insertField(field)}>{fieldLabel}</Button>)}</Space></div>
+      <Form.Item label={t("从示例开始")}><Select<string> aria-label={t("命名模板示例")} placeholder={t("选择后可继续编辑")} value={null} options={[
+        { value: '{{title}} - {{artist}}', label: t("歌名 - 歌手"), fields: ['title', 'artist'] },
+        { value: '{{originalName}}', label: t("原文件名"), fields: ['originalName'] },
+        { value: '{{artist}} - {{title}} [{{quality}}]', label: t("歌手 - 歌名 [音质]"), fields: ['artist', 'title', 'quality'] },
+        { value: '{{index}}. {{title}}', label: t("序号. 歌名"), fields: ['index', 'title'] },
+        { value: '{{#track}}{{track}} - {{/track}}{{title}}', label: t("曲号 - 歌名（缺曲号时省略）"), fields: ['track', 'title'] }
       ].filter(option => option.fields.every(field => settings.fields[field] !== undefined))} onChange={value => setTemplate(current => ({ ...current, template: value }))} /></Form.Item>
-      <Collapse className="naming-format-options" ghost size="small" items={[{ key: 'format', label: '格式选项与条件块', children: <>
-        <div className="naming-format-grid"><Form.Item label="歌手分隔符"><Input aria-label="歌手分隔符" value={template.artistSeparator} onChange={event => setTemplate(current => ({ ...current, artistSeparator: event.target.value }))} /></Form.Item>
-          {(['index', 'track', 'disc'] as const).map(field => <Form.Item key={field} label={`${{ index: '目录序号', track: '专辑曲号', disc: '碟号' }[field]}位数`}><InputNumber min={0} max={12} precision={0} aria-label={`${field}补零位数`} value={template[`${field}Padding`]} onChange={value => setTemplate(current => ({ ...current, [`${field}Padding`]: value ?? 0 }))} /></Form.Item>)}</div>
-        <Typography.Paragraph type="secondary">{'条件块示例：{{#album}}[{{album}}] {{/album}} 仅在专辑有值时显示方括号和其中的文字。'}</Typography.Paragraph>
+      <Collapse className="naming-format-options" ghost size="small" items={[{ key: 'format', label: t("格式选项与条件块"), children: <>
+        <div className="naming-format-grid"><Form.Item label={t("歌手分隔符")}><Input aria-label={t("歌手分隔符")} value={template.artistSeparator} onChange={event => setTemplate(current => ({ ...current, artistSeparator: event.target.value }))} /></Form.Item>
+          {(['index', 'track', 'disc'] as const).map(field => <Form.Item key={field} label={t("{{value0}}位数", { value0: { index: t("目录序号"), track: t("专辑曲号"), disc: t("碟号") }[field] })}><InputNumber min={0} max={12} precision={0} aria-label={t("{{value0}}补零位数", { value0: field })} value={template[`${field}Padding`]} onChange={value => setTemplate(current => ({ ...current, [`${field}Padding`]: value ?? 0 }))} /></Form.Item>)}</div>
+        <Typography.Paragraph type="secondary">{t("条件块示例：{{#album}}[{{album}}] {{/album}} 仅在专辑有值时显示方括号和其中的文字。")}</Typography.Paragraph>
       </> }]} /></>}
-    <div className="naming-preview-heading"><Typography.Title level={5}>{directoryRef === undefined ? '已加载目录预览' : '名称预览'}</Typography.Title></div>
+    <div className="naming-preview-heading"><Typography.Title level={5}>{directoryRef === undefined ? t("已加载目录预览") : t("名称预览")}</Typography.Title></div>
     <Failure error={preview.error} retry={() => void preview.refetch()} />
-    {preview.isPending ? <Skeleton active paragraph={{ rows: 2 }} /> : preview.data && (preview.data.total === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={preview.data.message ?? '当前目录没有可预览的文件'} /> : <>
-      <Typography.Paragraph type="secondary">{`${preview.data.total.toLocaleString()} 个文件 · ${preview.data.changed.toLocaleString()} 个名称变化`}{dirtyPreview || preview.isFetching ? ' · 更新预览中…' : ''}
-        {!!preview.data.missingFields.length && ` · 部分缺少${preview.data.missingFields.map(field => settings.fields[field] ?? field).join('、')}`}</Typography.Paragraph>
-      <List className="naming-preview" size="small" dataSource={preview.data.items.slice(0, 8)} locale={{ emptyText: '当前目录没有可预览的文件' }} renderItem={(item, index) => <List.Item key={index}><div>{item.before !== item.after && <span className="naming-before">{item.before}</span>}<span className="naming-after">{item.after}</span></div></List.Item>} />
+    {preview.isPending ? <Skeleton active paragraph={{ rows: 2 }} /> : preview.data && (preview.data.total === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={preview.data.message ? t(preview.data.message) : t("当前目录没有可预览的文件")} /> : <>
+      <Typography.Paragraph type="secondary">{t('{{count, number}} 个文件', { count: preview.data.total }) + ' · ' + t('{{count, number}} 个名称变化', { count: preview.data.changed })}{dirtyPreview || preview.isFetching ? t(" · 更新预览中…") : ''}
+        {!!preview.data.missingFields.length && t(" · 部分缺少{{value0}}", { value0: preview.data.missingFields.map(field => t(settings.fields[field] ?? field)).join(', ') })}</Typography.Paragraph>
+      <List className="naming-preview" size="small" dataSource={preview.data.items.slice(0, 8)} locale={{ emptyText: t("当前目录没有可预览的文件") }} renderItem={(item, index) => <List.Item key={index}><div>{item.before !== item.after && <span className="naming-before">{item.before}</span>}<span className="naming-after">{item.after}</span></div></List.Item>} />
     </>)}
-    <Failure error={save.error} /><div className="dialog-actions"><Button onClick={close}>取消</Button><Button type="primary" htmlType="submit" loading={save.isPending} disabled={mode === 'template' && !template.template.trim()}>应用命名</Button></div>
+    <Failure error={save.error} /><div className="dialog-actions"><Button onClick={close}>{t("取消")}</Button><Button type="primary" htmlType="submit" loading={save.isPending} disabled={mode === 'template' && !template.template.trim()}>{t("应用命名")}</Button></div>
   </Form>;
 }

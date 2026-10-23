@@ -16,7 +16,7 @@ const workProgress = z.object({ completed: z.number().int().nonnegative().max(Nu
   total: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), unit: z.string().min(1).max(32) });
 const staleFailure = (): RefreshFailure => ({ code: 'stale_call', message: '来源或刷新操作已发生变化，本次结果没有发布。' });
 const failureOf = (error: unknown): RefreshFailure => error instanceof LibraryError
-  ? { code: error.code, message: error.message, ...(error.sourceFault ? { sourceFault: error.sourceFault } : {}) }
+  ? { code: error.code, message: error.message, ...(error.translation ? { translation: error.translation } : {}), ...(error.sourceFault ? { sourceFault: error.sourceFault } : {}) }
   : { code: 'source_failed', message: error instanceof SourceError ? error.message : '目录刷新失败，请重试。' };
 
 export function createRefreshes(sources: Sources, store: LibraryStore & RefreshStore,

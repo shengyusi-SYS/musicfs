@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { readFile } from 'node:fs/promises';
 import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
@@ -8,7 +9,7 @@ import { writePrivateJson } from './rclone-control';
 const access = z.enum(['local', 'lan']); const port = z.number().int().min(0).max(65535);
 const fields = z.object({ managementAccess: access, managementPort: port, davAccess: access, davPort: port }).strict();
 export const desktopNetworkSchema = fields.refine(value => !value.managementPort || value.managementPort !== value.davPort,
-  { message: '管理页面与 WebDAV 需要使用不同端口。' });
+  { message: t("管理页面与 WebDAV 需要使用不同端口。") });
 export const desktopNetworkUpdateSchema = fields.partial().refine(value => Object.keys(value).length > 0);
 const assignedPorts = z.object({ managementPort: port, davPort: port }).strict();
 const storedNetworkSchema = z.union([
@@ -27,7 +28,7 @@ export async function readDesktopNetworkState(directory: string) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return {
       settings: { managementAccess: 'local', managementPort: 0, davAccess: 'local', davPort: 0 } as DesktopNetworkSettings, assignedPorts: undefined
     };
-    throw new Error('本机网络设置无法读取，请保留数据并检查 network.json。');
+    throw new Error(t("本机网络设置无法读取，请保留数据并检查 network.json。"));
   }
 }
 export const readDesktopNetworkSettings = async (directory: string): Promise<DesktopNetworkSettings> => (await readDesktopNetworkState(directory)).settings;

@@ -1,0 +1,11 @@
+{
+  "en": {
+    "目录名称": "Folder name",
+    "最小音频来源": "Minimal audio source"
+  },
+  "zh-CN": {
+    "Sample entry not found": "示例条目不存在",
+    "Invalid source settings": "来源配置无效",
+    "Invalid value": "无效值"
+  }
+}

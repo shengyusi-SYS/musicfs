@@ -79,6 +79,6 @@ test('QQ cancellation discards the private challenge and cannot be resumed throu
 });
 
 test('QQ declares the public contract needed by host-coordinated renewal and its migrated state', () => {
-  expect(parseManifest(manifest, 'worker').apiRange).toBe('>=0.1.6 <0.2.0');
+  expect(parseManifest(manifest, 'worker').apiRange).toBe('>=0.1.12 <0.2.0');
   expect(parseManifest(manifest, 'worker').stateVersion).toBe(2);
 });

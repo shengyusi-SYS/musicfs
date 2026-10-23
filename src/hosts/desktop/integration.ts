@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { t } from './locale';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
@@ -16,7 +17,7 @@ export function startDesktopIntegration(input: {
   onError?(error: Error): void;
 }): Promise<DesktopIntegration> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable(input.resourcesDirectory), ['tray'], {
+    const child = spawn(executable(input.resourcesDirectory), ['tray', JSON.stringify({ open: t('打开管理页面'), phone: t('手机访问'), quit: t('退出 MusicFS') })], {
       windowsHide: true, stdio: ['pipe', 'pipe', 'pipe']
     });
     const lines = createInterface({ input: child.stdout });

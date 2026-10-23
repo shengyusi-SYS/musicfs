@@ -83,14 +83,15 @@ export function createManagementApi(input: {
     if (error instanceof HTTPException) return error.getResponse();
     if (error instanceof z.ZodError) return c.json({ error: 'invalid_input', message: 'Invalid management input' }, 400);
     if (error instanceof ExtensionError) return c.json({ error: error.code, message: error.message }, error.code === 'host_not_configured' ? 503 : error.code === 'missing_plugin' ? 404 : error.code === 'revision_conflict' || error.code === 'change_in_progress' ? 409 : 422);
-    if (error instanceof Error && error.name === 'MountError' && 'code' in error) return c.json({ error: error.code, message: error.message }, error.code === 'not_found' ? 404 : error.code === 'mount_busy' ? 409 : 422);
+    if (error instanceof Error && error.name === 'MountError' && 'code' in error) return c.json({ error: error.code, message: error.message,
+      ...('translation' in error && error.translation ? { translation: error.translation } : {}) }, error.code === 'not_found' ? 404 : error.code === 'mount_busy' ? 409 : 422);
     if (error instanceof SourceError) return c.json({ error: error.code, message: error.message }, error.code === 'missing_instance' ? 404 : error.code === 'stale_call' || error.code === 'invalid_auth_action' ? 409 : 502);
     if (error instanceof UpdateRuleExistsError) return c.json({ error: 'update_rule_exists', message: error.message, ruleId: error.ruleId }, 409);
     if (error instanceof PendingRefreshError) {
       c.header('Retry-After', '2'); c.header('X-MusicFS-Refresh', error.operationId);
       return c.json({ error: 'refresh_pending', message: error.message, operationId: error.operationId }, 503);
     }
-    if (error instanceof LibraryError) return c.json({ error: error.code, message: error.message, ...(error.sourceFault ? { sourceError: error.sourceFault } : {}) }, error.code === 'not_found' ? 404 : error.code === 'invalid_layout' ? 400 : error.code === 'conflict' ? 409 : 503);
+    if (error instanceof LibraryError) return c.json({ error: error.code, message: error.message, ...(error.translation ? { translation: error.translation } : {}), ...(error.sourceFault ? { sourceError: error.sourceFault } : {}) }, error.code === 'not_found' ? 404 : error.code === 'invalid_layout' ? 400 : error.code === 'conflict' ? 409 : 503);
     return c.json({ error: 'internal_error', message: 'Management operation failed' }, 500);
   });
   // Never serialize Outcome.nextPrivateState into a management response.

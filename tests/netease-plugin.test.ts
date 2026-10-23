@@ -415,7 +415,7 @@ test('NetEase new listings require the optional host cache instead of silently p
   expect(await plugin.list(f.ctx, 'daily')).toMatchObject({ ok: false, error: { kind: 'not_supported' } });
 });
 
-test('NetEase stable auxiliary metadata lasts one week while missing lyrics are retried after one day', async () => {
+test('NetEase stable auxiliary metadata lasts one year while missing lyrics are retried after thirty days', async () => {
   for (const missing of [false, true]) {
     const f = fixture(); await authorize(f); f.ctx.fileInfo = 'required'; const request = f.ctx.fetch;
     if (missing) f.ctx.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -425,8 +425,8 @@ test('NetEase stable auxiliary metadata lasts one week while missing lyrics are 
     const before = Date.now(); value(await plugin.list(f.ctx, 'daily'));
     const cached = (f.ctx.cache as ReturnType<typeof memoryCache>).values.get('lyrics:1')!;
     const remaining = cached.expiresAt! - before;
-    expect(remaining).toBeGreaterThanOrEqual((missing ? 1 : 7) * 24 * 60 * 60_000);
-    expect(remaining).toBeLessThan((missing ? 1 : 7) * 24 * 60 * 60_000 + 2000);
+    expect(remaining).toBeGreaterThanOrEqual((missing ? 30 : 365) * 24 * 60 * 60_000);
+    expect(remaining).toBeLessThan((missing ? 30 : 365) * 24 * 60 * 60_000 + 2000);
   }
 });
 

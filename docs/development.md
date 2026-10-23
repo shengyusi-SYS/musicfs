@@ -2,6 +2,8 @@
 
 工程包含共用核心、页面、两种宿主和独立来源插件。执行标准见[目标](codex-goal.md)，进展与已有证据见[台账](verification.md)，长期结论见[工程经验](engineering-lessons.md)。下面列出可选开发入口，不要求每次变更执行全部探针；纯文档整理不重跑产品或真实来源验证。
 
+界面文案与显示错误使用中英文词典，新增文本后执行 `bun run check:i18n`；来源插件可自带翻译。实现与原文键维护规则见[国际化设计](architecture/i18n.md)。
+
 ## 环境与入口
 
 使用 `package.json` 指定的 Bun 版本；依赖以 `bun.lock` 为准。依赖图工具通过 Node 运行，本轮实际验证 Node v24.19.0。桌面构建还需要 Rust/Cargo 与目标工具链，准备方式见[原生辅助程序](../native/desktop/README.md)。先安装 JavaScript 依赖：

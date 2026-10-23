@@ -1,3 +1,4 @@
+import { t } from './locale';
 import type { DesktopNetworkSettings } from '../../contracts/desktop';
 
 export type DesktopListenerAddress = DesktopNetworkSettings & { origin: string; davOrigin: string };
@@ -22,7 +23,7 @@ export function createDesktopListener(options: { fetch: (request: Request) => Re
           if (isDav(new URL(request.url).pathname) !== (kind === 'dav')) return new Response(null, { status: 404 });
           // Current policy also applies to new requests on draining / keep-alive sockets.
           if (!loopback(server.requestIP(request)?.address) && active.address.access !== 'lan') {
-            return Response.json({ error: 'local_access_only', message: '此入口仅允许在运行 MusicFS 的电脑上访问。' },
+            return Response.json({ error: 'local_access_only', message: t("此入口仅允许在运行 MusicFS 的电脑上访问。") },
               { status: 403, headers: { 'Cache-Control': 'no-store' } });
           }
           return options.fetch(request);

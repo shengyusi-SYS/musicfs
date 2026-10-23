@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { Hono } from 'hono';
 import { bearerAuth } from 'hono/bearer-auth';
 import { HTTPException } from 'hono/http-exception';
@@ -35,8 +36,9 @@ export function createDesktopHttp(input: {
   });
   app.onError((error, c) => {
     if (error instanceof HTTPException) return error.getResponse();
-    if (error instanceof MountError || error instanceof DesktopHttpsError) return c.json({ error: error.code, message: error.message }, 422);
-    return c.json({ error: 'desktop_failed', message: '本机操作未完成，请检查后台日志后重试。' }, 500);
+    if (error instanceof MountError || error instanceof DesktopHttpsError) return c.json({ error: error.code, message: error.message,
+      ...(error instanceof MountError && error.translation ? { translation: error.translation } : {}) }, 422);
+    return c.json({ error: 'desktop_failed', message: t("本机操作未完成，请检查后台日志后重试。") }, 500);
   });
   const networkView = async () => desktopNetworkView(await readDesktopNetworkSettings(input.directory), input.network());
   app.get('/api/desktop/network', async c => c.json(await networkView()));
@@ -44,21 +46,21 @@ export function createDesktopHttp(input: {
   app.put('/api/desktop/preferences', async c => {
     if (!input.preferences) return c.notFound();
     const parsed = desktopPreferencesSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: 'invalid_preferences', message: '请选择有效的启动和挂载设置。' }, 422);
+    if (!parsed.success) return c.json({ error: 'invalid_preferences', message: t("请选择有效的启动和挂载设置。") }, 422);
     return c.json(await input.preferences.configure(parsed.data));
   });
   app.get('/api/desktop/read-cache', async c => input.readCache ? c.json(await input.readCache.inspect()) : c.notFound());
   app.put('/api/desktop/read-cache', async c => {
     if (!input.readCache) return c.notFound();
     const parsed = readCacheSettingsSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: 'invalid_read_cache_settings', message: '容量须为 0—1048576 MiB 的整数，保留时间须为 0—2147483 小时的整数。' }, 422);
+    if (!parsed.success) return c.json({ error: 'invalid_read_cache_settings', message: t("容量须为 0—1048576 MiB 的整数，保留时间须为 0—2147483 小时的整数。") }, 422);
     return c.json(await input.readCache.configure(parsed.data));
   });
   app.delete('/api/desktop/read-cache', async c => input.readCache ? c.json(await input.readCache.clear()) : c.notFound());
   let networkUpdate = Promise.resolve();
   app.on(['PUT', 'PATCH'], '/api/desktop/network', async c => {
     const parsed = (c.req.method === 'PATCH' ? desktopNetworkUpdateSchema : desktopNetworkSchema).safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: '请选择有效的访问范围，端口须为 0—65535 的整数。' }, 422);
+    if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: t("请选择有效的访问范围，端口须为 0—65535 的整数。") }, 422);
     // Each page submits only its own fields. Merge inside the same update queue
     // so saving one entry cannot restore the other entry's earlier settings.
     const updated = networkUpdate.then(async () => {
@@ -69,7 +71,7 @@ export function createDesktopHttp(input: {
     });
     networkUpdate = updated.then(() => {}, () => {});
     try { return c.json(await updated); }
-    catch { return c.json({ error: 'network_failed', message: '请选择不同且未被占用的管理端口和 WebDAV 端口。原入口仍可使用。' }, 422); }
+    catch { return c.json({ error: 'network_failed', message: t("请选择不同且未被占用的管理端口和 WebDAV 端口。原入口仍可使用。") }, 422); }
   });
   app.get('/api/desktop/mount-prerequisites', async c => c.json(await input.prerequisites.inspect()));
   app.post('/api/desktop/mount-prerequisites/install', async c => c.json(await input.prerequisites.installWinFsp()));
@@ -83,7 +85,7 @@ export function createDesktopHttp(input: {
     let resumeMounts: void | (() => void) = undefined;
     const resumeWork = () => { if (typeof resumeMounts === 'function') resumeMounts(); if (typeof resume === 'function') resume(); };
     try { resume = await input.prepareQuit?.(); resumeMounts = await input.prepareShutdown?.(); await input.mounts.close(); }
-    catch (error) { resumeWork(); return c.json({ error: 'mount_busy', message: error instanceof MountError ? error.message : '挂载未能正常卸载，后台仍在运行。请关闭占用程序后重试。' }, 409); }
+    catch (error) { resumeWork(); return c.json({ error: 'mount_busy', message: error instanceof MountError ? error.message : t("挂载未能正常卸载，后台仍在运行。请关闭占用程序后重试。") }, 409); }
     setTimeout(() => { void input.close().catch(() => { resumeWork(); console.error('MusicFS background shutdown failed; private data was preserved.'); }); }, 100);
     return c.json({ stopping: true }, 202);
   });

@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { appendFile, chmod, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -13,7 +14,8 @@ export async function reportDesktopStartupFailure(input: { message: string; dire
     if (process.platform !== 'win32') await chmod(logPath, 0o600);
     logged = true;
   } catch { /* The error still reaches the user when a data directory cannot be written. */ }
-  const detail = `MusicFS 启动失败\n\n${message}\n\n${logged ? `诊断日志：${logPath}` : `诊断日志未能写入。请检查数据目录：${input.directory}`}`;
+  const detail = t("MusicFS 启动失败\n\n{{value0}}\n\n{{value1}}", { value0: message, value1: logged
+    ? t('诊断日志：{{value0}}', { value0: logPath }) : t('诊断日志未能写入。请检查数据目录：{{value0}}', { value0: input.directory }) });
   console.error(detail);
   if (input.showDialog === false) return;
 

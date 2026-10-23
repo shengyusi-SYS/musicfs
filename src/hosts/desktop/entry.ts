@@ -1,3 +1,4 @@
+import { t } from './locale';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -38,31 +39,32 @@ export async function desktopLogin(entry: DesktopRuntime): Promise<{ url: string
   await response.body?.cancel();
   // Compatibility with an already-running backend from before management sessions.
   if (response.status === 404) { url.hash = new URLSearchParams({ token: entry.credentials.adminToken }).toString(); return { url: url.href }; }
-  throw new Error('后台已运行，登录链接未能建立，请重新运行 MusicFS。');
+  throw new Error(t("后台已运行，登录链接未能建立，请重新运行 MusicFS。"));
 }
 
 export async function configureDesktopEntry(directory: string, settings: Partial<DesktopNetworkSettings>): Promise<DesktopRuntime> {
   const entry = await readDesktopRuntime(directory);
-  if (!entry) throw new Error('未找到运行中的 MusicFS，请先启动程序。');
+  if (!entry) throw new Error(t("未找到运行中的 MusicFS，请先启动程序。"));
   const response = await fetch(new URL('/api/desktop/network', entry.runtime.origin), {
     method: 'PATCH', headers: { Authorization: `Bearer ${entry.credentials.adminToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(settings)
   });
   if (!response.ok) {
-    const error = await response.json() as { message?: string };
-    throw new Error(error.message ?? '网络设置未能保存，原入口仍可使用。');
+    const error = await response.json() as { message?: string; translation?: import('@musicfs/plugin-api').MessageTranslation };
+    throw new Error(error.translation ? t(error.translation.key, error.translation.values)
+      : error.message ? t(error.message) : t('网络设置未能保存，原入口仍可使用。'));
   }
   await response.body?.cancel();
   const updated = await readDesktopRuntime(directory);
-  if (!updated) throw new Error('网络设置已保存，请重新运行 MusicFS 查看当前入口。');
+  if (!updated) throw new Error(t("网络设置已保存，请重新运行 MusicFS 查看当前入口。"));
   return updated;
 }
 
 /** Public startup information contains a short-lived login link, never DAV credentials. */
 export async function desktopEntry(directory: string) {
   const entry = await readDesktopRuntime(directory);
-  if (!entry) throw new Error('未找到运行中的 MusicFS，请先启动程序。');
+  if (!entry) throw new Error(t("未找到运行中的 MusicFS，请先启动程序。"));
   const response = await fetch(new URL('/api/desktop/network', entry.runtime.origin), { headers: { Authorization: `Bearer ${entry.credentials.adminToken}` } });
-  if (!response.ok) { await response.body?.cancel(); throw new Error('后台已运行，访问地址未能读取，请重新运行 MusicFS。'); }
+  if (!response.ok) { await response.body?.cancel(); throw new Error(t("后台已运行，访问地址未能读取，请重新运行 MusicFS。")); }
   const network = await response.json() as DesktopNetworkView;
   return { origin: entry.runtime.origin, network, login: await desktopLogin(entry) };
 }

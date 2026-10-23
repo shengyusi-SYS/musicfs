@@ -130,3 +130,4 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .naming-before { color: var(--muted); font-size: 12px; }
 .naming-after { color: var(--ink); }
 @media (max-width: 480px) { .naming-field-picker { flex-direction: column; gap: 8px; } }
+.access-brand-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }

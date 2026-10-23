@@ -8,9 +8,9 @@ export async function buildAuthorKit(): Promise<string> {
   await rm(directory, { recursive: true, force: true });
   await mkdir(directory, { recursive: true });
   const files = ['packages/plugin-api/package.json', 'packages/plugin-api/src/index.ts', 'scripts/build-plugin.ts', 'scripts/build-sample.ts',
-    'plugins/sample/index.ts', 'plugins/sample/manifest.json', 'plugins/sample/config.schema.json',
+    'plugins/sample/index.ts', 'plugins/sample/manifest.json', 'plugins/sample/config.schema.json', 'plugins/sample/translations.json',
     'plugins/sample/generated-config.d.mts', 'plugins/sample/LICENSE.txt', 'plugins/sample/README.md',
-    'docs/plugin-authoring.md', 'docs/architecture/plugin-interface.md'];
+    'docs/plugin-authoring.md', 'docs/architecture/plugin-interface.md', 'docs/architecture/i18n.md'];
   if (await Bun.file('LICENSE').exists()) files.push('LICENSE');
   for (const file of files) {
     const destination = join(directory, file); await mkdir(dirname(destination), { recursive: true });

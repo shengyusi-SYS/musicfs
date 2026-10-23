@@ -10,7 +10,7 @@ export type NeteaseState = z.infer<typeof saved>;
 export const validateState = (state: Json): boolean => saved.safeParse(state).success;
 export const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export class NeteaseFailure extends Error { constructor(readonly fault: PluginFault) { super(fault.message); } }
-export function fail(kind: PluginFault['kind'], message: string): never { throw new NeteaseFailure({ kind, message }); }
+export function fail(kind: PluginFault['kind'], message: string, translation?: PluginFault['translation']): never { throw new NeteaseFailure({ kind, message, ...(translation ? { translation } : {}) }); }
 export function rateLimited(response?: Response): never {
   const header = response?.headers.get('retry-after');
   const seconds = header ? /^\d+(?:\.\d+)?$/.test(header) ? Number(header) : (Date.parse(header) - Date.now()) / 1000 : NaN;
@@ -81,7 +81,8 @@ export class NeteaseClient {
     }
     if (received.length) this.update({ ...this.state, cookies: JSON.stringify(this.jar.serializeSync()) });
     if (response.status === 429) { await response.body?.cancel(); rateLimited(response); }
-    if (!response.ok) { await response.body?.cancel(); fail('temporary', `网易云请求暂未成功（HTTP ${response.status}）。`); }
+    if (!response.ok) { await response.body?.cancel(); fail('temporary', `网易云请求暂未成功（HTTP ${response.status}）。`,
+      { key: '网易云请求暂未成功（HTTP {{value0}}）。', values: { value0: response.status } }); }
     let value: unknown;
     try { value = await response.json(); }
     catch { fail('temporary', '网易云返回了无法识别的内容。'); }
