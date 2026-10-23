@@ -1,10 +1,10 @@
 # MusicFS 实现与验收台账
 
-文档整理：2026-10-23。这里索引版本证据，不另定义需求或待办。产品范围见[统一需求](../outputs/musicfs-requirements-and-technical-design.md)，执行决定见[实施计划](../outputs/musicfs-implementation-plan.md)，可复用教训见[工程经验](engineering-lessons.md)。
+文档整理：2026-10-24。这里索引版本证据，不另定义需求或待办。产品范围见[统一需求](../outputs/musicfs-requirements-and-technical-design.md)，执行决定见[实施计划](../outputs/musicfs-implementation-plan.md)，可复用教训见[工程经验](engineering-lessons.md)。
 
 ## 当前事实
 
-当前源码为 dev.25 音乐库，发行后追加操作断点修正：展开树不跳页、设置页签保留输入、添加时就地新建、拖拽悬停展开，以及窄窗口直接展示结果与保存。内置浏览器的桌面/手机流程、WebUI类型检查、9项既有导航/布局回归和页面构建通过，见[工作区记录](verification/music-workspace.md)。新增修正尚未重打包；dev.25 Windows、离线 Worker、源码与插件作者包保持原发行身份，见[发行页](release.md)。同版前阶段的三套类型、依赖边界及50项接入/目录引用检查保留原范围。
+当前版本为 dev.26 音乐库操作修正：展开树不跳页、设置页签保留输入、添加时就地新建、拖拽悬停展开，以及窄窗口直接展示结果与保存。内置浏览器的桌面/手机流程、WebUI类型检查、9项既有导航/布局回归和页面构建通过，见[工作区记录](verification/music-workspace.md)。Windows、离线 Worker、源码与插件作者包按新版本统一归档，旧版归档保留原身份，见[发行页](release.md)。前阶段的三套类型、依赖边界及50项接入/目录引用检查保留原范围。
 
 dev.23完成自动更新规则与自定义命名模板：SQLite/D1共用调度与展示语义，schema13迁移旧周期、schema14保存独立命名策略，API0.1.11为插件提供可选命名资料。受影响离线回归、三套类型、依赖方向及页面/Worker/插件构建通过；具体结果及范围见[本轮核对](verification/updates-and-naming.md)。Windows、离线Worker、源码与作者包已归档并通过身份/摘要核对，下载入口见[发行页](release.md)；没有新增真实平台或Windows运行证据。
 
