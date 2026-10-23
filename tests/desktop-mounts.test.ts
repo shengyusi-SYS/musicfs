@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os';
 import { createMountManager, MountError } from '../src/hosts/desktop/mounts';
 import { createRcloneControl, writePrivateJson, type RcloneControl } from '../src/hosts/desktop/rclone-control';
 import { createDesktopService } from '../src/hosts/desktop/service';
+import { createDesktopListener } from '../src/hosts/desktop/listener';
+import { createMountRestore } from '../src/hosts/desktop/mount-restore';
+import { createApi } from '../src/web/api';
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const action of cleanup.splice(0).reverse()) await action(); });
@@ -61,6 +64,67 @@ function fakeControl() {
     setStatistics(value: unknown) { statistics = value; },
     setBusy(value: boolean) { busy = value; }, setListFailure(value: boolean) { listFailure = value; } };
 }
+
+test('local mounts keep the private read gateway across public port changes and automatic restore resolves the current gateway', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-endpoints-'));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  const adminToken = 'endpoint-fixture-admin';
+  const connection = { username: 'reader', password: 'public-fixture' };
+  async function start() {
+    const fake = fakeControl(); const listed: string[] = [];
+    let mounted!: () => void;
+    const nativeMounted = new Promise<void>(resolve => { mounted = resolve; });
+    const control: RcloneControl = { ...fake.control, async call<T>(method: string, parameters: Record<string, unknown> = {}) {
+      if (method === 'operations/list') {
+        const configuration = fake.remotes.get(String(parameters.fs).replace(/:$/, ''))!;
+        const response = await fetch(String(configuration.url), { method: 'PROPFIND', headers: { Depth: '1',
+          Authorization: 'Basic ' + Buffer.from(`${configuration.user}:${configuration.pass}`).toString('base64') } });
+        expect(response.status).toBe(207); await response.body?.cancel();
+        listed.push(String(configuration.url));
+      }
+      const result = await fake.control.call<T>(method, parameters);
+      if (method === 'mount/mount') mounted();
+      return result;
+    } };
+    let service: Awaited<ReturnType<typeof createDesktopService>>;
+    const manager = await createMountManager({ directory: join(directory, 'mounts'), binary: 'unused', control, manageControl: false,
+      localConnection: () => service.readCache!.mountConnection, checkDependencies: async () => {} });
+    service = await createDesktopService({ directory: join(directory, 'data'), adminToken, dav: connection, mounts: manager,
+      readCache: { control, controlDirectory: join(directory, 'mounts') } });
+    const listener = createDesktopListener({ fetch: service.app.fetch });
+    listener.listen({ managementAccess: 'local', managementPort: 0, davAccess: 'local', davPort: 0 });
+    const restore = createMountRestore({ mounts: manager, settings: { enabled: true, retry: false } });
+    let closed = false;
+    const close = async () => { if (closed) return; closed = true; await restore.close(); await service.close(); await listener.close(); };
+    cleanup.push(close);
+    const api = createApi(adminToken, ((path: string | URL | Request, init?: RequestInit) => fetch(new URL(String(path), listener.current()!.origin), init)) as typeof fetch);
+    return { api, manager, listener, service, restore, nativeMounted, fake, listed, close };
+  }
+  const first = await start();
+  const point = join(directory, 'Music');
+  const mount = await first.api.mount({ mountPoint: point, source: { kind: 'local' }, autoMount: true });
+  expect(mount.state).toBe('mounted');
+  expect(first.listed).toEqual([first.service.readCache!.mountConnection.url]);
+  const internal = new URL(first.listed[0]!);
+  expect(internal.port).not.toBe(String(first.listener.current()!.managementPort));
+  expect(internal.port).not.toBe(String(first.listener.current()!.davPort));
+  // Change both public ports without replacing the local mount or its private connection.
+  for (const field of ['managementPort', 'davPort'] as const) {
+    const reservation = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response(null) });
+    const port = reservation.port!; await reservation.stop(true);
+    first.listener.reconfigure({ ...first.listener.current()!, [field]: port });
+  }
+  expect((await first.api.mounts(new AbortController().signal))[0]).toMatchObject({ id: mount.id, state: 'mounted' });
+  expect(first.fake.mountCalls()).toBe(1); expect(first.listed).toEqual([internal.href]);
+  await first.close();
+  const second = await start();
+  second.restore.start(); await second.nativeMounted;
+  await second.restore.pause();
+  expect((await second.api.mounts(new AbortController().signal))[0]).toMatchObject({ id: mount.id, state: 'mounted', autoMount: true });
+  expect(second.listed).toEqual([second.service.readCache!.mountConnection.url]);
+  const saved = JSON.parse(await readFile(join(directory, 'mounts', 'mounts.json'), 'utf8'));
+  expect(saved[0].input.source).toEqual({ kind: 'local' });
+});
 
 test('mount names become native volume labels; renaming keeps identity and cache and respects busy files', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-mount-name-'));

@@ -50,6 +50,11 @@ flowchart LR
     Player[播放器] --> DavPort[WebDAV 端口与读取访问范围]
     ManagerPort --> Management[管理页面与管理认证]
     DavPort --> DAV[WebDAV 读取认证]
+    NativeWindows[Windows 原生映射] --> HTTPS[本机 HTTPS DAV]
+    HTTPS --> DAV
+    Startup[启动恢复] --> Mount[App 本机挂载]
+    Mount --> Private[内部回环 DAV 与独立凭据]
+    Private --> Files
     DAV --> Files[音乐文件]
     Management --> API[管理 API]
 ```
@@ -63,6 +68,8 @@ flowchart LR
 旧 `network.json` 的共享 `port` 留给 WebDAV，管理端口重新自动分配；旧 `access` 或已有的独立访问范围保持原意图。旧自动端口从同实例 `runtime.json` 恢复，升级后按新格式保存，不改变管理会话、读取凭据或来源授权。`desktopNetworkView` 按两项实际端口分别生成 `managementUrls` 与 `davUrls`，手机管理二维码和播放器导入使用各自的地址；WebDAV 仅本机时也只显示其本机地址。
 
 设置页的「管理页面访问」设置管理范围与管理端口；「连接与挂载 → WebDAV 播放器」集中设置读取范围、WebDAV 端口、地址、凭据与扫码导入。两个表单通过 `PATCH /api/desktop/network` 仅提交各自字段，桌面 HTTP 入口串行合并最新配置。修改管理端口后，当前浏览器跳转到新管理地址；修改 DAV 端口只更新播放器连接，不移动管理页面。从局域网管理页关闭自身访问后，保存结果提示回到运行 MusicFS 的电脑继续管理，不把手机重定向到手机自己的回环地址。
+
+连接页和播放器二维码共享所选局域网地址；两类二维码打开时重新查询本机网络信息，取得当前端口与网卡后再显示。该查询不访问音乐平台。托盘与启动器使用管理入口；本机挂载由 `readCache.mountConnection` 提供内部读取地址，自动恢复在监听就绪后通过挂载管理器重新取得当前地址，不持久保存某次运行的内部端口。远程挂载则保留用户填写的完整 WebDAV 地址。本机 HTTPS 使用自己的回环端口，不随两个 HTTP 端口改变。
 
 ### 播放器凭据与扫码导入
 

@@ -35,7 +35,7 @@ export function DavConnectionDetails({ api, value, desktop }: { api: Api; value:
     <Space wrap className="dav-actions"><Button type="primary" icon={<QrcodeOutlined aria-hidden="true" />} onClick={() => setScanning(true)}>扫码导入</Button>
       <Button icon={<EditOutlined aria-hidden="true" />} onClick={() => setEditing(true)}>修改账号密码</Button></Space>
     {editing && <DavCredentialsDialog api={api} value={value} close={() => setEditing(false)} />}
-    {scanning && <DavImportDialog api={api} value={value} desktop={desktop} close={() => setScanning(false)} />}
+    {scanning && <DavImportDialog api={api} value={value} desktop={desktop} preferredAddress={address} selectAddress={select} close={() => setScanning(false)} />}
   </>;
 }
 
@@ -53,18 +53,17 @@ function DavCredentialsDialog({ api, value, close }: { api: Api; value: Connecti
   </Modal>;
 }
 
-function DavImportDialog({ api, value, desktop, close }: { api: Api; value: Connection; desktop: boolean; close(): void }) {
-  const network = useQuery({ queryKey: ['desktop-network'], queryFn: ({ signal }) => api.desktopNetwork(signal), enabled: desktop });
+function DavImportDialog({ api, value, desktop, preferredAddress, selectAddress, close }: { api: Api; value: Connection; desktop: boolean; preferredAddress: string; selectAddress(value: string): void; close(): void }) {
+  const network = useQuery({ queryKey: ['desktop-network'], queryFn: ({ signal }) => api.desktopNetwork(signal), enabled: desktop, refetchOnMount: 'always' });
   const current = new URL(value.davPath + '/', location.origin).href;
-  const addresses = desktop ? network.data?.active.davAccess === 'lan'
+  const addresses = desktop ? !network.isFetching && !network.isError && network.data?.active.davAccess === 'lan'
     ? network.data.davUrls.filter(address => !['localhost', '127.0.0.1', '[::1]'].includes(new URL(address).hostname)) : [] : [current];
-  const [selected, select] = useState('');
-  const address = addresses.includes(selected) ? selected : addresses[0];
+  const address = addresses.includes(preferredAddress) ? preferredAddress : addresses[0];
   const url = address ? davImportUrl(address, value) : '';
   return <Modal title="扫码导入 WebDAV" open onCancel={close} footer={null} destroyOnHidden>
     <Failure error={network.error} retry={() => void network.refetch()} />
-    {desktop && network.isPending ? <Skeleton active /> : address ? <>
-      {addresses.length > 1 && <Select className="dav-address-select" aria-label="WebDAV 扫码地址" value={address} options={addresses.map(item => ({ value: item, label: item }))} onChange={select} />}
+    {desktop && (network.isPending || network.isFetching) ? <Skeleton active /> : address ? <>
+      {addresses.length > 1 && <Select className="dav-address-select" aria-label="WebDAV 扫码地址" value={address} options={addresses.map(item => ({ value: item, label: item }))} onChange={selectAddress} />}
       <div className="dav-qr"><ErrorBoundary fallback={<Typography.Text>连接信息较长，请手动填入播放器。</Typography.Text>}><QRCode value={url} size={240} marginSize={4} /></ErrorBoundary></div>
       <Typography.Paragraph type="secondary">用支持连接地址导入的播放器扫码，二维码包含用户名和密码。</Typography.Paragraph>
       <CopyField label="含账号密码的连接地址" value={url} />

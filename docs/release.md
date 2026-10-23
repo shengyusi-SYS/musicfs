@@ -1,5 +1,12 @@
 # MusicFS 当前交付物
 
+## dev.30 独立端口消费链路收口
+
+播放器扫码沿用连接页选定的局域网地址；手机管理与播放器二维码打开时读取当前本机端口和网卡。核对本机挂载持续使用内部读取入口，修改公开端口不重挂载，重启后的自动挂载重新取得本轮内部地址。
+
+[Windows x64](../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-windows-x64.zip)、[离线 Worker](../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-worker.zip)、[源码](../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-source.zip)、[插件作者包](../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-plugin-author-kit.zip)、[清单](../dist/releases/0.1.0-dev.30/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.30/SHA256SUMS)。退出旧后台，解压完整新版后通过启动器打开管理页；原端口、插件及授权保留。从 dev.28 或更早版本升级时，旧共享端口优先留给 WebDAV。
+
+本轮只补两条定向本地链路及内置浏览器地址核对，未重复 Windows 原生挂载或音乐平台测试，边界见[消费链路记录](verification/network-access.md#dev30-消费链路核查)。Windows 在 WSL 交叉构建，Worker 为离线包。
 ## dev.29 管理与 WebDAV 独立端口
 
 管理页面与 WebDAV 分别监听不同端口，各自设置访问范围。管理端口只提供管理页面与接口，WebDAV 端口只供播放器读取；修改其中一项不移动另一项。端口填0自动选择，正常重启后尽量复用已分配地址。本机 HTTPS 映射也只提供 WebDAV。

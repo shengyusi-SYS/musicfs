@@ -73,6 +73,14 @@ test('separate desktop settings, addresses, credentials and assigned ports survi
     if (address) {
       const managerOrigin = `http://${address}:${management.active.managementPort}`;
       const allowed = await fetch(managerOrigin + '/api/status', { headers: auth }); expect(allowed.status).toBe(200); await allowed.body?.cancel();
+      const phoneEntry = management.managementUrls.find(url => new URL(url).hostname === address)!;
+      const ticket = await api.accessTicket();
+      const exchange = await fetch(new URL('/api/access/exchange', phoneEntry), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket: ticket.ticket }) });
+      expect(exchange.status).toBe(200); await exchange.body?.cancel();
+      const cookie = exchange.headers.get('set-cookie')?.split(';')[0];
+      expect(Boolean(cookie)).toBe(true);
+      const phone = await fetch(new URL('/api/status', phoneEntry), { headers: { Cookie: cookie! } });
+      expect(phone.status).toBe(200); await phone.body?.cancel();
       const wrong = await fetch(managerOrigin + '/dav/', { method: 'PROPFIND', headers: reader }); expect(wrong.status).toBe(404); await wrong.body?.cancel();
     }
     const invalid = await fetch(backend!.origin + '/api/desktop/network', { method: 'PATCH', headers: auth,

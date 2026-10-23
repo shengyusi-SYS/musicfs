@@ -65,7 +65,8 @@
 | `GET /api/desktop/read-cache` | 直接DAV共享缓存的settings、actualMode、state、路径、原生采样与说明 |
 | `PUT /api/desktop/read-cache` | `{maxMiB,maxAgeHours}`，共享读取空闲时保存；容量0关闭新缓存，期限0关闭时间淘汰，保留旧片段 |
 | `DELETE /api/desktop/read-cache` | 空闲时停止所属共享VFS并清理其片段/索引，返回状态；下次读取懒启动，不影响标签计划或挂载缓存 |
-| `GET /api/desktop/network`、`PUT /api/desktop/network` | 查询或保存`{access,port}`，access为local或lan；立即切换监听并保存在途响应，返回实际端口 |
+| `GET /api/desktop/network` | 期望配置、实际管理/WebDAV 端口及各自的 `managementUrls/davUrls`；桌面播放器使用 `davUrls`，不将相对 `davPath` 拼接到管理端口 |
+| `PATCH /api/desktop/network`、`PUT /api/desktop/network` | 保存 `managementAccess/managementPort/davAccess/davPort`；PATCH仅修改提交字段，PUT保存全部字段。独立切换监听并保留在途响应，返回实际生效地址 |
 | `GET /api/desktop/preferences`、`PUT /api/desktop/preferences` | 查询或保存`launchAtLogin/openOnLaunch/openOnLogin/autoMount/retryAutoMount`，另返回系统集成状态 |
 | `GET /api/desktop/mount-prerequisites` | 检测本机挂载组件及安装状态 |
 | `POST /api/desktop/mount-prerequisites/install` | Windows运行随包WinFsp安装器并核对结果，必要时请求系统权限 |

@@ -4,7 +4,7 @@
 
 ## 当前事实
 
-dev.29 将桌面管理与 WebDAV 拆为独立监听端口，分别在管理设置与播放器连接页配置；端口、访问范围及各自路由独立，旧共享端口优先保留给 WebDAV。13项相关定向检查、三套类型检查、依赖边界、页面构建与内置浏览器保存/跳转流程通过，见[双端口记录](verification/network-access.md#dev29-独立监听端口)。音乐库双侧栏、接入及整理流程的既有验证见[工作区记录](verification/music-workspace.md)。Windows、离线 Worker、源码与作者包归档入口见[发行页](release.md)。
+dev.30 复核独立端口的扫码、播放器、本机挂载和启动恢复链路，修复扫码不沿用所选网卡的问题，二维码打开时读取当前本机网络信息。仅补验手机票据/Cookie 登录与本机挂载/自动恢复两条本地链路，并用内置浏览器核对两类二维码；三套类型与页面构建通过，见[消费链路记录](verification/network-access.md#dev30-消费链路核查)。其余独立端口机制沿用 dev.29 证据，音乐库流程见[工作区记录](verification/music-workspace.md)。Windows、离线 Worker、源码与作者包归档入口见[发行页](release.md)。
 
 dev.23完成自动更新规则与自定义命名模板：SQLite/D1共用调度与展示语义，schema13迁移旧周期、schema14保存独立命名策略，API0.1.11为插件提供可选命名资料。受影响离线回归、三套类型、依赖方向及页面/Worker/插件构建通过；具体结果及范围见[本轮核对](verification/updates-and-naming.md)。Windows、离线Worker、源码与作者包已归档并通过身份/摘要核对，下载入口见[发行页](release.md)；没有新增真实平台或Windows运行证据。
 
