@@ -1,5 +1,13 @@
 # MusicFS 当前交付物
 
+## dev.25 音乐库工作区
+
+来源树并入左侧导航，中央专注浏览内容，右侧播放器目录按需打开并记住宽度。支持拖拽整理单张歌单，保存并连接，并在切换页面后保留导航、搜索和浏览位置；手机上用抽屉展开两侧目录。
+
+[Windows x64](../dist/releases/0.1.0-dev.25/musicfs-0.1.0-dev.25-windows-x64.zip)、[离线 Worker](../dist/releases/0.1.0-dev.25/musicfs-0.1.0-dev.25-worker.zip)、[源码](../dist/releases/0.1.0-dev.25/musicfs-0.1.0-dev.25-source.zip)、[插件作者包](../dist/releases/0.1.0-dev.25/musicfs-0.1.0-dev.25-plugin-author-kit.zip)、[清单](../dist/releases/0.1.0-dev.25/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.25/SHA256SUMS)。正常退出旧后台，换完整新版启动即可；无需重装插件、重新授权或清理缓存，数据库无需新迁移。
+
+源码回归、类型检查及内置浏览器的桌面与手机流程核对见[工作区记录](verification/music-workspace.md)。Windows 在 WSL 交叉构建，Worker 为离线部署包；本轮不新增目标系统运行或云端部署结论。
+
 ## dev.24 自动更新编辑简化
 
 按来源和范围直接载入已有时间安排，没有规则时才新建；切换范围保留原规则，启停可在表单内修改。移除重复范围警告、跳转编辑按钮和额外规则选择框，修正规则范围重复时误报“状态已变化”的问题。
