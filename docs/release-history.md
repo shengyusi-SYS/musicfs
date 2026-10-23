@@ -2,6 +2,14 @@
 
 本页保留各检查点的产物和证据。[当前下载](release.md)
 
+## dev.31 中英文与完整文档
+
+中英文界面覆盖页面、插件显示、表单校验、错误提示、终端和托盘；无桌面启动提供可用入口。桌面、Worker、源码和作者包携带对应双语指南，README 加入工具定位声明。
+
+[Windows x64](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-windows-x64.zip)、[Linux x64](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-linux-x64.zip)、[Worker](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-worker.zip)、[源码](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-source.zip)、[作者包](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-plugin-author-kit.zip)。插件 API0.1.12，随包网易云 alpha.21、QQ alpha.20、最小来源0.1.4；先升级宿主，再安装新版插件。
+
+国际化与远程入口的功能证据分别见[中英文记录](verification/i18n.md)、[无桌面记录](verification/headless-access.md)。本次在WSL重新构建和归档，核对版本身份、摘要、双语文档及Linux帮助入口；未新增Windows实机、音乐平台或云端部署结论。
+
 ## dev.30 独立端口消费链路收口
 
 播放器扫码沿用连接页选定的局域网地址；手机管理与播放器二维码打开时读取当前本机端口和网卡。核对本机挂载持续使用内部读取入口，修改公开端口不重挂载，重启后的自动挂载重新取得本轮内部地址。

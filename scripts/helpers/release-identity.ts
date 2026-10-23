@@ -11,7 +11,8 @@ export type ReleaseIdentity = {
 
 const inputs = ['src', 'native/desktop', 'packages/plugin-api', 'packages/audio-tags/src', 'packages/audio-tags/package.json', 'plugins', 'scripts/build*.ts', 'scripts/package-release.ts', 'scripts/helpers',
   'package.json', 'bun.lock', 'tsconfig*.json', 'vite.config.ts', 'worker-template', 'third-party', 'LICENSE',
-  'docs/desktop.md', 'docs/worker.md', 'docs/clients.md', 'docs/user-guide.md', 'docs/plugin-authoring.md', 'docs/architecture/plugin-interface.md'];
+  'docs/desktop.md', 'docs/headless.md', 'docs/worker.md', 'docs/clients.md', 'docs/user-guide.md', 'docs/plugin-authoring.md',
+  'docs/architecture/plugin-interface.md', 'docs/architecture/i18n.md', 'docs/en'];
 function git(args: string[]): string {
   const result = Bun.spawnSync(['git', ...args], { stdout: 'pipe', stderr: 'pipe' });
   if (result.exitCode !== 0) throw new Error('Release identity requires the source Git checkout');

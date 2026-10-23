@@ -2,20 +2,21 @@
 
 [简体中文](../release.md)
 
-Current source is **0.1.0-dev.31**, including bilingual UI and headless access. The latest archived release remains **0.1.0-dev.30**; a stable release has not been published.
+The current archive is **0.1.0-dev.31**, with bilingual UI, headless access and bilingual user/developer guides. It remains a development preview.
 
 ## Choose a package
 
 | Goal | Download |
 |---|---|
-| Use on Windows | [Windows x64](../../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-windows-x64.zip) |
-| Deploy Cloudflare Worker | [Worker package](../../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-worker.zip) |
-| Develop a source plugin | [Author kit](../../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-plugin-author-kit.zip) |
-| Modify or build MusicFS | [Complete source](../../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-source.zip) |
+| Use on Linux | [Linux x64](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-linux-x64.zip) |
+| Use on Windows | [Windows x64](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-windows-x64.zip) |
+| Deploy Cloudflare Worker | [Worker package](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-worker.zip) |
+| Develop a source plugin | [Author kit](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-plugin-author-kit.zip) |
+| Modify or build MusicFS | [Complete source](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-source.zip) |
 
-These downloads are dev.30 and do not include dev.31 localization. The latest Linux prebuilt package is [dev.14 x64](../../dist/releases/0.1.0-dev.14/musicfs-0.1.0-dev.14-linux-x64.zip); [build current source](development.md#build-desktop-and-worker) for newer features. macOS currently has a source-build entry.
+Windows x64 and Linux x64 are built from the same source. macOS currently has a source-build entry.
 
-Plugin ZIPs are in `plugins/`. Package identities and checksums are in the [manifest](../../dist/releases/0.1.0-dev.30/release-manifest.json) and [SHA256SUMS](../../dist/releases/0.1.0-dev.30/SHA256SUMS).
+Plugin ZIPs are in `plugins/`. Package identities and checksums are in the [manifest](../../dist/releases/0.1.0-dev.31/release-manifest.json) and [SHA256SUMS](../../dist/releases/0.1.0-dev.31/SHA256SUMS).
 
 ## First use
 

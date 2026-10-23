@@ -2,20 +2,21 @@
 
 [English](en/release.md)
 
-当前源码为 **0.1.0-dev.31**，已加入中英文界面和无桌面访问。最近归档仍是 **0.1.0-dev.30**；正式版尚未发布。
+当前归档为 **0.1.0-dev.31**，包含中英文界面、无桌面访问和双语使用/开发文档；仍为开发预览版。
 
 ## 选择下载
 
 | 你要做什么 | 下载 |
 |---|---|
-| 在 Windows 上使用 | [Windows x64](../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-windows-x64.zip) |
-| 部署 Cloudflare Worker | [Worker 部署包](../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-worker.zip) |
-| 编写自己的来源插件 | [插件作者包](../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-plugin-author-kit.zip) |
-| 修改或构建 MusicFS | [完整源码](../dist/releases/0.1.0-dev.30/musicfs-0.1.0-dev.30-source.zip) |
+| 在 Linux 上使用 | [Linux x64](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-linux-x64.zip) |
+| 在 Windows 上使用 | [Windows x64](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-windows-x64.zip) |
+| 部署 Cloudflare Worker | [Worker 部署包](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-worker.zip) |
+| 编写自己的来源插件 | [插件作者包](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-plugin-author-kit.zip) |
+| 修改或构建 MusicFS | [完整源码](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-source.zip) |
 
-这些下载对应 dev.30，不包含 dev.31 的双语改造。Linux 最近的预构建包是 [dev.14 x64](../dist/releases/0.1.0-dev.14/musicfs-0.1.0-dev.14-linux-x64.zip)；使用最新功能可从当前源码[构建](development.md#构建桌面与-worker)。macOS 目前提供构建入口。
+Windows x64 和 Linux x64 使用同版源码构建。macOS 目前提供构建入口。
 
-版本内的插件 ZIP 在 `plugins/` 目录中；各包内容和摘要见[发行清单](../dist/releases/0.1.0-dev.30/release-manifest.json)、[SHA256SUMS](../dist/releases/0.1.0-dev.30/SHA256SUMS)。
+版本内的插件 ZIP 在 `plugins/` 目录中；各包内容和摘要见[发行清单](../dist/releases/0.1.0-dev.31/release-manifest.json)、[SHA256SUMS](../dist/releases/0.1.0-dev.31/SHA256SUMS)。
 
 ## 首次使用
 
