@@ -5,7 +5,7 @@ import { useQueries } from '@tanstack/react-query';
 import type { LayoutNode, SourceInstance } from '../../contracts/management';
 import type { Api } from '../api';
 import { exportedMusic, layoutLocation, locationKey, sourceLocation, type MusicLocation } from './music-navigation';
-import { listingQuery, layoutSource, rootsQuery, type SourceRoot } from './music-listing';
+import { listingQuery, layoutSource, rootsQuery, sourceDirectory, type SourceRoot } from './music-listing';
 import { canMove, editNode, groupIds, locateNode, moveNode, moveToFolder, type Placement } from '../pages/layout-draft';
 import type { LibraryLayout } from './use-library-layout';
 import type { LayoutActions } from './use-layout-actions';
@@ -13,16 +13,19 @@ import { RenameNode } from './music-layout-controls';
 import { MusicDropTarget, MusicLayoutDrag, MusicSourceDrag, sourceDrag, type SourceDrag } from './music-drag';
 
 type Branch = { key: string; title: ReactNode; icon?: ReactNode; location?: MusicLocation; children?: Branch[]; isLeaf?: boolean; selectable?: boolean };
-export function MusicTree({ api, instances, selected, open, layout, actions, section, add, reveal, options }: {
+export type MusicTreeView = { expanded: MusicLocation[]; filter: string; location: MusicLocation | null };
+export function MusicTree({ api, instances, selected, open, layout, actions, section, views, add, reveal, options }: {
   api: Api; instances: SourceInstance[]; selected: MusicLocation; open(location: MusicLocation, keepTree?: boolean): void;
   layout: LibraryLayout; actions: LayoutActions; section: 'sources' | 'layout'; add(data: SourceDrag, parentId: string | null): void;
+  views: Map<string, MusicTreeView>;
   reveal: MusicLocation | null; options?: ReactNode;
 }) {
-  const [expanded, setExpanded] = useState<MusicLocation[]>(section === 'layout' ? [exportedMusic] : []);
-  const [filter, setFilter] = useState(''); const nodes = layout.nodes ?? [];
+  const [expanded, setExpanded] = useState<MusicLocation[]>(() => views.get(section)?.expanded ?? (section === 'layout' ? [exportedMusic] : []));
+  const [filter, setFilter] = useState(() => views.get(section)?.filter ?? ''); const nodes = layout.nodes ?? [];
   const relevant = section === 'sources' ? selected.target.kind === 'source' : selected.target.kind === 'layout';
-  const lastLocation = useRef<MusicLocation | null>(null); if (relevant) lastLocation.current = selected;
+  const lastLocation = useRef<MusicLocation | null>(views.get(section)?.location ?? null); if (relevant) lastLocation.current = selected;
   const key = lastLocation.current ? locationKey(lastLocation.current) : '';
+  useEffect(() => { views.set(section, { expanded, filter, location: lastLocation.current }); }, [views, section, expanded, filter, key]);
   useEffect(() => {
     if (section !== 'layout' || !actions.renaming) return;
     setFilter(''); const location = layoutLocation(nodes, actions.renaming); lastLocation.current = location; revealNode(location);
@@ -56,8 +59,9 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
     if (value?.isError) children.push({ key: locationKey(location) + ':retry', selectable: false, isLeaf: true,
       title: <Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => { open(location); void value.refetch(); }}>重新加载</Button> });
     const target = location.target;
-    const root = target.kind === 'source' ? roots.get(target.instanceId)?.find(root => root.directoryRef === target.directoryRef) : undefined;
-    return { key: locationKey(location), location, title: <MusicSourceDrag data={root && target.kind === 'source' && !layout.disabled ? sourceDrag(target.instanceId, [root]) : undefined}>
+    const instanceId = target.kind === 'source' ? target.instanceId : layoutSource(nodes, location)?.instanceId;
+    const root = instanceId ? sourceDirectory(location, roots.get(instanceId), nodes) : undefined;
+    return { key: locationKey(location), location, title: <MusicSourceDrag data={root && instanceId && !layout.disabled ? sourceDrag(instanceId, [root]) : undefined}>
       <span className="music-tree-name" title={location.name}>{location.name}</span></MusicSourceDrag>,
       icon: value?.isFetching ? <LoadingOutlined /> : location.target.kind === 'source' && location.target.directoryRef === undefined ? <ApiOutlined /> : <FolderOutlined />,
       ...(children ? { children, isLeaf: !children.length && !value?.isError } : {}) };

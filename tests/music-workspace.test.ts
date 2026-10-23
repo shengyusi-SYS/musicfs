@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import type { LayoutNode, SourceInstance } from '../src/contracts/management';
 import type { Api } from '../src/web/api';
 import { currentLayoutLocation, exportedMusic, layoutLocation, sourceLocation, type MusicLocation } from '../src/web/components/music-navigation';
-import { groupListing, listingQuery } from '../src/web/components/music-listing';
+import { groupListing, listingQuery, sourceDirectory } from '../src/web/components/music-listing';
 import { editNode, moveToFolder } from '../src/web/pages/layout-draft';
 
 const instance: SourceInstance = { id: 'account', pluginId: 'example', name: '音乐账号', epoch: 1, config: {} };
@@ -48,4 +48,20 @@ test('raw source and draft aliases share snapshot data while retaining their own
 test('an unresolved layout reference cannot accidentally browse the source account root', () => {
   const query = listingQuery({} as Api, layoutLocation(original, 'alias'), [instance], original, []);
   expect(query.enabled).toBe(false);
+});
+
+test('individual playlist references share source snapshots and keep the root identity through deep links', async () => {
+  const rootLocation: MusicLocation = { name: '我的歌单', target: { kind: 'source', instanceId: instance.id, directoryRef: 'opaque/root', sourceId: 'playlists' }, ancestors: [sourceLocation(instance)] };
+  const api = { browseSourceDirectory: async () => ({ entries: [{ kind: 'directory', name: '通勤', modifiedAt: '', directoryRef: 'opaque/child' }], status: null }) } as unknown as Api;
+  const query = listingQuery(api, rootLocation, [instance], original, roots);
+  const child = query.select(await query.queryFn({ signal: new AbortController().signal })).entries[0]!.location!;
+  expect(sourceDirectory(rootLocation, roots, original)).toEqual(roots[0]);
+  expect(sourceDirectory({ ...child, ancestors: [] }, roots, original)).toEqual({ sourceId: 'playlists', name: '通勤', directoryRef: 'opaque/child', nested: true });
+  const playlist: LayoutNode = { ...alias, id: 'commute', name: '随身歌单', directoryRef: 'opaque/child' };
+  const nodes = [playlist];
+  const mapped = listingQuery(api, layoutLocation(nodes, playlist.id), [instance], nodes, roots);
+  expect(mapped.queryKey).toEqual(listingQuery(api, child, [instance], original, roots).queryKey);
+  expect(mapped.source?.directoryRef).toBe('opaque/child');
+  expect(sourceDirectory(layoutLocation(nodes, playlist.id), roots, nodes)).toEqual({ sourceId: 'playlists', name: '随身歌单', directoryRef: 'opaque/child', nested: true });
+  expect(listingQuery(api, layoutLocation(nodes, playlist.id), [instance], nodes, []).enabled).toBe(false);
 });

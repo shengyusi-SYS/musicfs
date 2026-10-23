@@ -4,7 +4,7 @@ import type { FileNamingPolicy } from '../../contracts/file-naming';
 
 export type LayoutNode = { id: string; name: string } & (
   | { kind: 'group'; children: LayoutNode[] }
-  | { kind: 'source'; instanceId: string; sourceId: string }
+  | { kind: 'source'; instanceId: string; sourceId: string; directoryRef?: string | undefined }
 );
 export type Layout = { revision: number; nodes: LayoutNode[] | null };
 export type SnapshotKey = { kind: 'roots' | 'directory'; ref: string };

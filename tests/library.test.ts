@@ -277,6 +277,29 @@ test('layout uses revision checks and supports missing-plugin references', async
   await expect(library.saveLayout(1, [{ kind: 'group', id: 'dup', name: 'a', children: [{ kind: 'group', id: 'dup', name: 'b', children: [] }] }])).rejects.toMatchObject({ code: 'invalid_layout' });
 });
 
+test('a saved playlist alias reads only that directory and follows the same file contract as the original', async () => {
+  const listed: string[] = [];
+  const { library, id } = await setup(plugin({ list: async (_ctx, ref) => {
+    listed.push(ref);
+    return { ok: true, value: { items: ref === 'root'
+      ? [{ kind: 'directory', entryId: 'commute', name: '通勤', directoryRef: 'opaque-child' }]
+      : [{ kind: 'file', entryId: 'one', name: '音频.wav', fileRef: 'audio', info: { contentId: 'fixed', size: 8, mediaType: 'audio/wav' } }] } };
+  } }));
+  await library.contentSources(id, signal());
+  const saved = await library.saveLayout(0, [{ kind: 'source', id: 'playlist', name: '通勤精选', instanceId: id, sourceId: 'root', directoryRef: 'opaque-child' }]);
+  expect(saved.nodes).toMatchObject([{ directoryRef: 'opaque-child' }]);
+  const entries = await library.files.list('/通勤精选', signal());
+  expect(entries.map(entry => entry.path)).toEqual(['/通勤精选/音频.wav']);
+  expect(listed).toEqual(['opaque-child']);
+  const listing = await library.browseDirectory('/通勤精选', signal());
+  expect(listing.source?.directoryRef).toBe('opaque-child');
+  expect(listing.entries).toEqual(entries);
+  const file = await library.files.stat(entries[0]!, signal());
+  if (file.kind !== 'file') throw new Error('Expected a file');
+  expect(await new Response((await library.files.open(file, { start: 2, end: 3 }, signal())).body).text()).toBe('CD');
+  expect(listed).toEqual(['opaque-child']);
+});
+
 test('range bytes are exact and an upstream full response is cancelled and rejected', async () => {
   const source = plugin(); const { library } = await setup(source);
   const file = await library.files.stat(filePath, signal()); if (file.kind !== 'file') throw new Error('Missing fixture');

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LayoutNode, SourceInstance } from '../../contracts/management';
 import { nodeTrail } from '../pages/layout-draft';
 
-export type MusicTarget = { kind: 'export'; path: string } | { kind: 'source'; instanceId: string; directoryRef?: string }
+export type MusicTarget = { kind: 'export'; path: string } | { kind: 'source'; instanceId: string; directoryRef?: string; sourceId?: string }
   | { kind: 'layout'; nodeId: string; directoryRef?: string };
 export type MusicCrumb = { target: MusicTarget; name: string };
 export type MusicLocation = MusicCrumb & { ancestors: MusicCrumb[] };
@@ -40,7 +40,8 @@ function readLocation(): MusicLocation {
   const instanceId = params.get('source');
   if (!instanceId) return exportedLocation(params.get('path') ?? '/');
   const root: MusicCrumb = { name: '音乐来源', target: { kind: 'source', instanceId } };
-  return { name: params.get('name') ?? root.name, target: { kind: 'source', instanceId, ...(directoryRef === null ? {} : { directoryRef }) }, ancestors: directoryRef === null ? [] : [root] };
+  const sourceId = params.get('root');
+  return { name: params.get('name') ?? root.name, target: { kind: 'source', instanceId, ...(directoryRef === null ? {} : { directoryRef }), ...(sourceId === null ? {} : { sourceId }) }, ancestors: directoryRef === null ? [] : [root] };
 }
 export function useMusicNavigation() {
   const [location, setLocation] = useState(readLocation);
@@ -48,7 +49,7 @@ export function useMusicNavigation() {
   function open(next: MusicLocation) {
     if (locationKey(next) === locationKey(location)) return;
     const url = new URL(window.location.href); url.searchParams.set('page', 'library');
-    for (const key of ['path', 'source', 'directory', 'name', 'node']) url.searchParams.delete(key);
+    for (const key of ['path', 'source', 'directory', 'name', 'node', 'root']) url.searchParams.delete(key);
     if (next.target.kind === 'export') { if (next.target.path !== '/') url.searchParams.set('path', next.target.path); }
     else if (next.target.kind === 'layout') {
       if (next.target.nodeId) url.searchParams.set('node', next.target.nodeId);
@@ -58,6 +59,7 @@ export function useMusicNavigation() {
     else {
       url.searchParams.set('source', next.target.instanceId); url.searchParams.set('name', next.name);
       if (next.target.directoryRef !== undefined) url.searchParams.set('directory', next.target.directoryRef);
+      if (next.target.sourceId !== undefined) url.searchParams.set('root', next.target.sourceId);
     }
     history.pushState({ ...history.state, musicLocation: next }, '', url); setLocation(next);
   }

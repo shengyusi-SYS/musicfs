@@ -9,7 +9,7 @@ export type SourceInstance = { id: string; pluginId: string; name: string; confi
 export type SourceConfiguration = { configuration: Configuration; authentication: boolean; metadataRefresh?: boolean; statistics?: Record<string, string>; naming?: { fields: Record<string, string> } };
 export type LayoutNode = { id: string; name: string } & (
   | { kind: 'group'; children: LayoutNode[] }
-  | { kind: 'source'; instanceId: string; sourceId: string }
+  | { kind: 'source'; instanceId: string; sourceId: string; directoryRef?: string | undefined }
 );
 export type Layout = { revision: number; nodes: LayoutNode[] | null };
 export type ViewEntry = { kind: 'file' | 'directory'; path: string; name: string; modifiedAt: string };

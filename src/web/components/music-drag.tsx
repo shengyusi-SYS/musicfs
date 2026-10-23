@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { setCustomNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview';
 import type { Placement } from '../pages/layout-draft';
-import type { SourceRoot } from './music-listing';
+import type { SourceDirectory } from './music-listing';
 
-export type SourceDrag = { type: 'music-source'; instanceId: string; roots: SourceRoot[] };
+export type SourceDrag = { type: 'music-source'; instanceId: string; roots: SourceDirectory[] };
 export type LayoutDrag = { type: 'music-layout'; nodeId: string; name: string };
 type MusicDrag = SourceDrag | LayoutDrag;
-export const sourceDrag = (instanceId: string, roots: SourceRoot[]): SourceDrag => ({ type: 'music-source', instanceId, roots });
+export const sourceDrag = (instanceId: string, roots: SourceDirectory[]): SourceDrag => ({ type: 'music-source', instanceId, roots });
 const isMusicDrag = (data: Record<string | symbol, unknown>): data is MusicDrag => data.type === 'music-source' || data.type === 'music-layout';
 
 function useMusicDrag<T extends HTMLElement>(data: MusicDrag | undefined) {

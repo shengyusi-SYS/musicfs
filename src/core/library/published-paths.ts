@@ -6,7 +6,7 @@ import { projectFileNames } from './file-naming';
 /** Map a publication to visible folders using saved snapshots only; never warm a source. */
 export async function publishedPaths(sources: Pick<Sources, 'instances'>, store: LibraryStore, stamp: SourceStamp, key: SnapshotKey): Promise<string[]> {
   const layout = await store.layout();
-  const starts: { path: string; sourceId: string }[] = [];
+  const starts: { path: string; sourceId: string; directoryRef?: string }[] = [];
   let instancePath: string | undefined;
   if (layout.nodes === null) {
     const instances = await namedView(await sources.instances());
@@ -19,7 +19,7 @@ export async function publishedPaths(sources: Pick<Sources, 'instances'>, store:
       for (const node of (await namedView(nodes)).entries) {
         const path = parent + '/' + node.pathName;
         if (node.kind === 'group') await visit(node.children, path);
-        else if (node.instanceId === stamp.id) starts.push({ path, sourceId: node.sourceId });
+        else if (node.instanceId === stamp.id) starts.push({ path, sourceId: node.sourceId, ...(node.directoryRef === undefined ? {} : { directoryRef: node.directoryRef }) });
       }
     };
     await visit(layout.nodes, '');
@@ -32,7 +32,7 @@ export async function publishedPaths(sources: Pick<Sources, 'instances'>, store:
   const pending = instancePath ? namedRoots.entries.map(root => ({ path: instancePath + '/' + root.pathName, ref: root.directoryRef, ancestors: new Set<string>() }))
     : starts.flatMap(start => {
       const root = namedRoots.entries.find(root => root.sourceId === start.sourceId);
-      return root ? [{ path: start.path, ref: root.directoryRef, ancestors: new Set<string>() }] : [];
+      return root ? [{ path: start.path, ref: start.directoryRef ?? root.directoryRef, ancestors: new Set<string>() }] : [];
     });
   const saved = new Map<string, Promise<{ pathName: string; directoryRef: string }[]>>();
   const directories = (ref: string) => {

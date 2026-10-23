@@ -21,7 +21,7 @@ const sameStamp = (a: SourceStamp, b: SourceStamp) => a.id === b.id && a.epoch =
 const id = z.string().min(1).max(512);
 const layoutNode: z.ZodType<LayoutNode> = z.lazy(() => z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('group'), id, name: id, children: z.array(layoutNode) }).strict(),
-  z.object({ kind: z.literal('source'), id, name: id, instanceId: id, sourceId: id }).strict()
+  z.object({ kind: z.literal('source'), id, name: id, instanceId: id, sourceId: id, directoryRef: z.string().min(1).max(4096).optional() }).strict()
 ]));
 
 function parseLayout(input: unknown): LayoutNode[] | null {
@@ -93,7 +93,7 @@ type Target =
   | { kind: 'layout'; nodes: LayoutNode[]; revision: number }
   | { kind: 'instances' }
   | { kind: 'instance'; instanceId: string }
-  | { kind: 'source'; instanceId: string; sourceId: string }
+  | { kind: 'source'; instanceId: string; sourceId: string; directoryRef?: string }
   | { kind: 'directory'; stamp: SourceStamp; ref: string }
   | { kind: 'file'; stamp: SourceStamp; ref: string; info?: FileInfo; deferredDirectory?: string };
 type Child = { id: string; name: string; target: Target; modifiedAt: string; namingIdentity?: string };
@@ -190,7 +190,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
   async function sourceDirectory(target: Extract<Target, { kind: 'source' }>, signal: AbortSignal): Promise<Extract<Target, { kind: 'directory' }>> {
     const root = (await rootsView(target.instanceId, signal)).entries.find(item => item.id === target.sourceId);
     if (!root || root.target.kind !== 'directory') throw new LibraryError('not_found', 'Content source no longer exists');
-    return root.target;
+    return target.directoryRef === undefined ? root.target : { ...root.target, ref: target.directoryRef };
   }
   async function children(target: Target, signal: AbortSignal): Promise<NamedView<Child>> {
     if (target.kind === 'instances') return namedView((await sources.instances()).map(instance => ({
@@ -198,7 +198,7 @@ export function createLibrary(sources: Sources, store: LibraryStore & RefreshSto
     })) satisfies Child[]);
     if (target.kind === 'layout') return namedView(target.nodes.map(node => ({ id: node.id, name: node.name, modifiedAt: epochDate,
       target: node.kind === 'group' ? { kind: 'layout', nodes: node.children, revision: target.revision }
-        : { kind: 'source', instanceId: node.instanceId, sourceId: node.sourceId } })) satisfies Child[]);
+        : { kind: 'source', instanceId: node.instanceId, sourceId: node.sourceId, ...(node.directoryRef === undefined ? {} : { directoryRef: node.directoryRef }) } })) satisfies Child[]);
     if (target.kind === 'source') return children(await sourceDirectory(target, signal), signal);
     if (target.kind === 'instance') {
       const stamp = await sources.view(target.instanceId);

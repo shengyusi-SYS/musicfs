@@ -8,7 +8,7 @@ import type { Api } from '../api';
 import { Failure } from '../components/feedback';
 import { SourceEditor } from '../components/source-editor';
 import { MusicInspector } from '../components/music-inspector';
-import { MusicTree } from '../components/music-tree';
+import { MusicTree, type MusicTreeView } from '../components/music-tree';
 import { MusicPanes } from '../components/music-panes';
 import { sourceDrag, type SourceDrag } from '../components/music-drag';
 import { MusicBrowser } from '../components/music-browser';
@@ -17,7 +17,7 @@ import { currentLayoutLocation, exportedMusic, layoutLocation, locationKey, sour
 import { useLibraryLayout } from '../components/use-library-layout';
 import { useLayoutActions } from '../components/use-layout-actions';
 import { AddToFolder, MoveFolder } from '../components/music-layout-controls';
-import { layoutSource, type SourceRoot } from '../components/music-listing';
+import { layoutSource, type SourceDirectory } from '../components/music-listing';
 import { appendNodes, locateNode, moveToFolder, type LayoutDraft } from './layout-draft';
 import { SourceRootsFeedback } from '../components/source-roots-feedback';
 import './music-workspace.css';
@@ -38,12 +38,13 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
   const [treePanel, setTreePanel] = useState<'sources' | 'layout'>('sources');
   const [layoutReveal, setLayoutReveal] = useState<MusicLocation | null>(null);
   const layoutActions = useLayoutActions(layout, location, open, () => showTree('layout'));
-  const [adding, setAdding] = useState<{ instance: SourceInstance; roots: SourceRoot[] } | null>(null);
+  const [adding, setAdding] = useState<{ instance: SourceInstance; roots: SourceDirectory[] } | null>(null);
   const selectedNode = location.target.kind === 'layout' ? locateNode(nodes, location.target.nodeId) : undefined;
   const parentId = selectedNode ? selectedNode.node.kind === 'group' ? selectedNode.node.id : selectedNode.parentId : null;
   const moving = layoutActions.moving ? locateNode(nodes, layoutActions.moving) : undefined;
   const [panel, setPanel] = useState<Panel | null>(() => initialPluginId ? { kind: 'create' } : null);
   const [browserViews] = useState(() => new LRUCache<string, MusicBrowserView>({ max: 40 }));
+  const [treeViews] = useState(() => new Map<string, MusicTreeView>());
   useEffect(() => { if (initialPluginId) setPanel({ kind: 'create' }); }, [initialPluginId]);
   const [authenticating, setAuthenticating] = useState<{ instance: SourceInstance; needsReauthorization: boolean } | null>(null);
   const remove = useMutation({ mutationFn: (id: string) => api.deleteInstance(id), onSuccess: async () => {
@@ -79,14 +80,15 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
     </Space>;
   }
   function copyToLayout(data: SourceDrag, parent: string | null) {
-    const additions = data.roots.map(root => ({ id: crypto.randomUUID(), name: root.name, kind: 'source' as const, instanceId: data.instanceId, sourceId: root.sourceId }));
+    const additions = data.roots.map(root => ({ id: crypto.randomUUID(), name: root.name, kind: 'source' as const, instanceId: data.instanceId, sourceId: root.sourceId,
+      ...(root.nested ? { directoryRef: root.directoryRef } : {}) }));
     const next = appendNodes(nodes, parent, additions); layout.change(next); setLayoutReveal(layoutLocation(next, parent ?? ''));
     message.success('已加入目录草稿');
   }
   const layoutOptions = <Dropdown trigger={['click']} menu={{ items: [{ key: 'automatic', label: '恢复按来源自动排列', disabled: layout.automatic || layout.disabled, onClick: () => { layout.change(null); open(exportedMusic); } }] }}><Button size="small" type="text" aria-label="播放器目录选项" icon={<MoreOutlined />} /></Dropdown>;
   function tree(section: 'sources' | 'layout') {
     return <MusicTree key={section + ':' + instances.data?.map(instance => `${instance.id}:${instance.epoch}`).join('|')} api={api} instances={instances.data ?? []} selected={location} open={navigate}
-      layout={layout} actions={layoutActions} section={section} add={copyToLayout} reveal={layoutReveal} options={layoutOptions} />;
+      layout={layout} actions={layoutActions} section={section} views={treeViews} add={copyToLayout} reveal={layoutReveal} options={layoutOptions} />;
   }
   const selectedSourceId = location.target.kind === 'source' ? location.target.instanceId : layoutSource(nodes, location)?.instanceId;
   const selectedSource = instances.data?.find(instance => instance.id === selectedSourceId);

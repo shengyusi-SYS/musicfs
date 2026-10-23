@@ -84,7 +84,7 @@ test('HTTP install → independent instances → layout → DAV → restart → 
     { kind: 'group', name: 'B', children: [{ kind: 'source', instanceId: b, sourceId: 'audio' }] }]);
   expect(await (await request('/api/layout')).json()).toEqual({ revision: 0, nodes: null });
   const nodes = [{ kind: 'group', id: 'music', name: '音乐', children: [
-    { kind: 'source', id: 'a', name: '甲', instanceId: a, sourceId: 'audio' },
+    { kind: 'source', id: 'a', name: '甲', instanceId: a, sourceId: 'audio', directoryRef: '/' },
     { kind: 'source', id: 'b', name: '乙', instanceId: b, sourceId: 'audio' }
   ] }];
   expect((await request('/api/layout', { method: 'PUT', ...body({ expectedRevision: 0, nodes }) })).status).toBe(200);
