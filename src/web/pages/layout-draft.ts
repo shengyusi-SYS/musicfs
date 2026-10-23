@@ -1,5 +1,15 @@
 import type { LayoutNode } from '../../contracts/management';
 
+export type LayoutDraft = { base: number; nodes: LayoutNode[] | null };
+
+export function nodeTrail(nodes: LayoutNode[], id: string): LayoutNode[] | undefined {
+  for (const node of nodes) {
+    if (node.id === id) return [node];
+    const child = node.kind === 'group' ? nodeTrail(node.children, id) : undefined;
+    if (child) return [node, ...child];
+  }
+}
+
 export function findNode(nodes: LayoutNode[], id: string): LayoutNode | undefined {
   for (const node of nodes) {
     if (node.id === id) return node;

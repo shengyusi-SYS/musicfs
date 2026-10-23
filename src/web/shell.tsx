@@ -6,7 +6,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { createApi, type Api } from './api';
 import { Failure } from './components/feedback';
 import { useWorkspaceNavigation } from './components/workspace-navigation';
-import type { LayoutDraft } from './pages/layout-editor';
+import type { LayoutDraft } from './pages/layout-draft';
 import { PhoneAccess } from './components/phone-access';
 import type { ManagementAccess, ManagementLogin } from '../contracts/management-auth';
 
