@@ -58,7 +58,7 @@ export function createDesktopHttp(input: {
   app.delete('/api/desktop/read-cache', async c => input.readCache ? c.json(await input.readCache.clear()) : c.notFound());
   app.put('/api/desktop/network', async c => {
     const parsed = desktopNetworkSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: '请选择本机或局域网访问，端口须为 0—65535 的整数。' }, 422);
+    if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: '请选择管理页面和 WebDAV 的访问范围，端口须为 0—65535 的整数。' }, 422);
     if (input.configureNetwork) {
       try { await input.configureNetwork(parsed.data); }
       catch { return c.json({ error: 'network_failed', message: '监听地址未能切换，请检查端口是否被占用。原入口仍可使用。' }, 422); }

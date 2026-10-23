@@ -206,10 +206,10 @@ export async function startDesktopBackground(input: { directory?: string; resour
       ...(service.readCache ? { readCache: service.readCache, prepareQuit: async () => service!.readCache!.prepareQuit() } : {}), close }));
     app.route('/', service.app);
     listener = createDesktopListener({ fetch: app.fetch });
-    try { listener.listen({ access: network.access, port: preferredPort }); }
+    try { listener.listen({ ...network, port: preferredPort }); }
     catch (error) {
       if (!preferredPort || !(error instanceof Error && 'code' in error && error.code === 'EADDRINUSE')) throw error;
-      listener.listen({ access: network.access, port: 0 });
+      listener.listen({ ...network, port: 0 });
     }
     // Launcher identity and local mounts always use a concrete loopback address,
     // including when the same listener also accepts LAN clients.

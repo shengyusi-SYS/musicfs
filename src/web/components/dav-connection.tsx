@@ -22,8 +22,12 @@ function CopyField({ label, value }: { label: string; value: string }) {
 export function DavConnectionDetails({ api, value, desktop, openSettings }: { api: Api; value: Connection; desktop: boolean; openSettings(): void }) {
   const [editing, setEditing] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const network = useQuery({ queryKey: ['desktop-network'], queryFn: ({ signal }) => api.desktopNetwork(signal), enabled: desktop });
+  const localOnly = desktop && network.data?.active.davAccess === 'local';
+  const address = localOnly ? network.data!.davUrls[0]! : new URL(value.davPath + '/', location.origin).href;
   return <>
-    <CopyField label="WebDAV 地址" value={new URL(value.davPath + '/', location.origin).href} />
+    <Failure error={network.error} retry={() => void network.refetch()} />
+    {desktop && network.isPending ? <Skeleton.Input active block /> : <CopyField label={localOnly ? '本机 WebDAV 地址' : 'WebDAV 地址'} value={address} />}
     <div className="credential-grid"><CopyField label="用户名" value={value.username} /><CopyField label="密码" value={value.password} /></div>
     <Space wrap className="dav-actions"><Button type="primary" icon={<QrcodeOutlined aria-hidden="true" />} onClick={() => setScanning(true)}>扫码导入</Button>
       <Button icon={<EditOutlined aria-hidden="true" />} onClick={() => setEditing(true)}>修改账号密码</Button></Space>
@@ -49,10 +53,8 @@ function DavCredentialsDialog({ api, value, close }: { api: Api; value: Connecti
 function DavImportDialog({ api, value, desktop, close, openSettings }: { api: Api; value: Connection; desktop: boolean; close(): void; openSettings(): void }) {
   const network = useQuery({ queryKey: ['desktop-network'], queryFn: ({ signal }) => api.desktopNetwork(signal), enabled: desktop });
   const current = new URL(value.davPath + '/', location.origin).href;
-  const addresses = desktop ? [...new Set([
-    ...(!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? [current] : []),
-    ...(network.data?.active.access === 'lan' ? network.data.davUrls.filter(address => !['localhost', '127.0.0.1', '[::1]'].includes(new URL(address).hostname)) : [])
-  ])] : [current];
+  const addresses = desktop ? network.data?.active.davAccess === 'lan'
+    ? network.data.davUrls.filter(address => !['localhost', '127.0.0.1', '[::1]'].includes(new URL(address).hostname)) : [] : [current];
   const [selected, select] = useState('');
   const address = addresses.includes(selected) ? selected : addresses[0];
   const url = address ? davImportUrl(address, value) : '';
@@ -64,7 +66,7 @@ function DavImportDialog({ api, value, desktop, close, openSettings }: { api: Ap
       <Typography.Paragraph type="secondary">用支持连接地址导入的播放器扫码，二维码包含用户名和密码。</Typography.Paragraph>
       <CopyField label="含账号密码的连接地址" value={url} />
     </> : !network.isError && <>
-      <Typography.Paragraph>{network.data?.active.access === 'local' ? '先开启局域网访问，再用同一网络的设备扫码。' : '暂未找到局域网地址，请连接网络后重试。'}</Typography.Paragraph>
+      <Typography.Paragraph>{network.data?.active.davAccess === 'local' ? '先在设置中允许 WebDAV 的局域网访问。' : '暂未找到局域网地址，请连接网络后重试。'}</Typography.Paragraph>
       <Space><Button type="primary" onClick={openSettings}>局域网访问设置</Button><Button onClick={() => void network.refetch()}>重新检测</Button></Space>
     </>}
   </Modal>;
