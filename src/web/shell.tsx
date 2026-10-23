@@ -82,6 +82,7 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
   const [addAfterInstall, setAddAfterInstall] = useState(false);
   const [connectionTab, setConnectionTab] = useState<'mount' | 'dav'>('mount');
   const [draft, setDraft] = useState<LayoutDraft | null>(null);
+  const [librarySidebar, setLibrarySidebar] = useState<HTMLDivElement | null>(null);
   const [phoneOpen, setPhoneOpen] = useState(() => new URLSearchParams(location.search).get('phone') === '1');
   const [quitFailed, setQuitFailed] = useState(() => new URLSearchParams(location.search).get('quitFailed') === '1');
   function closePhone() {
@@ -92,7 +93,12 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
   if (stopped) return <div className="access-screen"><section className="access-panel"><div className="access-brand">MusicFS</div><Typography.Title level={2}>正在退出 MusicFS</Typography.Title>
     <Typography.Paragraph type="secondary">下次使用时，重新打开桌面程序即可。</Typography.Paragraph></section></div>;
   const addSource = (pluginId: string) => { setNewPlugin(pluginId); navigate('library'); };
-  return <Layout className="workspace"><aside className="sidebar">
+  const serviceControl = <Dropdown trigger={['click']} menu={{ items: [
+    { key: 'disconnect', label: '退出登录', onClick: disconnect },
+    ...(status.data?.host === 'desktop' ? [{ key: 'phone', label: '手机访问', onClick: () => setPhoneOpen(true) }] : []),
+    ...(status.data?.host === 'desktop' ? [{ key: 'quit', label: '退出 MusicFS', disabled: quit.isPending, onClick: () => quit.mutate() }] : [])
+  ] }}><Button className="mobile-disconnect" type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label="服务操作" /></Dropdown>;
+  return <Layout className={'workspace' + (page === 'library' ? ' workspace-library' : '')}><aside className="sidebar">
     <a href="?page=library" className="wordmark" onClick={event => { event.preventDefault(); navigate('library'); }}>MusicFS</a>
     <Menu aria-label="主导航" mode="inline" selectedKeys={[page]} onClick={({ key }) => navigate(key as typeof page)} items={[
       { key: 'library', icon: <FolderOutlined aria-hidden="true" />, label: <>音乐库{draft && <span className="unsaved-dot" aria-label="有未保存的目录修改" />}</> },
@@ -100,6 +106,7 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
       { type: 'divider' }, { key: 'plugins', icon: <AppstoreOutlined aria-hidden="true" />, label: '插件' },
       { key: 'settings', icon: <SettingOutlined aria-hidden="true" />, label: '设置' }
     ]} />
+    <div className="library-sidebar-slot" ref={setLibrarySidebar} hidden={page !== 'library'} />
     <footer className="sidebar-footer"><Badge status={status.isSuccess ? 'success' : status.isError ? 'error' : 'processing'} text={status.isSuccess ? status.data.host === 'desktop' ? '本机服务' : '云端服务' : status.isError ? '连接失败' : '正在连接'} />
       <div className="version">{status.data?.version}</div>
       <Dropdown trigger={['click']} menu={{ items: [
@@ -108,17 +115,12 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
         ...(status.data?.host === 'desktop' ? [{ key: 'quit', label: '退出 MusicFS', disabled: quit.isPending, onClick: () => quit.mutate() }] : [])
       ] }}><Button type="text" icon={<MoreOutlined />} aria-label="服务操作">服务操作</Button></Dropdown>
     </footer>
-  </aside><Layout className="main-layout"><main className={'main-content' + (page === 'library' ? ' music-main' : '')}><header className="page-heading"><Typography.Title level={1}>{titles[page]}</Typography.Title>
-    <Dropdown trigger={['click']} menu={{ items: [
-      { key: 'disconnect', label: '退出登录', onClick: disconnect },
-      ...(status.data?.host === 'desktop' ? [{ key: 'phone', label: '手机访问', onClick: () => setPhoneOpen(true) }] : []),
-      ...(status.data?.host === 'desktop' ? [{ key: 'quit', label: '退出 MusicFS', disabled: quit.isPending, onClick: () => quit.mutate() }] : [])
-    ] }}><Button className="mobile-disconnect" type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label="服务操作" /></Dropdown></header>
+  </aside><Layout className="main-layout"><main className={'main-content' + (page === 'library' ? ' music-main' : '')}>{page !== 'library' && <header className="page-heading"><Typography.Title level={1}>{titles[page]}</Typography.Title>{serviceControl}</header>}
     <Failure error={quit.error} /><Failure error={logoutError} />
     {quitFailed && <Alert className="feedback" showIcon closable onClose={() => setQuitFailed(false)} type="warning" title="退出未完成，请先关闭正在使用挂载文件的程序，再重试。" />}
     {status.isError && <Alert showIcon type="error" title="无法连接 MusicFS" description={status.error.message} action={<Button onClick={() => void status.refetch()}>重试</Button>} />}
     {status.isPending ? <Skeleton active /> : status.isSuccess && <ErrorBoundary resetKeys={[page]} fallbackRender={() => <Alert type="error" showIcon title="页面未能加载" action={<Button onClick={() => location.reload()}>重新打开</Button>} />}><Suspense fallback={<Skeleton active />}>
-      <Activity mode={page === 'library' ? 'visible' : 'hidden'}><MusicWorkspace api={api} showPlugins={continueAdding => { setAddAfterInstall(!!continueAdding); setInstallRequested(true); navigate('plugins'); }} showConnection={() => navigate('connection')} initialPluginId={newPlugin} consumePlugin={() => setNewPlugin(null)} draft={draft} setDraft={setDraft} /></Activity>
+      <Activity mode={page === 'library' ? 'visible' : 'hidden'}><MusicWorkspace api={api} sidebar={librarySidebar} serviceControl={serviceControl} showPlugins={continueAdding => { setAddAfterInstall(!!continueAdding); setInstallRequested(true); navigate('plugins'); }} showConnection={() => navigate('connection')} initialPluginId={newPlugin} consumePlugin={() => setNewPlugin(null)} draft={draft} setDraft={setDraft} /></Activity>
       {page === 'plugins' && <Plugins api={api} addSource={addSource} startInstalling={installRequested} addAfterInstall={addAfterInstall} consumeInstall={() => { setInstallRequested(false); setAddAfterInstall(false); }} />}
       {page === 'connection' && <Connection api={api} tab={connectionTab} setTab={setConnectionTab} openSettings={() => navigate('settings')} />}
       {page === 'settings' && <Settings api={api} desktop={status.data.host === 'desktop'} />}

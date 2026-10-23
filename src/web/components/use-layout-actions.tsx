@@ -9,7 +9,7 @@ import type { LibraryLayout } from './use-library-layout';
 export function useLayoutActions(layout: LibraryLayout, current: MusicLocation, open: (location: MusicLocation) => void, showTree: () => void) {
   const [renaming, setRenaming] = useState<string | null>(null); const [moving, setMoving] = useState<string | null>(null);
   const nodes = layout.nodes ?? [];
-  function reveal() { if (matchMedia('(max-width: 767px)').matches) showTree(); }
+  function reveal() { showTree(); }
   function createFolder(parent: string | null) {
     const node = layout.createFolder(parent);
     if (node) { if (current.target.kind !== 'source') open(layoutLocation(appendNodes(nodes, parent, [node]), node.id)); setRenaming(node.id); reveal(); }

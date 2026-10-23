@@ -46,7 +46,8 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
   const rootQueries = useQueries({ queries: rootInstances.map(instance => rootsQuery(api, instance)) });
   const roots = new Map<string, SourceRoot[] | undefined>(rootInstances.map((instance, index) => [instance.id, rootQueries[index]?.data]));
   const queries = useQueries({ queries: expanded.map(location => {
-    const source = layoutSource(nodes, location); const query = listingQuery(api, location, instances, nodes, source ? roots.get(source.instanceId) : undefined);
+    const instanceId = location.target.kind === 'source' ? location.target.instanceId : layoutSource(nodes, location)?.instanceId;
+    const query = listingQuery(api, location, instances, nodes, instanceId ? roots.get(instanceId) : undefined);
     return { ...query, enabled: query.enabled && location.ancestors.every(ancestor => expandedIds.has(locationKey(ancestor))) };
   }) });
   const results = new Map(expanded.map((location, index) => [locationKey(location), queries[index]!]));
@@ -95,7 +96,7 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
   const parentId = selection?.node.kind === 'group' ? selection.node.id : selection?.parentId ?? null;
   return <section className={'music-tree-pane music-tree-' + section} aria-label={section === 'layout' ? '播放器目录' : '音乐来源导航'}>
     <header className="music-pane-heading"><h2>{section === 'layout' ? '播放器目录' : '音乐来源'}</h2>
-      {section === 'layout' && <span><Tooltip title="新建文件夹"><Button type="text" size="small" icon={<FolderAddOutlined />} aria-label="新建播放器文件夹" disabled={layout.disabled} onClick={() => actions.createFolder(parentId)} /></Tooltip>{options}</span>}
+      <span>{section === 'layout' && <Tooltip title="新建文件夹"><Button type="text" size="small" icon={<FolderAddOutlined />} aria-label="新建播放器文件夹" disabled={layout.disabled} onClick={() => actions.createFolder(parentId)} /></Tooltip>}{options}</span>
     </header>
     <Input className="music-tree-filter" size="small" prefix={<SearchOutlined />} placeholder="筛选目录" aria-label={section === 'layout' ? '筛选播放器目录' : '筛选来源目录'} allowClear value={filter} onChange={event => setFilter(event.target.value)} />
     <Tree<Branch> className="music-tree" aria-label={section === 'layout' ? '播放器目录树' : '来源目录树'} showIcon blockNode treeData={tree} selectedKeys={[key]}
@@ -106,6 +107,6 @@ export function MusicTree({ api, instances, selected, open, layout, actions, sec
         setExpanded(current => info.expanded ? [...current.filter(value => locationKey(value) !== locationKey(location)), location] : current.filter(value => locationKey(value) !== locationKey(location)));
         if (info.expanded && section === 'sources') open(location, true);
       }} />
-    {!tree.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的目录" />}
+    {!tree.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={section === 'sources' && !instances.length ? '尚未添加来源' : '没有匹配的目录'} />}
   </section>;
 }
