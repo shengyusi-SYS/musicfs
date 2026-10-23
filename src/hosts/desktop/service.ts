@@ -114,13 +114,14 @@ export async function createDesktopService(input: { directory: string; adminToke
       return installed;
     },
     remove: async id => { await extensions.remove(id); refreshMounts(); }, pluginChange: id => changes.get(id) }));
-  app.route('/', createDav(readCache?.files ?? library.files, davAccess.get));
+  const davApp = createDav(readCache?.files ?? library.files, davAccess.get);
+  app.route('/', davApp);
   if (input.webRoot) {
     app.get('/', serveStatic({ root: input.webRoot, path: 'index.html' }));
     app.on(['GET', 'HEAD'], '/assets/*', serveStatic({ root: input.webRoot }));
   }
   background.wake();
-  return { app, store, readCache, access, davAccess, close: async () => {
+  return { app, davApp, store, readCache, access, davAccess, close: async () => {
     const resume = readCache?.prepareQuit();
     try {
       if (input.mounts) await input.mounts.close();

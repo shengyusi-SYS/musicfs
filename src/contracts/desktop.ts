@@ -1,5 +1,5 @@
 /** Desktop listener settings; plugin and Worker configuration remain separate. */
-export type DesktopNetworkSettings = { managementAccess: 'local' | 'lan'; davAccess: 'local' | 'lan'; port: number };
+export type DesktopNetworkSettings = { managementAccess: 'local' | 'lan'; managementPort: number; davAccess: 'local' | 'lan'; davPort: number };
 export type DesktopNetworkView = {
   settings: DesktopNetworkSettings;
   active: DesktopNetworkSettings;

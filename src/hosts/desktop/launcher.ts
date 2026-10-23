@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { createDesktopService } from './service';
 import { createMountManager } from './mounts';
 import { createRcloneControl, writePrivateJson } from './rclone-control';
-import { readDesktopNetworkSettings } from './network';
+import { readDesktopNetworkState, saveDesktopNetworkSettings } from './network';
 import { createMountPrerequisites } from './mount-prerequisites';
 import { createDesktopHttps } from './https';
 import { createDesktopHttp } from './http';
@@ -23,12 +23,21 @@ import type { DesktopPreferencesView } from '../../contracts/desktop';
 import { createDesktopListener } from './listener';
 
 const credentialsSchema = z.object({ instanceId: z.uuid(), adminToken: z.string().min(32), username: z.literal('musicfs'), password: z.string().min(32) }).strict();
-const runtimeSchema = z.object({ pid: z.number().int().positive(), origin: z.string(), instanceId: z.uuid() }).strict();
+const runtimeSchema = z.object({ pid: z.number().int().positive(), origin: z.string(), davOrigin: z.string().optional(), instanceId: z.uuid() }).strict();
 type Credentials = z.infer<typeof credentialsSchema>;
 type Runtime = z.infer<typeof runtimeSchema>;
 const lockStaleMs = 30_000;
 const lockRecoveryMs = lockStaleMs + 2_000;
 const startupTimeoutMs = lockRecoveryMs + 15_000;
+
+function localPort(value: string | undefined): number {
+  if (!value) return 0;
+  try {
+    const address = new URL(value);
+    return address.protocol === 'http:' && address.hostname === '127.0.0.1' && address.pathname === '/' && !address.search
+      && !address.hash && !address.username && !address.password ? Number(address.port || 80) : 0;
+  } catch { return 0; }
+}
 
 async function openDesktopPage(url: string, resourcesDirectory: string): Promise<unknown> {
   return process.platform === 'win32' ? openDesktopBrowser({ resourcesDirectory, url }) : open(url);
@@ -121,7 +130,7 @@ export async function launchDesktop(input: {
 }
 
 /** Holds the cross-process lock for the entire backend lifetime. */
-export async function startDesktopBackground(input: { directory?: string; resourcesDirectory: string; command?: string[]; systemIntegration?: boolean }): Promise<{ origin: string; close(): Promise<void> } | undefined> {
+export async function startDesktopBackground(input: { directory?: string; resourcesDirectory: string; command?: string[]; systemIntegration?: boolean }): Promise<{ readonly origin: string; readonly davOrigin: string; close(): Promise<void> } | undefined> {
   const directory = resolve(input.directory ?? defaultDesktopDirectory());
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if (process.platform !== 'win32') await chmod(directory, 0o700);
@@ -147,26 +156,27 @@ export async function startDesktopBackground(input: { directory?: string; resour
     }
     const resources = resolve(input.resourcesDirectory);
     if (!await Bun.file(join(resources, 'web', 'index.html')).exists()) throw new Error('发行包缺少共用管理页面，请重新解压完整发行包。');
-    let network = await readDesktopNetworkSettings(directory);
+    const storedNetwork = await readDesktopNetworkState(directory);
+    const network = storedNetwork.settings;
     let preferences = await readDesktopPreferences(directory);
     const integrationState: DesktopPreferencesView['integration'] = { available: false };
-    let preferredPort = network.port;
+    const preferred = { managementPort: storedNetwork.assignedPorts?.managementPort ?? 0, davPort: storedNetwork.assignedPorts?.davPort ?? 0 };
     try {
       const previous = runtimeSchema.parse(JSON.parse(await readFile(runtimePath, 'utf8')));
-      const address = new URL(previous.origin);
-      if (previous.instanceId === credentials.instanceId && address.protocol === 'http:' && address.hostname === '127.0.0.1'
-        && address.pathname === '/' && !address.search && !address.hash && !address.username && !address.password) {
-        const port = Number(address.port || 80);
-        if (!preferredPort && Number.isInteger(port) && port > 0 && port <= 65535) preferredPort = port;
+      if (previous.instanceId === credentials.instanceId) {
+        if (previous.davOrigin) {
+          preferred.managementPort ||= localPort(previous.origin);
+          preferred.davPort ||= localPort(previous.davOrigin);
+        } else preferred.davPort ||= localPort(previous.origin);
       }
     } catch { /* Missing or invalid crash metadata cannot choose a listening endpoint. */ }
-    let origin = '';
+    let origin = ''; let davOrigin = '';
     const prerequisites = createMountPrerequisites({ resourcesDirectory: resources });
     const controlDirectory = join(directory, 'mounts');
     const binary = join(resources, process.platform === 'win32' ? 'rclone.exe' : 'rclone');
     const control = createRcloneControl({ directory: controlDirectory, binary });
     const mounts = await createMountManager({ control, manageControl: false, directory: controlDirectory, binary,
-      localConnection: () => service?.readCache?.mountConnection ?? ({ url: `${origin}/dav/`, ...(service?.davAccess.get() ?? { username: credentials.username, password: credentials.password }) }),
+      localConnection: () => service?.readCache?.mountConnection ?? ({ url: `${davOrigin}/dav/`, ...(service?.davAccess.get() ?? { username: credentials.username, password: credentials.password }) }),
       ...(process.platform === 'win32' ? { checkDependencies: () => prerequisites.check() } : {}) });
     restore = createMountRestore({ mounts, settings: { enabled: preferences.autoMount, retry: preferences.retryAutoMount },
       onError: () => console.error('MusicFS: a saved mount could not be restored. See Connections for details.') });
@@ -174,9 +184,9 @@ export async function startDesktopBackground(input: { directory?: string; resour
       mountAction: id => restore!.cancel(id),
       dav: { username: credentials.username, password: credentials.password }, webRoot: join(resources, 'web'), mounts, readCache: { control, controlDirectory } });
     const app = new Hono();
-    https = await createDesktopHttps({ directory: join(directory, 'https'), fetch: app.fetch });
+    https = await createDesktopHttps({ directory: join(directory, 'https'), fetch: service.davApp.fetch });
     app.use('/__musicfs/*', bearerAuth({ token: credentials.adminToken }));
-    app.get('/__musicfs/identity', c => c.json({ pid: process.pid, origin, instanceId: credentials.instanceId }));
+    app.get('/__musicfs/identity', c => c.json({ pid: process.pid, origin, davOrigin, instanceId: credentials.instanceId }));
     const inspectPreferences = (): DesktopPreferencesView => ({ settings: { ...preferences }, integration: { ...integrationState } });
     app.route('/', createDesktopHttp({ directory, adminToken: credentials.adminToken, managementAuth: service.access.middleware,
       preferences: { inspect: inspectPreferences, async configure(next) {
@@ -193,28 +203,25 @@ export async function startDesktopBackground(input: { directory?: string; resour
         restore!.configure({ enabled: next.autoMount, retry: next.retryAutoMount });
         return inspectPreferences();
       } },
-      network: () => network, port: () => listener!.current()!.port, mounts, prerequisites, https,
+      network: () => listener!.current()!, mounts, prerequisites, https,
       async configureNetwork(next) {
         const previous = listener!.current()!;
         listener!.reconfigure(next);
-        try { await writePrivateJson(join(directory, 'network.json'), next); }
+        try { await saveDesktopNetworkSettings(directory, next, listener!.current()!); }
         catch (error) { listener!.reconfigure(previous); throw error; }
-        network = next; origin = listener!.current()!.origin;
-        await writePrivateJson(runtimePath, { pid: process.pid, origin, instanceId: credentials.instanceId });
+        origin = listener!.current()!.origin; davOrigin = listener!.current()!.davOrigin;
+        await writePrivateJson(runtimePath, { pid: process.pid, origin, davOrigin, instanceId: credentials.instanceId });
       },
       prepareShutdown: () => restore!.pause(),
       ...(service.readCache ? { readCache: service.readCache, prepareQuit: async () => service!.readCache!.prepareQuit() } : {}), close }));
     app.route('/', service.app);
     listener = createDesktopListener({ fetch: app.fetch });
-    try { listener.listen({ ...network, port: preferredPort }); }
-    catch (error) {
-      if (!preferredPort || !(error instanceof Error && 'code' in error && error.code === 'EADDRINUSE')) throw error;
-      listener.listen({ ...network, port: 0 });
-    }
+    listener.listen({ ...network, managementPort: network.managementPort || preferred.managementPort, davPort: network.davPort || preferred.davPort }, { fallback: true });
     // Launcher identity and local mounts always use a concrete loopback address,
-    // including when the same listener also accepts LAN clients.
-    origin = listener.current()!.origin;
-    await writePrivateJson(runtimePath, { pid: process.pid, origin, instanceId: credentials.instanceId });
+    // independent of either endpoint's LAN access setting.
+    origin = listener.current()!.origin; davOrigin = listener.current()!.davOrigin;
+    await saveDesktopNetworkSettings(directory, network, listener.current()!);
+    await writePrivateJson(runtimePath, { pid: process.pid, origin, davOrigin, instanceId: credentials.instanceId });
     restore.start();
     if (input.systemIntegration) {
       integrationReady = (async () => {
@@ -255,7 +262,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
       })();
       try { await closing; } catch (error) { closing = undefined; throw error; }
     }
-    return { origin, close };
+    return { get origin() { return origin; }, get davOrigin() { return davOrigin; }, close };
   } catch (error) {
     await restore?.close();
     await integrationReady; await integration?.close();

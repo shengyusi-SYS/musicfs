@@ -1,5 +1,13 @@
 # MusicFS 当前交付物
 
+## dev.29 管理与 WebDAV 独立端口
+
+管理页面与 WebDAV 分别监听不同端口，各自设置访问范围。管理端口只提供管理页面与接口，WebDAV 端口只供播放器读取；修改其中一项不移动另一项。端口填0自动选择，正常重启后尽量复用已分配地址。本机 HTTPS 映射也只提供 WebDAV。
+
+[Windows x64](../dist/releases/0.1.0-dev.29/musicfs-0.1.0-dev.29-windows-x64.zip)、[离线 Worker](../dist/releases/0.1.0-dev.29/musicfs-0.1.0-dev.29-worker.zip)、[源码](../dist/releases/0.1.0-dev.29/musicfs-0.1.0-dev.29-source.zip)、[插件作者包](../dist/releases/0.1.0-dev.29/musicfs-0.1.0-dev.29-plugin-author-kit.zip)、[清单](../dist/releases/0.1.0-dev.29/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.29/SHA256SUMS)。退出旧后台，解压完整新版后通过启动器打开管理页。旧共享端口优先留给 WebDAV，管理端口重新分配；访问范围、插件和授权保留。
+
+13项相关定向检查、三套类型检查、依赖边界及页面构建通过；内置浏览器核对独立保存、管理端口跳转、登录保留和 WebDAV 二维码，见[双端口记录](verification/network-access.md#dev29-独立监听端口)。Windows 在 WSL 交叉构建；Worker 沿用其域名访问方式，本次未新增 Windows 实机或云端运行验证。
+
 ## dev.28 WebDAV 设置回归播放器页面
 
 「设置 → 管理页面访问」只管理页面访问；WebDAV 的访问设备、地址、账号密码和扫码导入集中在「连接与挂载 → WebDAV 播放器」。多网卡可直接选择连接地址，服务端口按需展开；两页独立保存，不覆盖另一项的访问范围。

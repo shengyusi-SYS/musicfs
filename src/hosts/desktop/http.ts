@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { Hono } from 'hono';
 import { bearerAuth } from 'hono/bearer-auth';
 import { HTTPException } from 'hono/http-exception';
@@ -7,8 +6,8 @@ import type { DesktopNetworkSettings, DesktopPreferences, DesktopPreferencesView
 import type { MountManager } from '../../contracts/mounts';
 import type { MountPrerequisites } from '../../contracts/mount-prerequisites';
 import type { ReadCacheManager } from '../../contracts/read-cache';
-import { desktopNetworkSchema, desktopNetworkView, readDesktopNetworkSettings } from './network';
-import { MountError, writePrivateJson } from './rclone-control';
+import { desktopNetworkSchema, desktopNetworkUpdateSchema, desktopNetworkView, readDesktopNetworkSettings, saveDesktopNetworkSettings } from './network';
+import { MountError } from './rclone-control';
 import { DesktopHttpsError, type createDesktopHttps } from './https';
 import { desktopPreferencesSchema } from './preferences';
 
@@ -16,11 +15,10 @@ const readCacheSettingsSchema = z.object({
   maxMiB: z.number().int().min(0).max(1_048_576),
   maxAgeHours: z.number().int().min(0).max(2_147_483)
 }).strict();
-const networkUpdateSchema = desktopNetworkSchema.partial().refine(value => Object.keys(value).length > 0);
 
 /** Desktop capabilities never enter the shared music domains or Worker host. */
 export function createDesktopHttp(input: {
-  directory: string; adminToken: string; network: DesktopNetworkSettings | (() => DesktopNetworkSettings); port: () => number;
+  directory: string; adminToken: string; network: () => DesktopNetworkSettings;
   configureNetwork?: (settings: DesktopNetworkSettings) => Promise<void>;
   managementAuth?: import('hono').MiddlewareHandler;
   preferences?: { inspect(): DesktopPreferencesView; configure(settings: DesktopPreferences): Promise<DesktopPreferencesView> };
@@ -40,7 +38,7 @@ export function createDesktopHttp(input: {
     if (error instanceof MountError || error instanceof DesktopHttpsError) return c.json({ error: error.code, message: error.message }, 422);
     return c.json({ error: 'desktop_failed', message: '本机操作未完成，请检查后台日志后重试。' }, 500);
   });
-  const networkView = async () => desktopNetworkView(await readDesktopNetworkSettings(input.directory), typeof input.network === 'function' ? input.network() : input.network, input.port());
+  const networkView = async () => desktopNetworkView(await readDesktopNetworkSettings(input.directory), input.network());
   app.get('/api/desktop/network', async c => c.json(await networkView()));
   app.get('/api/desktop/preferences', c => input.preferences ? c.json(input.preferences.inspect()) : c.notFound());
   app.put('/api/desktop/preferences', async c => {
@@ -59,19 +57,19 @@ export function createDesktopHttp(input: {
   app.delete('/api/desktop/read-cache', async c => input.readCache ? c.json(await input.readCache.clear()) : c.notFound());
   let networkUpdate = Promise.resolve();
   app.on(['PUT', 'PATCH'], '/api/desktop/network', async c => {
-    const parsed = (c.req.method === 'PATCH' ? networkUpdateSchema : desktopNetworkSchema).safeParse(await c.req.json().catch(() => null));
+    const parsed = (c.req.method === 'PATCH' ? desktopNetworkUpdateSchema : desktopNetworkSchema).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: 'invalid_network_settings', message: '请选择有效的访问范围，端口须为 0—65535 的整数。' }, 422);
     // Each page submits only its own fields. Merge inside the same update queue
     // so saving one entry cannot restore the other entry's earlier settings.
     const updated = networkUpdate.then(async () => {
       const settings = desktopNetworkSchema.parse({ ...await readDesktopNetworkSettings(input.directory), ...parsed.data });
       if (input.configureNetwork) await input.configureNetwork(settings);
-      else await writePrivateJson(join(input.directory, 'network.json'), settings);
+      else await saveDesktopNetworkSettings(input.directory, settings, input.network());
       return networkView();
     });
     networkUpdate = updated.then(() => {}, () => {});
     try { return c.json(await updated); }
-    catch { return c.json({ error: 'network_failed', message: '监听地址未能切换，请检查端口是否被占用。原入口仍可使用。' }, 422); }
+    catch { return c.json({ error: 'network_failed', message: '请选择不同且未被占用的管理端口和 WebDAV 端口。原入口仍可使用。' }, 422); }
   });
   app.get('/api/desktop/mount-prerequisites', async c => c.json(await input.prerequisites.inspect()));
   app.post('/api/desktop/mount-prerequisites/install', async c => c.json(await input.prerequisites.installWinFsp()));
