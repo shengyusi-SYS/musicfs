@@ -1,12 +1,14 @@
 # MusicFS
 
+> This project is only a conversion and adaptation tool. It does not provide membership benefits or copyrighted content.
+
 [简体中文](README.md)
 
 **Your online music, as local files.**
 
 MusicFS turns music sources into read-only folders. Mount them as a drive for your favorite local player, connect a phone player over WebDAV, scan them into a music library, or copy songs for offline listening.
 
-[Downloads](docs/release.md) · [User guide](docs/user-guide.md) · [Player connections](docs/clients.md)
+[Downloads](docs/en/release.md) · [User guide](docs/en/user-guide.md) · [Player connections](docs/en/clients.md)
 
 ## Get started
 
@@ -26,13 +28,17 @@ The bundled NetEase Cloud Music and QQ Music plugins support personal playlists,
 
 The example plugins also supply music tags, covers and lyrics in supported audio formats. Read audio fragments are cached, playlists can update on a schedule, and filename templates let you choose how songs appear to your players.
 
-Running on a NAS or over SSH? Use `./musicfs --headless --language en` for access URLs and a login link. Management and WebDAV have separate access settings and ports. [Remote use](docs/headless.md)
+Running on a NAS or over SSH? Use `./musicfs --headless --language en` for access URLs and a login link. Management and WebDAV have separate access settings and ports. [Remote use](docs/en/headless.md)
 
-MusicFS can also run on Cloudflare Workers with the same management interface. [Worker deployment](docs/worker.md)
+MusicFS can also run on Cloudflare Workers with the same management interface. [Worker deployment](docs/en/worker.md)
+
+## Keep exploring
+
+[Development](docs/en/development.md) · [Documentation](docs/en/README.md)
 
 ## Build your own source
 
-Start with the [plugin author guide](docs/plugin-authoring.md), or explore the [architecture](docs/architecture/README.md). Plugins can provide their own display translations.
+Start with the [plugin author guide](docs/en/plugin-authoring.md), or explore the [architecture](docs/en/architecture.md). Plugins can provide their own display translations.
 
 ## License
 

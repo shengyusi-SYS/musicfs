@@ -1,6 +1,12 @@
 # MusicFS 文档索引
 
-先按阅读目的选择入口。现行说明、版本证据和工程经验分别维护；`outputs/` 中的需求与计划保留原路径，不复制成第二份规范。
+[English](en/README.md)
+
+按自己的任务选择入口。使用指南随当前源码维护，下载归档携带对应版本的说明。
+
+- **普通用户：** [下载](release.md) → [添加来源与浏览](user-guide.md) → [连接播放器](clients.md)。
+- **插件作者：** [作者包起步](plugin-authoring.md) → [公开合同](architecture/plugin-interface.md) → [可类型检查的定义](../packages/plugin-api/src/index.ts)。
+- **本体开发者：** [开发与发行](development.md) → [架构分工](architecture/README.md) → [管理 API](management-api.md)。
 
 ## 使用与开发
 
@@ -12,7 +18,7 @@
 | 部署或升级 Worker 并保留插件 | [Worker 指南](worker.md) |
 | 连接 OpenList、播放器和客户端缓存 | [客户端说明](clients.md) |
 | 理解配置、认证、刷新与桌面路由 | [管理 API](management-api.md) |
-| 开发命令、实现位置与探针 | [开发说明](development.md) |
+| 开发、构建与发行；专项探针 | [开发说明](development.md)、[验证参考](development-reference.md) |
 | 开发独立数据源插件 | [作者指南](plugin-authoring.md)、[公开合同](architecture/plugin-interface.md) |
 
 ## 需求、设计与执行

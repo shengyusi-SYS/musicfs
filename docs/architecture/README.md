@@ -1,5 +1,7 @@
 # MusicFS 架构设计
 
+[English](../en/architecture.md)
+
 MusicFS 是插件式只读音乐文件服务，桌面与 Worker 独立部署、共用核心和 WebUI。网易云与 QQ 是示例插件，来源专属能力不进入核心。用户结果以[统一需求](../../outputs/musicfs-requirements-and-technical-design.md)为准，名词见[术语](../../outputs/GLOSSARY.md)，结构与时序见[图表](diagrams.md)。本页描述现行职责，实际版本和通过范围查[发行页](../release.md)及[验收台账](../verification.md)。
 
 ## 领域划分与所有权

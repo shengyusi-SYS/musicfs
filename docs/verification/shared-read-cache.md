@@ -1,6 +1,6 @@
 # 桌面共享读取缓存：限定验证
 
-记录日期：2026-10-21。正式模块及最终 Windows dev.11，API0.1.9/schema10、示例插件 alpha.15 不变。设计见[共享读取](../architecture/shared-read-cache.md)，精确构建输入和归档身份见[发行页](../release.md#dev11-直接webdav共享读取缓存)。本页整理已有结果，未新增产品验证。
+记录日期：2026-10-21。正式模块及最终 Windows dev.11，API0.1.9/schema10、示例插件 alpha.15 不变。设计见[共享读取](../architecture/shared-read-cache.md)，精确构建输入和归档身份见[发行页](../release-history.md#dev11-直接webdav共享读取缓存)。本页整理已有结果，未新增产品验证。
 
 ## 入口与证据
 

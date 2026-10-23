@@ -1,5 +1,7 @@
 # 最小音频来源
 
+[English](README.en.md)
+
 这个插件提供一份确定的 `440 Hz.wav`：1 秒、8 kHz、16 bit、单声道，共 16,044 字节。它没有账号、认证、歌单或音质模型，用于展示普通文件来源也能通过公开合同接入 MusicFS。
 
 从独立目录开始修改、构建和安装，见[插件作者指南](../../docs/plugin-authoring.md)。作者包尚未依赖公开 npm 发布的 SDK：`@musicfs/plugin-api` 由随包的 `packages/plugin-api/` 提供。
@@ -18,6 +20,7 @@ bun run typecheck
 |---|---|
 | [index.ts](index.ts) | 默认导出 `SourcePlugin`，仅从公开 API 导入类型；入口名称来自当前实例配置 |
 | [config.schema.json](config.schema.json) | 必填的 `label` 配置，以“目录名称”显示在通用表单 |
+| [translations.json](translations.json) | 可选显示词典，不改变配置值或导出文件名 |
 | [manifest.json](manifest.json) | 稳定插件 ID、发布版本、宿主入口、结构版本和需要封装的文件 |
 | [generated-config.d.mts](generated-config.d.mts) | Ajv 生成验证器的类型声明；`.mjs` 在构建时生成 |
 | [LICENSE.txt](LICENSE.txt) | 当前示例自有代码的 GPL-3.0-only 许可 |

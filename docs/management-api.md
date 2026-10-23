@@ -1,5 +1,7 @@
 # 管理 HTTP 接口
 
+[English](en/management-api.md)
+
 当前实现入口是[桌面服务装配](../src/hosts/desktop/service.ts)和[Worker 服务装配](../src/hosts/worker/service.ts)，共用 [Hono 管理路由](../src/transport/http/index.ts)、[Fetch DAV](../src/transport/dav/index.ts)与[管理页面](architecture/web-ui.md)。正式宿主、后台插件变更和桌面挂载已接线；真实云部署与目标系统挂载的状态见[台账](verification.md)。
 
 浏览器管理请求使用 HttpOnly 会话 Cookie；脚本继续使用 `Authorization: Bearer <管理 token>`。通用与桌面管理路由复用同一认证中间件；DAV 使用独立 Basic 读取凭据。管理登录、播放器读取和来源插件授权各有职责，见[管理访问架构](architecture/management-access.md)。
@@ -14,7 +16,7 @@
 | `POST /api/access/exchange` | `{ticket}` 换取新的独立浏览器会话 |
 | `POST /api/access/logout` | 删除当前服务端会话及 Cookie |
 | `GET /api/status` | 宿主和应用版本 |
-| `GET /api/connection` | 受管理认证保护的 DAV 地址路径、用户名及读取密码；宿主未提供时返回 404 |
+| `GET /api/connection`、`PUT /api/connection` | 受管理认证保护的 DAV 地址路径与读取凭据；PUT 保存 `{username,password}`，宿主未提供时返回404 |
 | `GET /api/plugins` | 安装清单、版本与 active/missing 状态 |
 | `POST /api/plugins/inspect` | 正文为预构建ZIP；只读返回插件manifest/revision及当前API/宿主兼容结果，不安装或加载模块 |
 | `POST /api/plugins/inspect-url` | `{url}`，按相同下载限制检查发布包，返回相同兼容预览 |

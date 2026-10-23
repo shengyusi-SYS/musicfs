@@ -40,7 +40,7 @@
 
 ## 复测与限制
 
-使用方法见[开发入口](../development.md#独立播放器复测)。本轮新增的是验收工具/使用说明，三组TypeScript和diff检查通过；未重复155项产品测试、四目标构建或此前FLAC全文下载。
+使用方法见[开发入口](../development-reference.md#独立播放器复测)。本轮新增的是验收工具/使用说明，三组TypeScript和diff检查通过；未重复155项产品测试、四目标构建或此前FLAC全文下载。
 
 首检查点已验证两个来源的本地MP3、OpenList v4.2.7及Linux mpv，不代表全部音质/格式、所有播放器、Worker云端、Windows/macOS原生客户端或跨公网已经通过。后续M4A和FLAC见下节及文末；云端和其余目标仍按[总台账](../verification.md)继续。音频输出保持静音，没有主观音质或扬声器出声证据。
 
