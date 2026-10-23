@@ -1,5 +1,13 @@
 # MusicFS 当前交付物
 
+## dev.27 管理与 WebDAV 独立访问
+
+设置中可分别选择管理页面和 WebDAV 仅本机访问或开放到局域网，共用原有端口。管理扫码与播放器导入各自显示对应地址；只开放 WebDAV 时，管理页面仍仅本机可用。
+
+[Windows x64](../dist/releases/0.1.0-dev.27/musicfs-0.1.0-dev.27-windows-x64.zip)、[离线 Worker](../dist/releases/0.1.0-dev.27/musicfs-0.1.0-dev.27-worker.zip)、[源码](../dist/releases/0.1.0-dev.27/musicfs-0.1.0-dev.27-source.zip)、[插件作者包](../dist/releases/0.1.0-dev.27/musicfs-0.1.0-dev.27-plugin-author-kit.zip)、[清单](../dist/releases/0.1.0-dev.27/release-manifest.json)与[校验和](../dist/releases/0.1.0-dev.27/SHA256SUMS)。退出旧后台，解压完整新版启动即可；旧设置保留原有访问范围，可在设置中分别调整。插件、授权与数据库沿用，无需重新安装或清缓存。
+
+网络范围的9项定向检查、类型检查、页面构建及模块边界通过，设置与扫码入口经内置浏览器走查，见[网络访问证据](verification/network-access.md)。Windows 在 WSL 交叉构建，Worker 为离线包，本次没有新增目标系统运行或云端部署。
+
 ## dev.26 音乐库操作简化
 
 展开来源树时保留当前浏览位置，设置页签保留未保存的输入。「添加到…」可直接新建目标文件夹，并与加入歌单一起撤销；拖拽悬停可展开文件夹，手机添加后直接显示整理结果和保存按钮。
