@@ -39,7 +39,7 @@
 | 用途 | 建议 | 替代的手写工作 | 仍需负责的内容 |
 |---|---|---|---|
 | 共用 HTTP | Hono；桌面使用 `Bun.serve` | 路由、中间件、Fetch 接入、静态资源响应 | 音乐与目录路由的业务处理 |
-| WebUI | React + Vite + Ant Design | 构建、弹窗、树和拖拽 | 插件/实例管理、布局语义；按实际缺口补充依赖 |
+| WebUI | React + Vite + Ant Design；Pragmatic drag and drop | 构建、弹窗、树、分栏及原生拖拽 | 插件/实例管理、布局语义和落点规则 |
 | 声明式插件配置 | `@rjsf/antd`、`@rjsf/core`、`@rjsf/validator-ajv8` | JSON Schema 表单和前端结构校验 | 可序列化提示、实例草稿与保存、认证步骤，核对 peerDependencies |
 | 插件后台结构校验 | 官方工具链优先作者构建时 Ajv standalone ESM，随插件发布 | 标准 Schema 校验代码生成与执行 | Schema 与结果一致、来源语义校验；第三方内部可选其他实现，Worker 不动态 compile |
 | 页面请求状态 | `@tanstack/react-query` | 认证轮询、部署进度、保存后失效、取消 | 生命周期与哪些操作影响目录 |
@@ -60,7 +60,7 @@
 
 Hono 同时支持 [Bun](https://hono.dev/docs/getting-started/bun) 与 [Worker](https://hono.dev/docs/getting-started/cloudflare-workers)，桌面无需 Node adapter。其路由可以承载自定义方法，但不因此自动实现 WebDAV。[路由文档](https://hono.dev/docs/api/routing)
 
-Ant Design [Tree](https://ant.design/components/tree/) 已有 draggable、onDrop、allowDrop、异步加载等能力。建议先选择内容源加入布局，再在一棵受控树内拖动；独立面板之间的拖入若确实采用，再验证少量接线，不预先叠加多套拖拽库。
+目录树展示继续使用 Ant Design Tree，尺寸调整使用已有 Splitter。来源跨栏添加和布局内部移动已统一为 Pragmatic drag and drop，替换 Tree 内建拖拽；两者共用目标高亮、边缘排序及预览。领域仍只维护一份草稿，不增加另一套树或拖拽引擎。现行呈现与取舍见[共用管理界面](../docs/architecture/web-ui.md)。
 
 组件库是否足够，以实际交互为准；缺口明显时采用合适依赖，不为了减少包数量而大量手写。Vite 统一生成前端静态产物，桌面收录这些文件，Worker 使用 Static Assets；不维护另一套 Bun 前端构建。
 
