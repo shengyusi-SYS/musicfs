@@ -1,4 +1,5 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { LRUCache } from 'lru-cache';
 import { Alert, App, Button, Drawer, Dropdown, Skeleton, Space, Typography } from 'antd';
 import { FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, RedoOutlined, SettingOutlined, UndoOutlined, MenuOutlined, PartitionOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +12,7 @@ import { MusicTree } from '../components/music-tree';
 import { MusicPanes } from '../components/music-panes';
 import { sourceDrag, type SourceDrag } from '../components/music-drag';
 import { MusicBrowser } from '../components/music-browser';
+import type { MusicBrowserView } from '../components/music-browser';
 import { currentLayoutLocation, exportedMusic, layoutLocation, locationKey, sourceLocation, useMusicNavigation, type MusicLocation } from '../components/music-navigation';
 import { useLibraryLayout } from '../components/use-library-layout';
 import { useLayoutActions } from '../components/use-layout-actions';
@@ -23,7 +25,7 @@ import './music-workspace.css';
 const Authentication = lazy(() => import('../components/authentication'));
 type Panel = { kind: 'create' } | { kind: 'settings'; instance: SourceInstance; directoryRef?: string | undefined; label: string };
 export default function MusicWorkspace({ api, showPlugins, showConnection, initialPluginId, consumePlugin, draft, setDraft }: {
-  api: Api; showPlugins(): void; showConnection(): void; initialPluginId: string | null; consumePlugin(): void;
+  api: Api; showPlugins(continueAdding?: boolean): void; showConnection(): void; initialPluginId: string | null; consumePlugin(): void;
   draft: LayoutDraft | null; setDraft(draft: LayoutDraft | null): void;
 }) {
   const client = useQueryClient(); const { modal, message } = App.useApp();
@@ -41,6 +43,8 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
   const parentId = selectedNode ? selectedNode.node.kind === 'group' ? selectedNode.node.id : selectedNode.parentId : null;
   const moving = layoutActions.moving ? locateNode(nodes, layoutActions.moving) : undefined;
   const [panel, setPanel] = useState<Panel | null>(() => initialPluginId ? { kind: 'create' } : null);
+  const [browserViews] = useState(() => new LRUCache<string, MusicBrowserView>({ max: 40 }));
+  useEffect(() => { if (initialPluginId) setPanel({ kind: 'create' }); }, [initialPluginId]);
   const [authenticating, setAuthenticating] = useState<{ instance: SourceInstance; needsReauthorization: boolean } | null>(null);
   const remove = useMutation({ mutationFn: (id: string) => api.deleteInstance(id), onSuccess: async () => {
     open(exportedMusic); await Promise.all(['instances', 'library', 'layout', 'roots', 'update-rules'].map(key => client.invalidateQueries({ queryKey: [key] }))); message.success('来源已删除');
@@ -52,7 +56,7 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
     }
     await client.resetQueries({ queryKey: ['library'] }); await client.invalidateQueries({ queryKey: ['instances'] }); message.success('已退出账号');
   } });
-  function add() { if (plugins.data && !plugins.data.some(plugin => plugin.status === 'active')) showPlugins(); else setPanel({ kind: 'create' }); }
+  function add() { if (plugins.data && !plugins.data.some(plugin => plugin.status === 'active')) showPlugins(true); else setPanel({ kind: 'create' }); }
   function closePanel() { setPanel(null); consumePlugin(); }
   function showTree(section: 'sources' | 'layout') { setTreePanel(section); setTreeOpen(true); }
   function navigate(next: typeof location, keepTree = false) { open(next); if (!keepTree) setTreeOpen(false); closePanel(); }
@@ -77,7 +81,7 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
   function copyToLayout(data: SourceDrag, parent: string | null) {
     const additions = data.roots.map(root => ({ id: crypto.randomUUID(), name: root.name, kind: 'source' as const, instanceId: data.instanceId, sourceId: root.sourceId }));
     const next = appendNodes(nodes, parent, additions); layout.change(next); setLayoutReveal(layoutLocation(next, parent ?? ''));
-    message.success('已添加 ' + additions.length + ' 项');
+    message.success('已加入目录草稿');
   }
   const layoutOptions = <Dropdown trigger={['click']} menu={{ items: [{ key: 'automatic', label: '恢复按来源自动排列', disabled: layout.automatic || layout.disabled, onClick: () => { layout.change(null); open(exportedMusic); } }] }}><Button size="small" type="text" aria-label="播放器目录选项" icon={<MoreOutlined />} /></Dropdown>;
   function tree(section: 'sources' | 'layout') {
@@ -90,21 +94,21 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
   return <><div className="music-workspace-toolbar"><Space wrap><Button icon={<PlusOutlined />} onClick={add}>添加来源</Button>
     <Button className="music-sources-toggle" icon={<MenuOutlined />} onClick={() => showTree('sources')}>来源</Button>
     <Button className="music-layout-toggle" icon={<PartitionOutlined />} onClick={() => showTree('layout')}>播放器目录</Button>
-  </Space><Button type="primary" icon={<LinkOutlined />} onClick={showConnection}>连接播放器</Button></div>
+  </Space><Button type="primary" icon={<LinkOutlined />} loading={layout.saving} disabled={layout.conflicted} onClick={() => draft ? layout.save(showConnection) : showConnection()}>{draft ? '保存并连接' : '连接播放器'}</Button></div>
     {(draft || layout.history.future.length > 0) && <div className="music-save-bar"><span>{draft ? '目录有未保存的修改' : '已撤销修改'}</span><Space wrap>
       <Button size="small" icon={<UndoOutlined />} disabled={layout.saving || layout.conflicted || !layout.history.past.length} onClick={layout.undo}>撤销</Button>
       <Button size="small" icon={<RedoOutlined />} disabled={layout.saving || layout.conflicted || !layout.history.future.length} onClick={layout.redo}>重做</Button>
       <Button size="small" type="text" disabled={layout.saving} onClick={layout.discard}>放弃修改</Button>
-      <Button size="small" type="primary" loading={layout.saving} disabled={!draft || layout.conflicted} onClick={layout.save}>保存目录</Button>
+      <Button size="small" type="primary" loading={layout.saving} disabled={!draft || layout.conflicted} onClick={() => layout.save()}>保存目录</Button>
     </Space></div>}
     <Failure error={instances.error} retry={() => void instances.refetch()} /><Failure error={remove.error ?? logout.error ?? layout.saveError} />
     <SourceRootsFeedback api={api} error={layout.error} reload={layout.reload} />
     {layout.conflicted && <Alert className="feedback" type="warning" showIcon title="目录已在其他窗口更新" action={<Button onClick={layout.discard}>载入最新目录</Button>} />}
-    {missingPlugin && <Alert className="feedback" type="info" showIcon title="此来源需要安装插件" action={<Button size="small" onClick={showPlugins}>安装插件</Button>} />}
+    {missingPlugin && <Alert className="feedback" type="info" showIcon title="此来源需要安装插件" action={<Button size="small" onClick={() => showPlugins()}>安装插件</Button>} />}
     {instances.isPending ? <Skeleton active /> : instances.isError ? null : !instances.data?.length ? <section className="surface welcome-surface"><div className="welcome-symbol"><FolderOpenOutlined /></div><Typography.Title level={2}>把喜欢的音乐放在一起</Typography.Title>
       <Typography.Paragraph type="secondary">连接音乐账号，交给你常用的播放器。</Typography.Paragraph><Button type="primary" onClick={add}>添加音乐来源</Button></section>
       : <MusicPanes sources={tree('sources')} layout={tree('layout')} content={layout.loading && location.target.kind === 'layout' ? <Skeleton className="music-content" active /> : <MusicBrowser key={locationKey(location)} api={api} instances={instances.data} location={location} open={navigate} actions={actions} login={login}
-          nodes={nodes} layoutActions={layoutActions} editingDisabled={layout.disabled} add={(instance, roots) => setAdding({ instance, roots })} />} />}
+          nodes={nodes} views={browserViews} layoutActions={layoutActions} editingDisabled={layout.disabled} add={(instance, roots) => setAdding({ instance, roots })} />} />}
     <Drawer className="music-mobile-tree" title={treePanel === 'layout' ? '播放器目录' : '音乐来源'} open={treeOpen} onClose={() => setTreeOpen(false)} placement={treePanel === 'layout' ? 'right' : 'left'} size={320} destroyOnHidden>{tree(treePanel)}</Drawer>
     {adding && <AddToFolder nodes={nodes} initial={parentId} count={adding.roots.length} close={() => setAdding(null)} add={parent => {
       copyToLayout(sourceDrag(adding.instance.id, adding.roots), parent); setAdding(null);
@@ -113,7 +117,7 @@ export default function MusicWorkspace({ api, showPlugins, showConnection, initi
       const next = moveToFolder(nodes, moving.node.id, parent); layout.change(next); layoutActions.setMoving(null); setLayoutReveal(layoutLocation(next, parent ?? ''));
     }} />}
     {panel?.kind === 'create' && <SourceEditor api={api} initialPluginId={initialPluginId} close={closePanel}
-      showPlugins={() => { closePanel(); showPlugins(); }} saved={(instance, authenticate) => { closePanel(); open(sourceLocation(instance)); if (authenticate) setAuthenticating({ instance, needsReauthorization: false }); }} />}
+      showPlugins={() => { closePanel(); showPlugins(true); }} saved={(instance, authenticate) => { closePanel(); open(sourceLocation(instance)); if (authenticate) setAuthenticating({ instance, needsReauthorization: false }); }} />}
     {panel?.kind === 'settings' && <MusicInspector key={panel.instance.id + ':' + panel.directoryRef} api={api} instance={panel.instance} directoryRef={panel.directoryRef} label={panel.label} close={closePanel}
       showPlugins={() => { closePanel(); showPlugins(); }} />}
     {authenticating && <Suspense fallback={<Skeleton active />}><Authentication api={api} instance={authenticating.instance} needsReauthorization={authenticating.needsReauthorization} close={() => setAuthenticating(null)}

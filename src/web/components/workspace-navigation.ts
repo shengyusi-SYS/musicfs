@@ -18,7 +18,7 @@ export function useWorkspaceNavigation() {
     if (next === page) return;
     const url = new URL(location.href);
     url.searchParams.set('page', next);
-    history.pushState(null, '', url);
+    history.pushState(history.state, '', url);
     setPage(next);
   }
   return { page, navigate };

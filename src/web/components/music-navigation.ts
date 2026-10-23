@@ -44,7 +44,7 @@ function readLocation(): MusicLocation {
 }
 export function useMusicNavigation() {
   const [location, setLocation] = useState(readLocation);
-  useEffect(() => { const restore = () => setLocation(readLocation()); addEventListener('popstate', restore); return () => removeEventListener('popstate', restore); }, []);
+  useEffect(() => { const restore = () => setLocation(readLocation()); restore(); addEventListener('popstate', restore); return () => removeEventListener('popstate', restore); }, []);
   function open(next: MusicLocation) {
     if (locationKey(next) === locationKey(location)) return;
     const url = new URL(window.location.href); url.searchParams.set('page', 'library');

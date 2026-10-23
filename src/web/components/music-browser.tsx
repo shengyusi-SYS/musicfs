@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { LRUCache } from 'lru-cache';
+import type { GetRef } from 'antd';
 import { Alert, Breadcrumb, Button, Empty, Input, Skeleton, Space, Table, Typography } from 'antd';
 import { FileOutlined, FolderOutlined, HolderOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
@@ -12,14 +14,21 @@ import { findNode } from '../pages/layout-draft';
 import type { LayoutActions } from './use-layout-actions';
 import { MusicDragRow, MusicSourceDrag, sourceDrag } from './music-drag';
 
-export function MusicBrowser({ api, instances, location, open, actions, login, nodes, layoutActions, add, editingDisabled }: {
+export type MusicBrowserView = { filter: string; selected: React.Key[]; page: number; scrollTop: number };
+export function MusicBrowser({ api, instances, location, open, actions, login, nodes, views, layoutActions, add, editingDisabled }: {
   api: Api; instances: SourceInstance[]; location: MusicLocation; open(location: MusicLocation): void;
   actions(source: NonNullable<MusicListing['source']>, authentication: boolean, metadata: { disabled: boolean; run(): void } | null): React.ReactNode;
-  login(instance: SourceInstance): void; nodes: LayoutNode[]; layoutActions: LayoutActions; add(instance: SourceInstance, roots: SourceRoot[]): void; editingDisabled: boolean;
+  login(instance: SourceInstance): void; nodes: LayoutNode[]; views: LRUCache<string, MusicBrowserView>; layoutActions: LayoutActions; add(instance: SourceInstance, roots: SourceRoot[]): void; editingDisabled: boolean;
 }) {
-  const [filter, setFilter] = useState('');
+  const viewKey = locationKey(location);
+  const [view, setView] = useState<MusicBrowserView>(() => views.get(viewKey) ?? { filter: '', selected: [], page: 1, scrollTop: 0 });
+  const currentView = useRef(view); const table = useRef<GetRef<typeof Table>>(null);
+  const { filter, selected } = view;
+  function update(patch: Partial<MusicBrowserView>) {
+    const next = { ...currentView.current, ...patch }; currentView.current = next; views.set(viewKey, next); setView(next);
+  }
   const listing = useMusicListing(api, location, instances, nodes);
-  const [selected, setSelected] = useState<React.Key[]>([]);
+  useLayoutEffect(() => { if (!listing.isPending) table.current?.scrollTo({ top: currentView.current.scrollTop }); }, [listing.isPending, view.page, filter]);
   const source = listing.source;
   const instance = instances.find(value => value.id === source?.instanceId);
   const configuration = useQuery({ queryKey: ['configuration', source?.pluginId], enabled: !!source?.pluginId, queryFn: ({ signal }) => api.configuration(source!.pluginId, signal) });
@@ -57,16 +66,17 @@ export function MusicBrowser({ api, instances, location, open, actions, login, n
       <RefreshProgress operation={refresh} labels={configuration.data?.statistics} reload={() => refresh.view && refresh.start(refresh.view.scope)} reauthorize={reauthorize} />
       {listing.data?.status?.error && !refresh.active && <Alert className="feedback" type="warning" showIcon title="上次更新未完成" action={<Button size="small" onClick={() => refresh.start({ kind: 'directory', directoryRef: source!.directoryRef! })}>重试</Button>} />}
     </div>
-    <div className="music-list-toolbar"><Input prefix={<SearchOutlined />} placeholder="搜索当前目录" aria-label="搜索当前目录" allowClear value={filter} onChange={event => setFilter(event.target.value)} />
+    <div className="music-list-toolbar"><Input prefix={<SearchOutlined />} placeholder="搜索当前目录" aria-label="搜索当前目录" allowClear value={filter} onChange={event => update({ filter: event.target.value, page: 1, scrollTop: 0 })} />
       {selectedRoots.length > 0 && instance ? <Button disabled={editingDisabled} onClick={() => add(instance, selectedRoots)}>添加 {selectedRoots.length} 项到…</Button> : filter && <Typography.Text type="secondary">{entries.length} 项</Typography.Text>}
     </div>
-    {listing.isPending ? <Skeleton className="music-list-loading" active paragraph={{ rows: 6 }} /> : listing.data && <Table<MusicEntry> className="music-file-table" size="middle" dataSource={entries} components={{ body: { row: MusicDragRow } }}
+    {listing.isPending ? <Skeleton className="music-list-loading" active paragraph={{ rows: 6 }} /> : listing.data && <Table<MusicEntry> ref={table} className="music-file-table" size="middle" dataSource={entries} components={{ body: { row: MusicDragRow } }}
+      onScroll={event => { currentView.current = { ...currentView.current, scrollTop: event.currentTarget.scrollTop }; views.set(viewKey, currentView.current); }}
       onRow={entry => {
         const root = entryRoot(entry); const chosen = selectedRoots.some(item => item.sourceId === root?.sourceId) ? selectedRoots : root ? [root] : [];
         return { className: '', dragData: !editingDisabled && instance && chosen.length ? sourceDrag(instance.id, chosen) : undefined };
       }}
-      {...(selectingRoots ? { rowSelection: { selectedRowKeys: selected, preserveSelectedRowKeys: true, onChange: setSelected, getCheckboxProps: (entry: MusicEntry) => ({ disabled: editingDisabled || !entryRoot(entry), 'aria-label': '选择' + entry.name }) } } : {})}
-      rowKey={entry => entry.location ? locationKey(entry.location) : entry.name} scroll={{ y: '100%' }} pagination={{ pageSize: 50, hideOnSinglePage: true, showSizeChanger: false, simple: true }}
+      {...(selectingRoots ? { rowSelection: { selectedRowKeys: selected, preserveSelectedRowKeys: true, onChange: keys => update({ selected: keys }), getCheckboxProps: (entry: MusicEntry) => ({ disabled: editingDisabled || !entryRoot(entry), 'aria-label': '选择' + entry.name }) } } : {})}
+      rowKey={entry => entry.location ? locationKey(entry.location) : entry.name} scroll={{ y: '100%' }} pagination={{ current: view.page, onChange: page => update({ page, scrollTop: 0 }), pageSize: 50, hideOnSinglePage: true, showSizeChanger: false, simple: true }}
       locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter ? '没有匹配的名称' : '此目录为空'}>
         {!filter && location.target.kind === 'layout' && <Button onClick={() => layoutActions.createFolder(layoutNode?.kind === 'group' ? layoutNode.id : null)} disabled={editingDisabled}>新建文件夹</Button>}
       </Empty> }} columns={[

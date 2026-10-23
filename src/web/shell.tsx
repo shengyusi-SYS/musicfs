@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { Activity, lazy, Suspense, useState } from 'react';
 import { Alert, Badge, Button, Checkbox, Collapse, Dropdown, Form, Input, Layout, Menu, Skeleton, Typography } from 'antd';
 import { FolderOutlined, AppstoreOutlined, LinkOutlined, MoreOutlined, SettingOutlined } from '@ant-design/icons';
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -79,6 +79,7 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
   const [stopped, setStopped] = useState(false);
   const [newPlugin, setNewPlugin] = useState<string | null>(null);
   const [installRequested, setInstallRequested] = useState(false);
+  const [addAfterInstall, setAddAfterInstall] = useState(false);
   const [connectionTab, setConnectionTab] = useState<'mount' | 'dav'>('mount');
   const [draft, setDraft] = useState<LayoutDraft | null>(null);
   const [phoneOpen, setPhoneOpen] = useState(() => new URLSearchParams(location.search).get('phone') === '1');
@@ -116,9 +117,9 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
     <Failure error={quit.error} /><Failure error={logoutError} />
     {quitFailed && <Alert className="feedback" showIcon closable onClose={() => setQuitFailed(false)} type="warning" title="退出未完成，请先关闭正在使用挂载文件的程序，再重试。" />}
     {status.isError && <Alert showIcon type="error" title="无法连接 MusicFS" description={status.error.message} action={<Button onClick={() => void status.refetch()}>重试</Button>} />}
-    {status.isPending ? <Skeleton active /> : status.isSuccess && <ErrorBoundary key={page} fallbackRender={() => <Alert type="error" showIcon title="页面未能加载" action={<Button onClick={() => location.reload()}>重新打开</Button>} />}><Suspense fallback={<Skeleton active />}>
-      {page === 'library' && <MusicWorkspace api={api} showPlugins={() => { setInstallRequested(true); navigate('plugins'); }} showConnection={() => navigate('connection')} initialPluginId={newPlugin} consumePlugin={() => setNewPlugin(null)} draft={draft} setDraft={setDraft} />}
-      {page === 'plugins' && <Plugins api={api} addSource={addSource} startInstalling={installRequested} consumeInstall={() => setInstallRequested(false)} />}
+    {status.isPending ? <Skeleton active /> : status.isSuccess && <ErrorBoundary resetKeys={[page]} fallbackRender={() => <Alert type="error" showIcon title="页面未能加载" action={<Button onClick={() => location.reload()}>重新打开</Button>} />}><Suspense fallback={<Skeleton active />}>
+      <Activity mode={page === 'library' ? 'visible' : 'hidden'}><MusicWorkspace api={api} showPlugins={continueAdding => { setAddAfterInstall(!!continueAdding); setInstallRequested(true); navigate('plugins'); }} showConnection={() => navigate('connection')} initialPluginId={newPlugin} consumePlugin={() => setNewPlugin(null)} draft={draft} setDraft={setDraft} /></Activity>
+      {page === 'plugins' && <Plugins api={api} addSource={addSource} startInstalling={installRequested} addAfterInstall={addAfterInstall} consumeInstall={() => { setInstallRequested(false); setAddAfterInstall(false); }} />}
       {page === 'connection' && <Connection api={api} tab={connectionTab} setTab={setConnectionTab} openSettings={() => navigate('settings')} />}
       {page === 'settings' && <Settings api={api} desktop={status.data.host === 'desktop'} />}
     </Suspense></ErrorBoundary>}</main></Layout>

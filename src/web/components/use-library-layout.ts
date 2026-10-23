@@ -50,6 +50,6 @@ export function useLibraryLayout(api: Api, instances: SourceInstance[], draft: L
     error: layout.error ?? (nodes === null ? defaults.error : null), saveError: conflicted ? null : save.error,
     loading: layout.isPending || nodes === null && defaults.isPending, saving: save.isPending,
     reload: () => void (nodes === null ? defaults.refetch() : layout.refetch()), change, createFolder, discard,
-    undo: () => travel('undo'), redo: () => travel('redo'), save: () => draft && save.mutate(draft) };
+    undo: () => travel('undo'), redo: () => travel('redo'), save: (done?: () => void) => { if (draft) save.mutate(draft, done ? { onSuccess: done } : undefined); } };
 }
 export type LibraryLayout = ReturnType<typeof useLibraryLayout>;
