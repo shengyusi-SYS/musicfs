@@ -4,6 +4,8 @@
 
 ## 当前事实
 
+源码已补齐无桌面/SSH 启动反馈、短期登录链接、独立网络 CLI 参数和前台服务模式；页面显示实际挂载设备，无桌面时隐藏不适用的桌面偏好。WSL 真实 HTTP 与内置浏览器核对、受影响回归、类型和页面构建通过，见[远程入口记录](verification/headless-access.md)。本次尚未重打发行包，当前下载仍为 dev.30。
+
 dev.30 复核独立端口的扫码、播放器、本机挂载和启动恢复链路，修复扫码不沿用所选网卡的问题，二维码打开时读取当前本机网络信息。仅补验手机票据/Cookie 登录与本机挂载/自动恢复两条本地链路，并用内置浏览器核对两类二维码；三套类型与页面构建通过，见[消费链路记录](verification/network-access.md#dev30-消费链路核查)。其余独立端口机制沿用 dev.29 证据，音乐库流程见[工作区记录](verification/music-workspace.md)。Windows、离线 Worker、源码与作者包归档入口见[发行页](release.md)。
 
 dev.23完成自动更新规则与自定义命名模板：SQLite/D1共用调度与展示语义，schema13迁移旧周期、schema14保存独立命名策略，API0.1.11为插件提供可选命名资料。受影响离线回归、三套类型、依赖方向及页面/Worker/插件构建通过；具体结果及范围见[本轮核对](verification/updates-and-naming.md)。Windows、离线Worker、源码与作者包已归档并通过身份/摘要核对，下载入口见[发行页](release.md)；没有新增真实平台或Windows运行证据。

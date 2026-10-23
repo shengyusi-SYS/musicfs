@@ -28,10 +28,13 @@ function DesktopStartup({ api }: { api: Api }) {
   const save = useMutation({ mutationFn: (settings: DesktopPreferences) => api.saveDesktopPreferences(settings), onSuccess: value => {
     client.setQueryData(['desktop-preferences'], value); message.success('设置已保存');
   } });
+  const desktopIntegration = preferences.data?.integration.enabled !== false;
   const rows: { key: keyof DesktopPreferences; label: string }[] = [
-    { key: 'launchAtLogin', label: '登录系统后启动 MusicFS' },
-    { key: 'openOnLaunch', label: '手动启动时打开管理页面' },
-    { key: 'openOnLogin', label: '登录系统自启时打开管理页面' },
+    ...(desktopIntegration ? [
+      { key: 'launchAtLogin' as const, label: '登录系统后启动 MusicFS' },
+      { key: 'openOnLaunch' as const, label: '手动启动时打开管理页面' },
+      { key: 'openOnLogin' as const, label: '登录系统自启时打开管理页面' }
+    ] : []),
     { key: 'autoMount', label: '启动时恢复自动挂载' },
     { key: 'retryAutoMount', label: '挂载暂时失败后自动重试' }
   ];

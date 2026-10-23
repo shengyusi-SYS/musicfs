@@ -7,25 +7,20 @@ import open from 'open';
 import { lock } from 'proper-lockfile';
 import { Hono } from 'hono';
 import { bearerAuth } from 'hono/bearer-auth';
-import { z } from 'zod';
 import { createDesktopService } from './service';
 import { createMountManager } from './mounts';
 import { createRcloneControl, writePrivateJson } from './rclone-control';
-import { readDesktopNetworkState, saveDesktopNetworkSettings } from './network';
+import { desktopNetworkSchema, readDesktopNetworkState, saveDesktopNetworkSettings } from './network';
 import { createMountPrerequisites } from './mount-prerequisites';
 import { createDesktopHttps } from './https';
 import { createDesktopHttp } from './http';
 import { createMountRestore, type MountRestore } from './mount-restore';
 import { readDesktopPreferences, saveDesktopPreferences } from './preferences';
 import { openDesktopBrowser, setDesktopAutostart, startDesktopIntegration } from './integration';
-import type { ManagementTicket } from '../../contracts/management-auth';
-import type { DesktopPreferencesView } from '../../contracts/desktop';
+import type { DesktopNetworkSettings, DesktopPreferencesView } from '../../contracts/desktop';
 import { createDesktopListener } from './listener';
+import { configureDesktopEntry, credentialsSchema, desktopLogin, readDesktopRuntime as readExisting, runtimeSchema, type DesktopCredentials } from './entry';
 
-const credentialsSchema = z.object({ instanceId: z.uuid(), adminToken: z.string().min(32), username: z.literal('musicfs'), password: z.string().min(32) }).strict();
-const runtimeSchema = z.object({ pid: z.number().int().positive(), origin: z.string(), davOrigin: z.string().optional(), instanceId: z.uuid() }).strict();
-type Credentials = z.infer<typeof credentialsSchema>;
-type Runtime = z.infer<typeof runtimeSchema>;
 const lockStaleMs = 30_000;
 const lockRecoveryMs = lockStaleMs + 2_000;
 const startupTimeoutMs = lockRecoveryMs + 15_000;
@@ -44,23 +39,6 @@ async function openDesktopPage(url: string, resourcesDirectory: string): Promise
 }
 
 export const defaultDesktopDirectory = () => envPaths('MusicFS', { suffix: '' }).data;
-
-async function readExisting(directory: string): Promise<{ runtime: Runtime; credentials: Credentials } | undefined> {
-  try {
-    const runtime = runtimeSchema.parse(JSON.parse(await readFile(join(directory, 'runtime.json'), 'utf8')));
-    const credentials = credentialsSchema.parse(JSON.parse(await readFile(join(directory, 'credentials.json'), 'utf8')));
-    const location = new URL(runtime.origin);
-    if (location.protocol !== 'http:' || location.hostname !== '127.0.0.1' || location.pathname !== '/' || location.search || location.hash
-      || location.username || location.password || credentials.instanceId !== runtime.instanceId) return;
-    const response = await fetch(new URL('/__musicfs/identity', location), {
-      headers: { Authorization: `Bearer ${credentials.adminToken}` }, signal: AbortSignal.timeout(800), redirect: 'error'
-    });
-    if (!response.ok) { await response.body?.cancel(); return; }
-    const identity = runtimeSchema.parse(await response.json());
-    if (identity.instanceId !== runtime.instanceId || identity.pid !== runtime.pid || identity.origin !== runtime.origin) return;
-    return { runtime, credentials };
-  } catch { return; }
-}
 
 async function acquireBackgroundLock(directory: string): Promise<(() => Promise<void>) | undefined> {
   const deadline = Date.now() + lockRecoveryMs;
@@ -83,6 +61,7 @@ async function acquireBackgroundLock(directory: string): Promise<(() => Promise<
 export async function launchDesktop(input: {
   command: string[]; directory?: string; resourcesDirectory: string;
   loginStartup?: boolean; systemIntegration?: boolean;
+  network?: Partial<DesktopNetworkSettings>;
   openBrowser?: boolean; browser?: (url: string) => Promise<unknown>; startupTimeoutMs?: number;
 }): Promise<{ origin: string; reused: boolean }> {
   const directory = resolve(input.directory ?? defaultDesktopDirectory());
@@ -109,6 +88,7 @@ export async function launchDesktop(input: {
     }
     if (!existing) throw new Error(`MusicFS 后台未能启动，请查看 ${join(directory, 'launcher.log')}。`);
   }
+  if (input.network) existing = await configureDesktopEntry(directory, input.network);
   const preferences = await readDesktopPreferences(directory);
   if (input.systemIntegration) {
     await writePrivateJson(join(directory, 'startup.json'), { command: input.command, resourcesDirectory: resolve(input.resourcesDirectory) });
@@ -118,19 +98,15 @@ export async function launchDesktop(input: {
   }
   const openBrowser = input.openBrowser ?? (input.loginStartup ? preferences.openOnLogin : preferences.openOnLaunch);
   if (openBrowser) {
-    const url = new URL(existing.runtime.origin);
-    const response = await fetch(new URL('/api/access/ticket', url), { method: 'POST', headers: { Authorization: `Bearer ${existing.credentials.adminToken}` } });
-    if (response.ok) url.hash = new URLSearchParams({ ticket: (await response.json() as ManagementTicket).ticket }).toString();
-    else if (response.status === 404) { await response.body?.cancel(); url.hash = new URLSearchParams({ token: existing.credentials.adminToken }).toString(); }
-    else { await response.body?.cancel(); throw new Error('后台已运行，自动登录入口未能建立，请重试。'); }
-    try { await (input.browser ?? (url => openDesktopPage(url, input.resourcesDirectory)))(url.href); }
+    const { url } = await desktopLogin(existing);
+    try { await (input.browser ?? (url => openDesktopPage(url, input.resourcesDirectory)))(url); }
     catch { throw new Error(`后台已运行，系统浏览器未能打开。可重新点击启动器；诊断目录：${directory}。`); }
   }
   return { origin: existing.runtime.origin, reused };
 }
 
 /** Holds the cross-process lock for the entire backend lifetime. */
-export async function startDesktopBackground(input: { directory?: string; resourcesDirectory: string; command?: string[]; systemIntegration?: boolean }): Promise<{ readonly origin: string; readonly davOrigin: string; close(): Promise<void> } | undefined> {
+export async function startDesktopBackground(input: { directory?: string; resourcesDirectory: string; command?: string[]; systemIntegration?: boolean; network?: Partial<DesktopNetworkSettings> }): Promise<{ readonly origin: string; readonly davOrigin: string; close(): Promise<void> } | undefined> {
   const directory = resolve(input.directory ?? defaultDesktopDirectory());
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if (process.platform !== 'win32') await chmod(directory, 0o700);
@@ -147,7 +123,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
   const runtimePath = join(directory, 'runtime.json');
   try {
     const credentialsPath = join(directory, 'credentials.json');
-    let credentials: Credentials;
+    let credentials: DesktopCredentials;
     try { credentials = credentialsSchema.parse(JSON.parse(await readFile(credentialsPath, 'utf8'))); }
     catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error('本机凭据无法读取，请保留数据并检查 credentials.json。');
@@ -157,9 +133,9 @@ export async function startDesktopBackground(input: { directory?: string; resour
     const resources = resolve(input.resourcesDirectory);
     if (!await Bun.file(join(resources, 'web', 'index.html')).exists()) throw new Error('发行包缺少共用管理页面，请重新解压完整发行包。');
     const storedNetwork = await readDesktopNetworkState(directory);
-    const network = storedNetwork.settings;
+    const network = input.network ? desktopNetworkSchema.parse({ ...storedNetwork.settings, ...input.network }) : storedNetwork.settings;
     let preferences = await readDesktopPreferences(directory);
-    const integrationState: DesktopPreferencesView['integration'] = { available: false };
+    const integrationState: DesktopPreferencesView['integration'] = { available: false, enabled: !!input.systemIntegration };
     const preferred = { managementPort: storedNetwork.assignedPorts?.managementPort ?? 0, davPort: storedNetwork.assignedPorts?.davPort ?? 0 };
     try {
       const previous = runtimeSchema.parse(JSON.parse(await readFile(runtimePath, 'utf8')));

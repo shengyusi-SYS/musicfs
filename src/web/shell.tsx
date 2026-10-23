@@ -70,7 +70,7 @@ function ManagementSignIn({ api, passwordConfigured, onConnected }: { api: Api; 
     <Form.Item name="rememberMe" valuePropName="checked"><Checkbox>记住登录</Checkbox></Form.Item>
     <Failure error={login.error} /><Button type="primary" htmlType="submit" block loading={login.isPending}>登录</Button>
   </Form><Collapse ghost items={[{ key: 'bootstrap', label: '使用管理令牌', children: tokenForm }]} /></>
-    : <><Typography.Paragraph type="secondary">从桌面程序打开，或使用部署时的管理令牌连接。</Typography.Paragraph>{tokenForm}</>}</>;
+    : <><Typography.Paragraph type="secondary">重新运行 MusicFS 获取登录入口，也可使用部署时的管理令牌。</Typography.Paragraph>{tokenForm}</>}</>;
 }
 
 function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () => void; logoutError: Error | null }) {
@@ -91,7 +91,7 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
   const status = useQuery({ queryKey: ['status'], queryFn: ({ signal }) => api.status(signal), staleTime: Infinity });
   const quit = useMutation({ mutationFn: () => api.quitDesktop(), onSuccess: async () => { await client.cancelQueries(); setStopped(true); } });
   if (stopped) return <div className="access-screen"><section className="access-panel"><div className="access-brand">MusicFS</div><Typography.Title level={2}>正在退出 MusicFS</Typography.Title>
-    <Typography.Paragraph type="secondary">下次使用时，重新打开桌面程序即可。</Typography.Paragraph></section></div>;
+    <Typography.Paragraph type="secondary">下次使用时，重新运行 MusicFS 即可。</Typography.Paragraph></section></div>;
   const addSource = (pluginId: string) => { setNewPlugin(pluginId); navigate('library'); };
   const serviceControl = <Dropdown trigger={['click']} menu={{ items: [
     { key: 'disconnect', label: '退出登录', onClick: disconnect },
@@ -107,7 +107,7 @@ function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () 
       { key: 'settings', icon: <SettingOutlined aria-hidden="true" />, label: '设置' }
     ]} />
     <div className="library-sidebar-slot" ref={setLibrarySidebar} hidden={page !== 'library'} />
-    <footer className="sidebar-footer"><Badge status={status.isSuccess ? 'success' : status.isError ? 'error' : 'processing'} text={status.isSuccess ? status.data.host === 'desktop' ? '本机服务' : '云端服务' : status.isError ? '连接失败' : '正在连接'} />
+    <footer className="sidebar-footer"><Badge status={status.isSuccess ? 'success' : status.isError ? 'error' : 'processing'} text={status.isSuccess ? status.data.host === 'desktop' ? 'MusicFS 后台' : '云端服务' : status.isError ? '连接失败' : '正在连接'} />
       <div className="version">{status.data?.version}</div>
       <Dropdown trigger={['click']} menu={{ items: [
         ...(status.data?.host === 'desktop' ? [{ key: 'phone', label: '手机访问', onClick: () => setPhoneOpen(true) }] : []),

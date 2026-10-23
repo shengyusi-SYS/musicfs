@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { networkInterfaces } from 'node:os';
+import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { DesktopNetworkSettings, DesktopNetworkView } from '../../contracts/desktop';
@@ -45,7 +45,7 @@ export function desktopNetworkView(settings: DesktopNetworkSettings, current: De
     for (const address of interfaces ?? []) if (!address.internal && address.family === 'IPv4') addresses.push(address.address);
   }
   const urls = (scope: 'local' | 'lan', port: number, path: string) => [...new Set((scope === 'lan' ? addresses : addresses.slice(0, 1)).map(address => `http://${address}:${port}${path}`))];
-  return { settings, active, managementUrls: urls(active.managementAccess, active.managementPort, '/'), davUrls: urls(active.davAccess, active.davPort, '/dav/'),
+  return { settings, active, machine: { name: hostname(), platform: process.platform }, managementUrls: urls(active.managementAccess, active.managementPort, '/'), davUrls: urls(active.davAccess, active.davPort, '/dav/'),
     restartRequired: settings.managementAccess !== active.managementAccess || settings.davAccess !== active.davAccess
       || settings.managementPort !== 0 && settings.managementPort !== active.managementPort || settings.davPort !== 0 && settings.davPort !== active.davPort };
 }

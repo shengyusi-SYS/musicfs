@@ -14,7 +14,7 @@ MusicFS 继续使用单管理员。桌面启动、手机扫码和账号密码登
 
 ```mermaid
 sequenceDiagram
-    participant Entry as 桌面启动器或已登录电脑
+    participant Entry as 桌面程序、终端或已登录浏览器
     participant Access as 管理认证
     participant Browser as 电脑或手机浏览器
     participant API as 管理 API
@@ -31,6 +31,8 @@ sequenceDiagram
 ```
 
 首次从桌面程序打开时即可进入，密码在设置中按需创建。启动器先验证现有后台身份，再通过管理凭据申请 ticket；托盘复用同一签发接口。页面消费 URL fragment 后清除它，长期管理凭据留在后台。
+
+终端入口复用身份核对与 ticket，不增加另一套账号或认证模式。SSH/无图形会话自动关闭浏览器、托盘和桌面自启注册，打印当前管理/DAV地址、短期登录链接及 SSH 转发方法；管理默认只监听回环，显式 CLI 参数通过同一网络设置用例分别开放管理或 DAV。重新运行复用已验证后台并签发新 ticket。前台模式由服务管理器持有进程，自动挂载仍在就绪后异步恢复；桌面集成关闭时，页面只显示实际适用的挂载偏好。
 
 手机先由用户手动开启管理页面的局域网访问。二维码指向所选网卡上的管理地址，包含同样的短期 ticket；兑换后手机拥有自己的会话。更新二维码只签发新 ticket，二维码过期或已使用时可重新获取。只开放 WebDAV 不提供管理二维码。
 
@@ -96,7 +98,9 @@ flowchart LR
 | `contracts/management-auth.ts` | 登录状态、账号输入和 ticket 的页面合同 |
 | `infrastructure/management-auth` | Better Auth 最小配置；单管理员、产品端点和访问中间件 |
 | `hosts/desktop/service.ts` | 打开独立 `auth.sqlite`，组合共用与桌面管理路由 |
-| `hosts/desktop/launcher.ts` | 本机入口、后台身份、托盘动作与 ticket 签发 |
+| `hosts/desktop/entry.ts` | 后台身份核对、当前访问入口与短期登录链接，供 GUI/终端复用 |
+| `hosts/desktop/cli.ts`、`desktop.ts` | 终端选项、桌面会话识别、启动反馈与前台生命周期 |
+| `hosts/desktop/launcher.ts` | 后台启动/复用、监听及托盘动作的装配 |
 | `hosts/worker/service.ts`、`worker.ts` | 绑定 D1，复用当前管理凭据对应的认证实例 |
 | `web/shell.tsx`、`pages/settings.tsx` | 登录、退出、账号设置和会话失效后的页面状态 |
 

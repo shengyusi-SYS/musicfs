@@ -52,7 +52,7 @@ bun install --frozen-lockfile --ignore-scripts
 
 `dev:service` 需要开发者显式设置 `MUSICFS_ADMIN_TOKEN` 和 `MUSICFS_DAV_PASSWORD`，开发 DAV 用户名为 `musicfs`。构建前端后可打开 8787 服务，或用 Vite 开发；首次使用开发管理令牌进入，再在设置中创建账号，之后使用 Cookie 会话。[正式桌面启动器](desktop.md)自行生成私有凭据，并通过短期 ticket 打开管理页；开发服务只装配共用能力，不注册托盘或系统自启。
 
-从源码运行桌面入口默认不启用系统集成；测试编译产物时可传 `--no-integration`，只关闭托盘与自启注册。`--data /tmp/musicfs-desktop-test` 选择独立数据，`--no-open` 关闭自动打开浏览器，`--autostart` 区分登录系统后的启动策略。后台仍以 `--background` 运行并持有生命周期锁。网络范围和端口由 `listener` 即时切换，已有响应继续排空；测试这些行为用本机流和端口即可。
+从源码运行桌面入口默认不启用系统集成；测试编译产物时可传 `--no-integration`，只关闭托盘与自启注册。`--data /tmp/musicfs-desktop-test` 选择独立数据，`--no-open` 关闭自动打开浏览器并打印入口，`--autostart` 区分登录系统后的启动策略。无桌面/SSH 自动采用 `--headless` 行为；`--foreground` 持有当前进程，`--background` 为启动器的内部后台入口，不输出登录链接到后台日志。访问范围与端口可从 CLI 分别保存，完整选项见 `bun src/desktop.ts --help`，普通用户流程见[远程运行](headless.md)。网络范围和端口由 `listener` 即时切换，已有响应继续排空；测试这些行为用本机流和端口即可。
 
 最小/QQ 包分别输出到 `dist/plugins/org.musicfs.sample.zip` 和 `dist/plugins/org.musicfs.qq.zip`，网易云输出到 `dist/netease/org.musicfs.netease.zip`；正式宿主输出到 `dist/desktop/` 和 `dist/worker/`。编译基础探针输出到 `dist/p0/`。这些目录不进入版本控制。插件生成的校验代码在构建时产生；其 `.d.mts` 类型声明随源码保存。
 

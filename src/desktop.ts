@@ -1,7 +1,8 @@
 import { dirname, resolve } from 'node:path';
-import { parseArgs } from 'node:util';
 import { defaultDesktopDirectory, launchDesktop, startDesktopBackground } from './hosts/desktop/launcher';
 import { reportDesktopStartupFailure } from './hosts/desktop/notifications';
+import { desktopHelp, desktopStartupText, hasDesktopSession, parseDesktopArgs } from './hosts/desktop/cli';
+import { configureDesktopEntry, desktopEntry } from './hosts/desktop/entry';
 
 declare const MUSICFS_COMPILED: boolean | undefined;
 
@@ -9,11 +10,11 @@ const compiled = typeof MUSICFS_COMPILED !== 'undefined' && MUSICFS_COMPILED;
 const args = process.argv.slice(2);
 let background = args.includes('--background');
 let directory = defaultDesktopDirectory();
+const desktopSession = hasDesktopSession();
 
 try {
-  const { values } = parseArgs({ args, strict: true, options: {
-    background: { type: 'boolean' }, 'no-open': { type: 'boolean' }, autostart: { type: 'boolean' }, 'no-integration': { type: 'boolean' }, data: { type: 'string' }, resources: { type: 'string' }
-  } });
+  const { values, network } = parseDesktopArgs(args);
+  if (values.help) { console.log(desktopHelp); process.exit(0); }
   background = !!values.background;
   if (values.data) directory = resolve(values.data);
   const executableDirectory = dirname(process.execPath);
@@ -21,20 +22,30 @@ try {
     ? (process.platform === 'darwin' && executableDirectory.endsWith('/MacOS') ? resolve(executableDirectory, '../Resources') : resolve(executableDirectory, 'resources'))
     : resolve(import.meta.dir, '../dist/desktop-resources')));
   const command = compiled ? [process.execPath] : [process.execPath, import.meta.path];
-  const systemIntegration = !!compiled && !values['no-integration'];
-  if (values.background) {
-    const backend = await startDesktopBackground({ ...(values.data ? { directory: values.data } : {}), resourcesDirectory, command, systemIntegration });
+  const headless = !!values.headless || !!values.foreground || !desktopSession;
+  const systemIntegration = !!compiled && !values['no-integration'] && !headless;
+  const repeatCommand = [...command, '--data', directory, '--resources', resourcesDirectory];
+  const showEntry = async (reused: boolean, foreground = false) => console.log(desktopStartupText({
+    entry: await desktopEntry(directory), directory, command: repeatCommand, reused, foreground, platform: process.platform
+  }));
+  if (values.background || values.foreground) {
+    const backend = await startDesktopBackground({ directory, resourcesDirectory, command, systemIntegration, ...(network ? { network } : {}) });
     if (backend) {
       const stop = () => { void backend.close().then(() => process.exit(0)).catch(() => console.error('MusicFS: close active files before quitting the background.')); };
       process.on('SIGINT', stop); process.on('SIGTERM', stop);
     }
+    if (values.foreground) {
+      if (!backend && network) await configureDesktopEntry(directory, network);
+      await showEntry(!backend, !!backend);
+    }
   } else {
-    await launchDesktop({ command, resourcesDirectory, systemIntegration, loginStartup: !!values.autostart,
-      ...(values.data ? { directory: values.data } : {}), ...(values['no-open'] ? { openBrowser: false } : {}) });
+    const result = await launchDesktop({ command, directory, resourcesDirectory, systemIntegration, loginStartup: !!values.autostart,
+      ...(network ? { network } : {}), ...(values['no-open'] || headless ? { openBrowser: false } : {}) });
+    if (!values.autostart && (headless || values['no-open'])) await showEntry(result.reused);
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : 'MusicFS desktop startup failed.';
-  if (background) console.error(message);
-  else await reportDesktopStartupFailure({ message, directory, showDialog: !args.includes('--no-open') });
+  if (background || args.includes('--foreground')) console.error(message);
+  else await reportDesktopStartupFailure({ message, directory, showDialog: desktopSession && !args.includes('--headless') && !args.includes('--no-open') });
   process.exitCode = 1;
 }

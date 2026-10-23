@@ -23,6 +23,10 @@ export default function Mounts({ api }: { api: Api }) {
     refetchOnWindowFocus: false, refetchOnReconnect: false, retry: false });
   const prerequisites = useQuery({ queryKey: ['mount-prerequisites'], queryFn: ({ signal }) => api.mountPrerequisites(signal),
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2 });
+  const network = useQuery({ queryKey: ['desktop-network'], queryFn: ({ signal }) => api.desktopNetwork(signal) });
+  const machine = network.data?.machine;
+  const systemName = machine && ({ win32: 'Windows', linux: 'Linux', darwin: 'macOS' }[machine.platform] ?? machine.platform);
+  const mountLocation = machine ? `挂载位置：${machine.name} · ${systemName}` : '挂载到运行 MusicFS 的设备';
   const install = useMutation({ mutationFn: () => api.installWinFsp(), onSuccess: value => {
     client.setQueryData(['mount-prerequisites'], value);
     if (value.state === 'ready') message.success('挂载组件已就绪，可继续挂载');
@@ -82,7 +86,7 @@ export default function Mounts({ api }: { api: Api }) {
     configureCache.reset(); clearCache.reset(); setCacheError(''); setCacheTarget(item);
     cacheForm.setFieldsValue({ directoryCacheSeconds: item.directoryCacheSeconds, fileCacheMaxMiB: item.fileCacheMaxMiB, fileCacheMaxAgeHours: item.fileCacheMaxAgeHours });
   }
-  return <><div className="page-actions"><Typography.Text type="secondary">像本地文件一样，在播放器中打开音乐</Typography.Text>
+  return <><div className="page-actions"><Typography.Text type="secondary">{mountLocation}</Typography.Text>
     <Button type="primary" icon={<PlusOutlined aria-hidden="true" />} disabled={!mounts.isSuccess || changing} onClick={() => { mount.reset(); setMountError(''); setOpen(true); }}>添加挂载</Button></div>
     {prerequisites.data?.kind === 'winfsp' && prerequisites.data.state !== 'ready' && <Alert className="feedback" showIcon type="info" title="首次挂载需要安装 WinFsp" action={prerequisites.data.canInstall
       ? <Button loading={install.isPending} disabled={changing && !install.isPending} onClick={() => install.mutate()}>安装挂载组件</Button>
@@ -90,7 +94,7 @@ export default function Mounts({ api }: { api: Api }) {
     {prerequisites.error && !(prerequisites.error instanceof ApiError && prerequisites.error.status === 404) && <Failure error={prerequisites.error} retry={() => void prerequisites.refetch()} />}
     <Failure error={install.error} /><Failure error={mounts.error} retry={() => void mounts.refetch()} /><Failure error={unmount.error} /><Failure error={remount.error} /><Failure error={remove.error} /><Failure error={refresh.error} /><Failure error={autoMount.error} />
     <section className="surface mount-list">{mounts.isPending ? <div className="loading-surface"><Skeleton active /></div> : !mounts.isError && !mounts.data?.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="给音乐一个盘符，或挂载到文件夹" /> : mounts.data?.map(item => <article className="mount-row" key={item.id}>
-      <div className="source-avatar"><FolderOutlined aria-hidden="true" /></div><div className="instance-identity"><Typography.Text strong>{item.name}</Typography.Text><div className="mount-location">{item.mountPoint}</div><div className="secondary-id">{item.source.kind === 'local' ? '本机音乐目录' : item.source.url}</div>
+      <div className="source-avatar"><FolderOutlined aria-hidden="true" /></div><div className="instance-identity"><Typography.Text strong>{item.name}</Typography.Text><div className="mount-location">{item.mountPoint}</div><div className="secondary-id">{item.source.kind === 'local' ? '当前 MusicFS 音乐目录' : item.source.url}</div>
         {item.error && <div role="alert" className="inline-error">{item.error.message}</div>}</div>
       <div className="instance-actions"><Tag color={item.state === 'mounted' ? 'success' : item.state === 'error' ? 'error' : 'default'}>{labels[item.state]}</Tag>
         <label className="mount-auto"><Switch size="small" checked={item.autoMount} disabled={changing || autoMount.isPending} onChange={enabled => autoMount.mutate({ id: item.id, enabled })} /> 自动挂载</label>
@@ -105,12 +109,13 @@ export default function Mounts({ api }: { api: Api }) {
         ] }}><Button type="text" icon={<MoreOutlined aria-hidden="true" />} aria-label={item.name + '的更多操作'} /></Dropdown>
       </div></article>)}</section>
     <Modal title="添加挂载" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
+      <Typography.Paragraph type="secondary">{mountLocation}</Typography.Paragraph>
       <Form form={form} layout="vertical" onFinish={submit} preserve={false} initialValues={{ directoryCacheSeconds: directoryCacheDefault(kind), fileCacheMaxMiB: MOUNT_FILE_CACHE_MIB, fileCacheMaxAgeHours: CACHE_YEAR_HOURS, autoMount: true }}>
         <Form.Item label="音乐目录"><Radio.Group value={kind} onChange={event => {
           const next = event.target.value as 'local' | 'remote';
           if (form.getFieldValue('directoryCacheSeconds') === directoryCacheDefault(kind)) form.setFieldValue('directoryCacheSeconds', directoryCacheDefault(next));
           setKind(next);
-        }} options={[{ label: '本机 MusicFS', value: 'local' }, { label: '远程 WebDAV', value: 'remote' }]} disabled={mount.isPending} /></Form.Item>
+        }} options={[{ label: '当前 MusicFS', value: 'local' }, { label: '其他 WebDAV', value: 'remote' }]} disabled={mount.isPending} /></Form.Item>
         {kind === 'remote' && <><Form.Item label="WebDAV 地址" name="url" rules={[{ required: true, type: 'url', message: '请输入完整 WebDAV 地址' }]}><Input placeholder="https://music.example.com/dav" /></Form.Item>
           <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input autoComplete="off" /></Form.Item>
           <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]}><Input.Password autoComplete="off" /></Form.Item></>}

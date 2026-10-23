@@ -14,7 +14,7 @@ export default function Connection({ api, tab, setTab }: { api: Api; tab: 'mount
   const status = useQuery({ queryKey: ['status'], queryFn: ({ signal }) => api.status(signal) });
   const desktop = status.data?.host === 'desktop';
   return <Tabs className="connection-tabs" activeKey={desktop ? tab : 'dav'} onChange={key => setTab(key as 'mount' | 'dav')} destroyOnHidden items={[
-    ...(desktop ? [{ key: 'mount', label: <><DesktopOutlined aria-hidden="true" /> 挂载到电脑</>, children: <Mounts api={api} /> }] : []),
+    ...(desktop ? [{ key: 'mount', label: <><DesktopOutlined aria-hidden="true" /> 磁盘挂载</>, children: <Mounts api={api} /> }] : []),
     { key: 'dav', label: <><LinkOutlined aria-hidden="true" /> WebDAV 播放器</>, children: <DavConnection api={api} desktop={desktop} /> }
   ]} />;
 }

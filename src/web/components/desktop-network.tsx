@@ -15,13 +15,15 @@ export default function DesktopNetwork({ api, scope }: { api: Api; scope: 'manag
   const network = useQuery({ queryKey: ['desktop-network'], queryFn: ({ signal }) => api.desktopNetwork(signal),
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2 });
   const save = useMutation({ mutationFn: (settings: Partial<DesktopNetworkSettings>) => api.saveDesktopNetwork(settings), onSuccess: value => {
+    const previousPort = network.data?.active.managementPort;
     client.setQueryData(['desktop-network'], value);
     const url = new URL(location.href);
     if (scope === 'management' && value.active.managementAccess === 'local' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
       setManagementClosed(true); return;
     }
     message.success('访问设置已保存');
-    if (scope === 'management' && Number(url.port || 80) !== value.active.managementPort && url.protocol === 'http:') {
+    // A proxy/forwarder may publish its own port. Only update a direct address.
+    if (scope === 'management' && Number(url.port || 80) === previousPort && previousPort !== value.active.managementPort && url.protocol === 'http:') {
       url.port = String(value.active.managementPort); location.assign(url.href);
     }
   } });

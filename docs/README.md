@@ -8,6 +8,7 @@
 |---|---|
 | 选择实际版本、升级、启动和部署 | [交付物](release.md)、[用户指南](user-guide.md) |
 | 托盘、自启、手机扫码、桌面挂载与本机 HTTPS | [桌面说明](desktop.md) |
+| NAS、SSH 首次访问及前台服务 | [远程运行](headless.md) |
 | 部署或升级 Worker 并保留插件 | [Worker 指南](worker.md) |
 | 连接 OpenList、播放器和客户端缓存 | [客户端说明](clients.md) |
 | 理解配置、认证、刷新与桌面路由 | [管理 API](management-api.md) |

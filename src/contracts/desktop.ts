@@ -6,6 +6,7 @@ export type DesktopNetworkView = {
   restartRequired: boolean;
   managementUrls: string[];
   davUrls: string[];
+  machine: { name: string; platform: string };
 };
 
 export type DesktopPreferences = {
@@ -18,5 +19,5 @@ export type DesktopPreferences = {
 
 export type DesktopPreferencesView = {
   settings: DesktopPreferences;
-  integration: { available: boolean; error?: string };
+  integration: { available: boolean; enabled?: boolean; error?: string };
 };
