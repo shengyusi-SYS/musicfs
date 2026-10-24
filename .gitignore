@@ -19,3 +19,4 @@ plugins/netease/generated-*.mjs
 !.dev.vars.example
 advisor.project.json
 .advisor.json
+/local-research/
