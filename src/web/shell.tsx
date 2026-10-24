@@ -45,7 +45,8 @@ function ManagementSession() {
   const access = useQuery({ queryKey: ['access'], queryFn: async () => { await initializeSession(api); return api.access(); }, staleTime: Infinity });
   const logout = useMutation({ mutationFn: () => api.logout(), onSuccess: async () => {
     await client.cancelQueries(); client.removeQueries({ predicate: query => query.queryKey[0] !== 'access' }); entryError = null;
-    client.setQueryData(['access'], { authenticated: false, passwordConfigured: access.data?.passwordConfigured ?? false } satisfies ManagementAccess);
+    client.setQueryData(['access'], { authenticated: false, passwordConfigured: access.data?.passwordConfigured ?? false,
+      ...(access.data?.host ? { host: access.data.host } : {}) } satisfies ManagementAccess);
     await client.invalidateQueries({ queryKey: ['access'] });
   } });
   async function connected() {
@@ -55,15 +56,15 @@ function ManagementSession() {
   return <div className="access-screen"><section className="access-panel"><div className="access-brand-row"><div className="access-brand">MusicFS</div><LanguageSwitch /></div>
     <Typography.Title level={1}>{t("打开你的音乐空间")}</Typography.Title>
     {access.isPending ? <Skeleton active /> : access.isError ? <Failure error={access.error} retry={() => void access.refetch()} />
-      : <ManagementSignIn api={api} passwordConfigured={access.data.passwordConfigured} onConnected={connected} />}
+      : <ManagementSignIn api={api} passwordConfigured={access.data.passwordConfigured} host={access.data.host} onConnected={connected} />}
   </section></div>;
 }
 
-function ManagementSignIn({ api, passwordConfigured, onConnected }: { api: Api; passwordConfigured: boolean; onConnected(): Promise<void> }) {
+function ManagementSignIn({ api, passwordConfigured, host, onConnected }: { api: Api; passwordConfigured: boolean; host?: 'desktop' | 'worker' | undefined; onConnected(): Promise<void> }) {
   const login = useMutation({ mutationFn: (values: ManagementLogin) => api.login(values.username.trim(), values.password, values.rememberMe), onSuccess: onConnected });
   const bootstrap = useMutation({ mutationFn: (token: string) => api.bootstrap(token.trim()), onSuccess: onConnected });
   const tokenForm = <Form<{ token: string }> layout="vertical" onFinish={values => bootstrap.mutate(values.token)}>
-    <Typography.Paragraph type="secondary">{t("云端请使用部署时设置的 ADMIN_TOKEN；桌面版可重新运行 MusicFS 获取登录入口。")}</Typography.Paragraph>
+    <Typography.Paragraph type="secondary">{host === 'worker' ? passwordConfigured ? t("使用 ADMIN_TOKEN 登录后，可在设置中重设账号密码。") : t("输入部署时设置的 ADMIN_TOKEN，进入后可在设置中创建登录账号。") : t("重新运行 MusicFS 获取登录入口，也可输入本机管理令牌。")}</Typography.Paragraph>
     <Form.Item label={t("管理令牌")} name="token" rules={[{ required: true, whitespace: true, message: t("请输入管理令牌") }]}><Input.Password autoComplete="off" /></Form.Item>
     <Failure error={bootstrap.error} /><Button type={passwordConfigured ? 'default' : 'primary'} htmlType="submit" block loading={bootstrap.isPending}>{t("连接")}</Button>
   </Form>;

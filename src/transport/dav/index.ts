@@ -7,6 +7,8 @@ import { LibraryError, PendingRefreshError, type FileView } from '../../core/lib
 import { SourceError } from '../../core/sources';
 import { needsFileMetadata, parsePropfind, propfindResponse } from './xml';
 import type { DavCredentials } from '../../contracts/dav-access';
+import { reportRequestFailure, reportSourceFailure, requestDiagnostics } from '../diagnostics';
+import { observeAudio } from '../../infrastructure/io-diagnostics';
 
 export type ReadCredentials = DavCredentials;
 export type DavOptions = { fixedLength?: (size: number) => TransformStream<Uint8Array, Uint8Array> };
@@ -46,6 +48,8 @@ export function createDav(view: FileView, credentials: ReadCredentials | (() => 
     if (error instanceof PendingRefreshError) {
       c.header('Retry-After', '2'); c.header('X-MusicFS-Refresh', error.operationId);
     }
+    if (davStatus(error) === 500) reportRequestFailure(c, error);
+    else if (!(error instanceof PendingRefreshError) && davStatus(error) >= 500) reportSourceFailure(c, error, davStatus(error));
     return c.text(`MusicFS request failed (${davStatus(error)})`, davStatus(error));
   });
   const handler = async (c: Context) => {
@@ -99,7 +103,7 @@ export function createDav(view: FileView, credentials: ReadCredentials | (() => 
     if (range) headers.set('Content-Range', `bytes ${range.start}-${range.end}/${content.size}`);
     if (method === 'HEAD') return new Response(null, { headers });
     const result = await view.open(description, range, signal);
-    let body = result.body;
+    let body = observeAudio(result.body, { requestId: c.get('requestId'), expectedBytes: length, ranged: !!range }, signal);
     if (options.fixedLength) {
       const fixed = options.fixedLength(length);
       // pipeTo propagates cancellation and errors to both ends; the response owns the pipeline lifetime.
@@ -108,7 +112,7 @@ export function createDav(view: FileView, credentials: ReadCredentials | (() => 
     }
     return new Response(body, { status: range ? 206 : 200, headers });
   };
-  app.all('/dav', auth, limit, handler);
-  app.all('/dav/*', auth, limit, handler);
+  app.all('/dav', requestDiagnostics, auth, limit, handler);
+  app.all('/dav/*', requestDiagnostics, auth, limit, handler);
   return app;
 }

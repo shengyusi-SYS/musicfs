@@ -32,6 +32,7 @@ test('the packaged Worker creates a management session and protects the shared A
     const request = (path: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => runtime!.dispatchFetch(origin + path, init);
     const denied = await request('/api/status');
     expect(denied.status).toBe(401); await denied.body?.cancel();
+    expect(await (await request('/api/access')).json()).toMatchObject({ authenticated: false, passwordConfigured: false, host: 'worker' });
     const bootstrap = await request('/api/access/bootstrap', { method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ token }) });
     expect(bootstrap.status).toBe(200); await bootstrap.body?.cancel();

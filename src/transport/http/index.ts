@@ -16,6 +16,7 @@ import { ExtensionError, type Extensions, type Installation } from '../../core/e
 import { SourceError, type Sources } from '../../core/sources';
 import { LibraryError, PendingRefreshError, UpdateRuleExistsError, type Library } from '../../core/library';
 import { inspectPackage } from '../../infrastructure/archives';
+import { reportRequestFailure, requestDiagnostics } from '../diagnostics';
 
 const name = z.string().trim().min(1).max(120);
 const instanceInput = z.object({ pluginId: z.string().min(1), name, config: z.json() }).strict();
@@ -79,6 +80,7 @@ export function createManagementApi(input: {
   const { sources, library, extensions } = input;
   if (!input.adminToken) throw new Error('Management token is required');
   const app = new Hono();
+  app.use('/api/*', requestDiagnostics);
   app.use('/api/*', async (c, next) => { c.header('Cache-Control', 'no-store'); c.header('X-Content-Type-Options', 'nosniff'); await next(); });
   app.use('/api/*', input.managementAuth ?? bearerAuth({ token: input.adminToken }), bodyLimit({ maxSize: input.maxPackageBytes }));
   app.onError((error, c) => {
@@ -94,7 +96,8 @@ export function createManagementApi(input: {
       return c.json({ error: 'refresh_pending', message: error.message, operationId: error.operationId }, 503);
     }
     if (error instanceof LibraryError) return c.json({ error: error.code, message: error.message, ...(error.translation ? { translation: error.translation } : {}), ...(error.sourceFault ? { sourceError: error.sourceFault } : {}) }, error.code === 'not_found' ? 404 : error.code === 'invalid_layout' ? 400 : error.code === 'conflict' ? 409 : 503);
-    return c.json({ error: 'internal_error', message: 'Management operation failed' }, 500);
+    const requestId = reportRequestFailure(c, error);
+    return c.json({ error: 'internal_error', message: 'Management operation failed', requestId }, 500);
   });
   // Never serialize Outcome.nextPrivateState into a management response.
   const result = <T>(outcome: Outcome<T>): Result<T> => outcome.ok ? { ok: true, value: outcome.value } : { ok: false, error: outcome.error };

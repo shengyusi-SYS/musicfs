@@ -9,11 +9,15 @@ import { LibraryError, type Description, type FileDescription, type FileView } f
 import { createDav, type ReadCredentials } from '../../transport/dav';
 import { MountError, writePrivateJson, type RcloneControl } from './rclone-control';
 import { CACHE_YEAR_HOURS, SHARED_READ_CACHE_MIB } from '../../contracts/cache-defaults';
+import { getLogger, withContext } from '@logtape/logtape';
+import { observeFetch } from '../../infrastructure/io-diagnostics';
 
 const settingsSchema = z.object({ maxMiB: z.number().int().min(0).max(1_048_576), maxAgeHours: z.number().int().min(0).max(2_147_483) }).strict();
 const storedSettingsSchema = settingsSchema.extend({ cacheDefaultsVersion: z.literal(1).optional() });
 const defaults: ReadCacheSettings = { maxMiB: SHARED_READ_CACHE_MIB, maxAgeHours: CACHE_YEAR_HOURS };
 const remote = 'musicfs_shared_reads';
+const logger = getLogger(['musicfs', 'io', 'cache']);
+const cacheFetch = observeFetch(fetch, 'cache');
 const fixedTime = '2000-01-01T00:00:00.000Z';
 const directory = (path: string): Description => ({ kind: 'directory', path, name: path.split('/').at(-1) ?? '', etag: path, modifiedAt: fixedTime });
 const bucketNames = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
@@ -90,7 +94,11 @@ export async function createDesktopReadCache(input: {
       return result;
     },
     async open(file, range, signal) {
-      try { return await input.view.open(file, range, signal); }
+      try {
+        const resourceKey = keyFor(file);
+        logger.debug('Cache requested source bytes', { resourceKey });
+        return await withContext({ resourceKey }, () => input.view.open(file, range, signal));
+      }
       catch (error) { if (error instanceof LibraryError) failures.set(keyFor(file), error); throw error; }
     }
   };
@@ -139,6 +147,7 @@ export async function createDesktopReadCache(input: {
   const files: FileView = { ...input.view, async open(file, range, signal): Promise<ReadResult> {
     if (!accepting) throw new LibraryError('source_failed', 'Desktop is stopping');
     const key = settings.maxMiB === 0 ? undefined : keyFor(file);
+    logger.debug('Audio read selected', { cache: key === undefined ? 'bypass' : 'native', ...(key ? { resourceKey: key } : {}) });
     active++;
     if (key !== undefined) {
       const old = pinned.get(key);
@@ -164,7 +173,7 @@ export async function createDesktopReadCache(input: {
         // A new immutable key only changes its bucket listing, not existing file nodes.
         if (!known) await input.control.call('vfs/forget', { fs: `${remote}:`, file: `${key.slice(0, 2)}/${key}` });
         failures.delete(key);
-        const response = await fetch(`${running!.address}/${key.slice(0, 2)}/${key}`, { signal,
+        const response = await cacheFetch(`${running!.address}/${key.slice(0, 2)}/${key}`, { signal,
           headers: range ? { Range: `bytes=${range.start}-${range.end}` } : {} });
         if (response.status !== (range ? 206 : 200) || response.headers.get('content-length') !== String(expectedLength)
           || range && response.headers.get('content-range') !== `bytes ${range.start}-${range.end}/${file.handle.content.size}`) {

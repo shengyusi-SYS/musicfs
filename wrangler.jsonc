@@ -5,6 +5,7 @@
   "find_additional_modules": true,
   "compatibility_date": "2026-07-30",
   "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false }, "traces": { "enabled": false } },
   "triggers": { "crons": ["* * * * *"] },
   "rules": [
     { "type": "ESModule", "globs": ["*.mjs", "plugins/**/*.mjs", "plugins/**/*.js"], "fallthrough": false },

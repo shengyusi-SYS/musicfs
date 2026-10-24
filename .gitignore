@@ -5,6 +5,8 @@ native/desktop/target/
 .wrangler/
 .advisor-state/
 coverage/
+*.log
+*.log.[0-9]*
 *.tsbuildinfo
 plugins/sample/generated-config.mjs
 plugins/qq/generated-config.mjs

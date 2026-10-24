@@ -1,4 +1,6 @@
 import { setImmediate as yieldToIo } from 'node:timers/promises';
+import { getLogger } from '@logtape/logtape';
+import { errorFields } from '../../infrastructure/logging';
 
 /** One desktop process may drain persisted work after the management page closes. */
 export function createDesktopRunner(step: (signal: AbortSignal) => Promise<boolean>, nextAt: () => number | null | Promise<number | null>) {
@@ -24,8 +26,8 @@ export function createDesktopRunner(step: (signal: AbortSignal) => Promise<boole
         timer = setTimeout(wake, Math.min(2_147_483_647, Math.max(25, instant - Date.now())));
         timer.unref();
       }
-    })().catch(() => {
-      if (!controller.signal.aborted) console.error('MusicFS: background work paused; its persisted checkpoint can be retried.');
+    })().catch(error => {
+      if (!controller.signal.aborted) getLogger(['musicfs', 'background']).error('Background work paused at persisted checkpoint', errorFields(error));
     }).finally(() => { running = undefined; if (requested) wake(); });
   }
   return { wake, async close() { clearTimeout(timer); controller.abort(new Error('Desktop backend is closing')); await running; } };

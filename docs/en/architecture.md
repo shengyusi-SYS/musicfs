@@ -32,6 +32,8 @@ flowchart LR
 
 The core does not import provider SDKs, React, HTTP frameworks or tagging tools. Plugins use the public API rather than private core modules. Host adapters implement interfaces owned by their consumers. `dependency-cruiser` checks import directions.
 
+Hosts and adapters own [IO diagnostics](logging.md), including WebDAV request correlation, source connections, stream failures and log limits. Domains do not depend on the logging library.
+
 ## Files and persistence
 
 The library exposes list/stat/statMany/open. A file's `contentId`, size, media type and range describe its final exported bytes, including any plugin-added tags. Song occurrences, actual audio and final representations have distinct identities.

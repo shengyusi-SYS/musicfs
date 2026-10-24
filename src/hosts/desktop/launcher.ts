@@ -21,6 +21,9 @@ import { openDesktopBrowser, setDesktopAutostart, startDesktopIntegration } from
 import type { DesktopNetworkSettings, DesktopPreferencesView } from '../../contracts/desktop';
 import { createDesktopListener } from './listener';
 import { configureDesktopEntry, credentialsSchema, desktopLogin, readDesktopRuntime as readExisting, runtimeSchema, type DesktopCredentials } from './entry';
+import { configureDesktopLogging } from './logging';
+import { getLogger } from '@logtape/logtape';
+import { errorFields } from '../../infrastructure/logging';
 
 const lockStaleMs = 30_000;
 const lockRecoveryMs = lockStaleMs + 2_000;
@@ -122,7 +125,9 @@ export async function startDesktopBackground(input: { directory?: string; resour
   let integration: Awaited<ReturnType<typeof startDesktopIntegration>> | undefined;
   let integrationReady: Promise<void> | undefined;
   const runtimePath = join(directory, 'runtime.json');
+  let closeLogging: (() => void) | undefined;
   try {
+    closeLogging = await configureDesktopLogging(directory);
     const credentialsPath = join(directory, 'credentials.json');
     let credentials: DesktopCredentials;
     try { credentials = credentialsSchema.parse(JSON.parse(await readFile(credentialsPath, 'utf8'))); }
@@ -156,7 +161,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
       localConnection: () => service?.readCache?.mountConnection ?? ({ url: `${davOrigin}/dav/`, ...(service?.davAccess.get() ?? { username: credentials.username, password: credentials.password }) }),
       ...(process.platform === 'win32' ? { checkDependencies: () => prerequisites.check() } : {}) });
     restore = createMountRestore({ mounts, settings: { enabled: preferences.autoMount, retry: preferences.retryAutoMount },
-      onError: () => console.error('MusicFS: a saved mount could not be restored. See Connections for details.') });
+      onError: error => getLogger(['musicfs', 'mounts']).warning('Saved mount restoration failed', errorFields(error)) });
     service = await createDesktopService({ directory, adminToken: credentials.adminToken, instanceId: credentials.instanceId,
       mountAction: id => restore!.cancel(id),
       dav: { username: credentials.username, password: credentials.password }, webRoot: join(resources, 'web'), mounts, readCache: { control, controlDirectory } });
@@ -199,6 +204,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
     origin = listener.current()!.origin; davOrigin = listener.current()!.davOrigin;
     await saveDesktopNetworkSettings(directory, network, listener.current()!);
     await writePrivateJson(runtimePath, { pid: process.pid, origin, davOrigin, instanceId: credentials.instanceId });
+    getLogger(['musicfs', 'desktop']).info('Backend ready', { managementPort: new URL(origin).port, davPort: new URL(davOrigin).port });
     restore.start();
     if (input.systemIntegration) {
       integrationReady = (async () => {
@@ -236,11 +242,13 @@ export async function startDesktopBackground(input: { directory?: string; resour
         await listener!.close();
         await rm(runtimePath, { force: true });
         await release();
+        closeLogging?.();
       })();
       try { await closing; } catch (error) { closing = undefined; throw error; }
     }
     return { get origin() { return origin; }, get davOrigin() { return davOrigin; }, close };
   } catch (error) {
+    getLogger(['musicfs', 'desktop']).error('Backend startup failed', errorFields(error));
     await restore?.close();
     await integrationReady; await integration?.close();
     await https?.close();
@@ -248,6 +256,7 @@ export async function startDesktopBackground(input: { directory?: string; resour
     await service?.close();
     await rm(runtimePath, { force: true });
     await release();
+    closeLogging?.();
     throw error;
   }
 }

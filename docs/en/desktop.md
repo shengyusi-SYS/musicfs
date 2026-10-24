@@ -76,6 +76,7 @@ Quit normally and copy the entire data directory to back up accounts, plugins, f
 | Another device cannot connect | Check the relevant entry's LAN setting and reachable address |
 | Source needs sign-in | Sign in to that source again; QQ and WeChat may hold different libraries |
 | Startup fails | Inspect `startup.log` and `launcher.log` in the data directory |
+| WebDAV or background reads fail | Inspect `logs/musicfs.log` and match the error ID when available |
 | Mount reads fail | Inspect `mounts/rclone.log` in the data directory |
 
 When reporting a problem, include MusicFS and plugin versions, system, connection method, steps and the relevant error.

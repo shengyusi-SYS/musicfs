@@ -11,6 +11,9 @@ import { createManagementApi } from '../../transport/http';
 import { createDav, type DavOptions, type ReadCredentials } from '../../transport/dav';
 import { createWorkerRegistry, type RegisteredPlugin } from './plugins';
 import { createWorkerDavAccess } from './dav-access';
+import { getLogger } from '@logtape/logtape';
+import { errorFields } from '../../infrastructure/logging';
+import { observeFetch, observeSources } from '../../infrastructure/io-diagnostics';
 
 export type WorkerPluginChanges = {
   install(archive: Uint8Array, signal: AbortSignal): Promise<PluginChange>;
@@ -25,7 +28,7 @@ export function createWorkerRuntime(db: D1Database, registrations: RegisteredPlu
   const registry = createWorkerRegistry(store, registrations);
   // A shared adaptive plugin algorithm can spend more items on cache hits.
   // Reserve room for source checks and the atomic refresh checkpoint under Free's 50-query ceiling.
-  const sources = createSources(store, registry, fetch, Date.now, { cacheQueries: 32, requests: 50 });
+  const sources = observeSources(createSources(store, registry, observeFetch(fetch, 'source'), Date.now, { cacheQueries: 32, requests: 50 }));
   const library = createLibrary(sources, store, undefined, { execution: 'deferred', sha256 });
   return { store, sources, library };
 }
@@ -39,7 +42,7 @@ export function createWorkerService(input: {
   authentication?: ManagementAuth;
 }) {
   const { store, sources, library } = input.runtime ?? createWorkerRuntime(input.db, input.registrations);
-  const authentication = input.authentication ?? createManagementAuth({ database: input.db, adminToken: input.adminToken });
+  const authentication = input.authentication ?? createManagementAuth({ database: input.db, adminToken: input.adminToken, host: 'worker' });
   const davAccess = createWorkerDavAccess(input.db, input.dav);
   const app = new Hono();
   app.use('*', async (c, next) => {
@@ -48,7 +51,9 @@ export function createWorkerService(input: {
     // One request may start one background page. Continuation requires a NEW
     // HTTP/scheduled invocation; waitUntil is never a recursive page runner.
     if (pending && (c.res.status === 202 || c.res.status === 503) && input.waitUntil) {
-      input.waitUntil(library.refreshes.step(pending, AbortSignal.timeout(60_000)).catch(() => {}));
+      input.waitUntil(library.refreshes.step(pending, AbortSignal.timeout(60_000)).catch(error => {
+        getLogger(['musicfs', 'refresh']).error('Background refresh step failed', { operationId: pending, ...errorFields(error) });
+      }));
     }
   });
   app.route('/', authentication.app);

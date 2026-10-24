@@ -42,6 +42,8 @@
     "@ant-design/icons": "6.3.4",
     "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
     "@hono/bun": "1.0.1",
+    "@logtape/file": "2.4.1",
+    "@logtape/logtape": "2.4.1",
     "@musicfs/plugin-api": "workspace:*",
     "@rjsf/antd": "6.11.0",
     "@rjsf/core": "6.11.0",
@@ -97,11 +99,21 @@
   "license": "GPL-3.0-only",
   "cloudflare": {
     "bindings": {
-      "DB": { "description": "Stores your MusicFS sources, folders and settings. / 保存音乐来源、目录和设置。" },
-      "ADMIN_TOKEN": { "description": "Choose and save a private token for first login and account recovery. / 自行设置并保存管理令牌，用于首次登录和找回管理账号。" },
-      "DAV_USERNAME": { "description": "Username for WebDAV players, for example musicfs. / 播放器使用的 WebDAV 用户名。" },
-      "DAV_PASSWORD": { "description": "Choose a password for WebDAV players. / 设置播放器使用的 WebDAV 密码。" },
-      "CF_API_TOKEN": { "description": "An API Token with Workers Scripts Edit permission for this account, used to install and update plugins. / 当前账号具备 Workers Scripts Edit 权限的 Token，用于安装和更新插件。" }
+      "DB": {
+        "description": "Stores your MusicFS sources, folders and settings. / 保存音乐来源、目录和设置。"
+      },
+      "ADMIN_TOKEN": {
+        "description": "Choose and save a private token for first login and account recovery. / 自行设置并保存管理令牌，用于首次登录和找回管理账号。"
+      },
+      "DAV_USERNAME": {
+        "description": "Username for WebDAV players, for example musicfs. / 播放器使用的 WebDAV 用户名。"
+      },
+      "DAV_PASSWORD": {
+        "description": "Choose a password for WebDAV players. / 设置播放器使用的 WebDAV 密码。"
+      },
+      "CF_API_TOKEN": {
+        "description": "An API Token with Workers Scripts Edit permission for this account, used to install and update plugins. / 当前账号具备 Workers Scripts Edit 权限的 Token，用于安装和更新插件。"
+      }
     }
   }
 }

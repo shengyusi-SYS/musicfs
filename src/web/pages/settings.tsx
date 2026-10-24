@@ -12,15 +12,15 @@ export default function Settings({ api, desktop }: { api: Api; desktop: boolean 
   const access = useQuery({ queryKey: ['access'], queryFn: () => api.access() });
   const [form] = Form.useForm<{ username: string; password: string }>();
   const account = useMutation({ mutationFn: (values: { username: string; password: string }) => api.saveAccount(values.username.trim(), values.password),
-    onSuccess: value => { client.setQueryData(['access'], value); form.setFieldValue('password', ''); message.success(t("登录账号已保存")); } });
-  return <div className="settings-sections"><UpdateRules api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("登录账号")}</Typography.Title></div>
+    onSuccess: value => { client.setQueryData(['access'], { ...access.data, ...value }); form.setFieldValue('password', ''); message.success(t("登录账号已保存")); } });
+  return <div className="settings-sections"><section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("登录账号")}</Typography.Title></div>
     <Failure error={access.error} retry={() => void access.refetch()} />
     {access.isPending ? <Skeleton active /> : <Form form={form} className="account-form" layout="vertical" initialValues={{ username: access.data?.passwordConfigured ? access.data.username : 'admin' }} onFinish={values => account.mutate(values)}>
       <Form.Item label={t("用户名")} name="username" rules={[{ required: true, whitespace: true, message: t("请输入用户名") }, { max: 64 }]}><Input autoComplete="username" maxLength={64} /></Form.Item>
       <Form.Item label={access.data?.passwordConfigured ? t("新密码") : t("密码")} name="password" rules={[{ required: true, message: t("请输入密码") }, { min: 8, max: 128, message: t("密码须为 8—128 个字符") }]}><Input.Password autoComplete="new-password" /></Form.Item>
       <Failure error={account.error} /><Button type="primary" htmlType="submit" loading={account.isPending}>{access.data?.passwordConfigured ? t("保存账号与密码") : t("设置登录账号")}</Button>
     </Form>}
-  </section>{desktop && <><DesktopStartup api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("管理页面访问")}</Typography.Title></div><DesktopNetwork api={api} scope="management" /></section></>}</div>;
+  </section>{desktop && <><DesktopStartup api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("管理页面访问")}</Typography.Title></div><DesktopNetwork api={api} scope="management" /></section></>}<UpdateRules api={api} /></div>;
 }
 
 function DesktopStartup({ api }: { api: Api }) {

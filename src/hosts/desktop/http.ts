@@ -11,6 +11,9 @@ import { desktopNetworkSchema, desktopNetworkUpdateSchema, desktopNetworkView, r
 import { MountError } from './rclone-control';
 import { DesktopHttpsError, type createDesktopHttps } from './https';
 import { desktopPreferencesSchema } from './preferences';
+import { getLogger } from '@logtape/logtape';
+import { errorFields } from '../../infrastructure/logging';
+import { reportRequestFailure } from '../../transport/diagnostics';
 
 const readCacheSettingsSchema = z.object({
   maxMiB: z.number().int().min(0).max(1_048_576),
@@ -38,7 +41,8 @@ export function createDesktopHttp(input: {
     if (error instanceof HTTPException) return error.getResponse();
     if (error instanceof MountError || error instanceof DesktopHttpsError) return c.json({ error: error.code, message: error.message,
       ...(error instanceof MountError && error.translation ? { translation: error.translation } : {}) }, 422);
-    return c.json({ error: 'desktop_failed', message: t("本机操作未完成，请检查后台日志后重试。") }, 500);
+    const requestId = reportRequestFailure(c, error);
+    return c.json({ error: 'desktop_failed', message: t("本机操作未完成，请检查后台日志后重试。"), requestId }, 500);
   });
   const networkView = async () => desktopNetworkView(await readDesktopNetworkSettings(input.directory), input.network());
   app.get('/api/desktop/network', async c => c.json(await networkView()));
@@ -86,7 +90,7 @@ export function createDesktopHttp(input: {
     const resumeWork = () => { if (typeof resumeMounts === 'function') resumeMounts(); if (typeof resume === 'function') resume(); };
     try { resume = await input.prepareQuit?.(); resumeMounts = await input.prepareShutdown?.(); await input.mounts.close(); }
     catch (error) { resumeWork(); return c.json({ error: 'mount_busy', message: error instanceof MountError ? error.message : t("挂载未能正常卸载，后台仍在运行。请关闭占用程序后重试。") }, 409); }
-    setTimeout(() => { void input.close().catch(() => { resumeWork(); console.error('MusicFS background shutdown failed; private data was preserved.'); }); }, 100);
+    setTimeout(() => { void input.close().catch(error => { resumeWork(); getLogger(['musicfs', 'desktop']).error('Background shutdown failed', errorFields(error)); }); }, 100);
     return c.json({ stopping: true }, 202);
   });
   return app;

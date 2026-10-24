@@ -8,6 +8,8 @@ import { readPackage } from '../../infrastructure/archives';
 import { createD1Store } from '../../infrastructure/persistence/d1';
 import type { RegisteredPlugin } from './plugins';
 import { createWorkerPublisher, workerModuleType, type WorkerArtifact, type WorkerModule } from './publisher';
+import { getLogger } from '@logtape/logtape';
+import { errorFields } from '../../infrastructure/logging';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -83,6 +85,8 @@ export function createWorkerChanges(input: { db: D1Database; registrations: Regi
       }
       return lease;
     } catch (error) {
+      getLogger(['musicfs', 'plugins']).error('Plugin publication failed or remains unconfirmed', { operationId: lease.record.view.operationId,
+        pluginId: lease.record.manifest.id, ...errorFields(error) });
       const httpStatus = typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number' ? error.status : undefined;
       if (!lease.record.registry || httpStatus !== undefined && httpStatus >= 400 && httpStatus < 500 && httpStatus !== 408) {
         return activation.fail(lease, 'deployment_failed', 'Worker 拒绝发布或准备失败，原安装保持可用。');
@@ -116,7 +120,9 @@ export function createWorkerChanges(input: { db: D1Database; registrations: Regi
       await activation.step(lease, candidateModule, signal);
     } finally { await store.releaseChange(id, token); }
   }
-  function schedule(id: string) { input.waitUntil(run(id).catch(() => {})); }
+  function schedule(id: string) { input.waitUntil(run(id).catch(error => {
+    getLogger(['musicfs', 'plugins']).error('Background plugin change failed', { operationId: id, ...errorFields(error) });
+  })); }
   async function enqueue(kind: PluginChange['kind'], installation: { manifest: PluginManifest; revision: string }, previous: Installation | undefined, files?: ReadonlyMap<string, Uint8Array>) {
     const now = new Date().toISOString();
     const operation: PluginChangeRecord = { view: { operationId: crypto.randomUUID(), kind, pluginId: installation.manifest.id, status: 'queued', createdAt: now, updatedAt: now },
@@ -144,7 +150,8 @@ export function createWorkerChanges(input: { db: D1Database; registrations: Regi
         } finally { await store.releaseChange(operation.view.operationId, token); }
         if (ready) schedule(operation.view.operationId);
       }
-    } catch {
+    } catch (error) {
+      getLogger(['musicfs', 'plugins']).error('Plugin staging failed', { operationId: operation.view.operationId, ...errorFields(error) });
       const token = crypto.randomUUID(); const instant = Date.now();
       const lease = await store.claimChange(operation.view.operationId, token, instant, instant + 60_000);
       if (lease) {

@@ -19,6 +19,11 @@ import { createDesktopReadCache } from './read-cache';
 import type { RcloneControl } from './rclone-control';
 import { createDesktopAccess } from './access';
 import { createDesktopDavAccess } from './dav-access';
+import { getLogger } from '@logtape/logtape';
+import { errorFields } from '../../infrastructure/logging';
+import { observeFetch, observeSources } from '../../infrastructure/io-diagnostics';
+
+const logger = getLogger(['musicfs', 'mounts']);
 
 export async function createDesktopService(input: { directory: string; adminToken: string; instanceId?: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager; mountAction?: (id: string) => void; readCache?: { control: RcloneControl; controlDirectory: string } }) {
   await mkdir(input.directory, { recursive: true, mode: 0o700 });
@@ -51,8 +56,8 @@ export async function createDesktopService(input: { directory: string; adminToke
   const access = createDesktopAccess(input.directory, input.adminToken, input.instanceId);
   const host = createDesktopPlugins(join(input.directory, 'plugins'), store);
   const extensions = createExtensions(store, host.prepare);
-  const refreshMounts = () => { void input.mounts?.refreshLocal().catch(() => console.error('MusicFS: mount directory refresh failed; cached names remain until their configured expiry.')); };
-  const sources = createSources({ ...store,
+  const refreshMounts = () => { void input.mounts?.refreshLocal().catch(error => logger.warning('Mount directory refresh failed', errorFields(error))); };
+  const sources = observeSources(createSources({ ...store,
     insert(...args: Parameters<typeof store.insert>) { const saved = store.insert(...args); if (saved) refreshMounts(); return saved; },
     configure(...args: Parameters<typeof store.configure>) { const saved = store.configure(...args); if (saved && !args[3]) refreshMounts(); return saved; },
     advanceAuthentication(...args: Parameters<typeof store.advanceAuthentication>) {
@@ -64,14 +69,14 @@ export async function createDesktopService(input: { directory: string; adminToke
       return saved;
     },
     deleteInstance(id: string) { store.deleteInstance(id); refreshMounts(); }
-  }, host.registry);
+  }, host.registry, observeFetch(fetch, 'source')));
   const library = createLibrary(sources, { ...store,
     saveLayout(...args: Parameters<typeof store.saveLayout>) { const saved = store.saveLayout(...args); if (saved) refreshMounts(); return saved; },
     saveFileNamingPolicy(...args: Parameters<typeof store.saveFileNamingPolicy>) {
       const saved = store.saveFileNamingPolicy(...args);
       if (saved && input.mounts) void sources.view(args[0]).then(stamp => publishedPaths(sources, store, stamp,
         args[1] === undefined ? { kind: 'roots', ref: '' } : { kind: 'directory', ref: args[1] }))
-        .then(paths => input.mounts!.refreshLocal(paths)).catch(() => console.error('MusicFS: renamed folder notification failed.'));
+        .then(paths => input.mounts!.refreshLocal(paths)).catch(error => logger.warning('Renamed folder notification failed', errorFields(error)));
       return saved;
     },
     commitRefresh(...args: Parameters<typeof store.commitRefresh>) {
@@ -81,7 +86,7 @@ export async function createDesktopService(input: { directory: string; adminToke
       // Preserve mounted listings when a successful refresh publishes unchanged contents.
       if (result === 'committed' && task && store.snapshotHeader(args[0].stamp.id, task.key)?.id !== previousId) {
         void publishedPaths(sources, store, args[0].stamp, task.key).then(paths => input.mounts!.refreshLocal(paths))
-          .catch(() => console.error('MusicFS: changed folder notification failed.'));
+          .catch(error => logger.warning('Changed folder notification failed', errorFields(error)));
       }
       return result;
     } }, undefined, { execution: 'deferred', sha256, publishedViews: { views: 32, estimatedBytes: 32 * 1024 * 1024 } });

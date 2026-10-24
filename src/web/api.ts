@@ -14,7 +14,7 @@ import type { DavCredentials } from '../contracts/dav-access';
 import type { FileNamingPolicy, FileNamingPreview, FileNamingSettings } from '../contracts/file-naming';
 
 export class ApiError extends Error {
-  constructor(public readonly status: number, public readonly detail: unknown) {
+  constructor(public readonly status: number, public readonly detail: unknown, public readonly requestId?: string | null) {
     const fault = typeof detail === 'object' && detail !== null && 'error' in detail && typeof detail.error === 'object' && detail.error !== null && 'message' in detail.error ? detail.error : detail;
     super(typeof fault === 'object' && fault !== null && 'message' in fault && typeof fault.message === 'string'
       ? fault.message : t("请求失败（{{value0}}）", { value0: status }));
@@ -55,7 +55,7 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
     if (!response.ok) {
       if (response.status === 401 && !path.startsWith('/access')) onUnauthorized?.();
       const detail: unknown = await response.json().catch(() => null);
-      throw new ApiError(response.status, detail);
+      throw new ApiError(response.status, detail, response.headers.get('X-MusicFS-Request-ID'));
     }
     return response.status === 204 ? undefined as T : response.json() as Promise<T>;
   }

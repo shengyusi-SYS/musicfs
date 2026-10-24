@@ -7,6 +7,8 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { ManagementAccess, ManagementTicket } from '../../contracts/management-auth';
+import { getLogger } from '@logtape/logtape';
+import { errorFields } from '../logging';
 
 export { MANAGEMENT_AUTH_SCHEMA_SQL } from './schema';
 
@@ -21,6 +23,7 @@ export type ManagementAuthOptions = {
   adminToken: string;
   /** Separates cookies for local instances sharing 127.0.0.1 but different data folders. */
   instanceId?: string;
+  host?: 'desktop' | 'worker';
 };
 
 export type ManagementAuth = ReturnType<typeof createManagementAuth>;
@@ -134,6 +137,9 @@ export function createManagementAuth(options: ManagementAuthOptions) {
       advanced: { cookiePrefix: `musicfs-${(options.instanceId ?? 'admin').replace(/[^a-zA-Z0-9_-]/g, '')}`,
         useSecureCookies: protocol === 'https', database: { validateSchema: false } },
       telemetry: { enabled: false },
+      logger: { level: 'error', log: (_level, _message, ...args: unknown[]) => {
+        getLogger(['musicfs', 'auth']).error('Management authentication handler failed', errorFields(args.find(value => value instanceof Error)));
+      } },
       plugins: [plugin],
     });
   }
@@ -186,7 +192,7 @@ export function createManagementAuth(options: ManagementAuthOptions) {
     const internal = await auth.$context;
     const record = await internal.internalAdapter.findUserByEmail(ADMIN_EMAIL, { includeAccounts: true });
     const passwordConfigured = Boolean(record?.accounts.some(value => value.providerId === 'credential' && value.password));
-    return ctx.json({ authenticated, passwordConfigured, ...(authenticated && record ? { username: record.user.name } : {}) } satisfies ManagementAccess);
+    return ctx.json({ authenticated, passwordConfigured, ...(options.host ? { host: options.host } : {}), ...(authenticated && record ? { username: record.user.name } : {}) } satisfies ManagementAccess);
   });
   // Only these product endpoints are exposed. Better Auth registration/social/email endpoints stay internal.
   for (const [path, method] of [['login', 'POST'], ['bootstrap', 'POST'], ['logout', 'POST'], ['account', 'PUT'], ['ticket', 'POST'], ['exchange', 'POST']] as const) {

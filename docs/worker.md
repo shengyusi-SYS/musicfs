@@ -130,6 +130,8 @@ bunx wrangler@4.119.0 deploy \
 
 ## 常见问题与备份
 
+运行日志在 Cloudflare 的 Worker → Observability 查看。模板默认只记录应用警告、错误和未捕获异常，不为每次扫描或 Range 请求写调用日志；临时 debug 和链路字段见[IO 诊断](architecture/logging.md)。
+
 | 现象 | 检查 |
 |---|---|
 | 安装显示未配置发布能力 | 核对 `CF_API_TOKEN`、账号和 Worker 名称 |

@@ -34,8 +34,8 @@ export interface InstanceStore {
 }
 
 export class SourceError extends Error {
-  constructor(public readonly code: 'missing_instance' | 'stale_call' | 'invalid_auth_action' | 'plugin_failure', message: string) {
-    super(message);
+  constructor(public readonly code: 'missing_instance' | 'stale_call' | 'invalid_auth_action' | 'plugin_failure', message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'SourceError';
   }
 }

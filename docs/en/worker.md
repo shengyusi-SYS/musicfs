@@ -128,6 +128,8 @@ bunx wrangler@4.119.0 deploy \
 
 ## Help and backups
 
+View runtime logs under your Worker's **Observability** page in Cloudflare. The template records application warnings, errors and uncaught exceptions without a log for every scan or Range request. See [IO diagnostics](logging.md) for temporary debug logging and correlation fields.
+
 | Symptom | Check |
 |---|---|
 | Plugin publishing is not configured | Verify `CF_API_TOKEN`, account ID and Worker name |

@@ -59,7 +59,7 @@ export function createSources(store: InstanceStore & RenewalStore & Partial<Plug
     try { return await operation(); } catch (error) {
       if (signal.aborted) throw signal.reason;
       if (error instanceof SourceError) throw error;
-      throw new SourceError('plugin_failure', 'Source plugin failed unexpectedly');
+      throw new SourceError('plugin_failure', 'Source plugin failed unexpectedly', { cause: error });
     }
   }
   const currentAuthentication = (snapshot: InstanceSnapshot) => {

@@ -3,6 +3,7 @@ export type ManagementAccess = {
   authenticated: boolean;
   passwordConfigured: boolean;
   username?: string;
+  host?: 'desktop' | 'worker';
 };
 export type AccessView = ManagementAccess;
 

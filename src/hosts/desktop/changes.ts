@@ -3,6 +3,8 @@ import { createPluginActivation, needsMigration, terminalChange, type PluginChan
 import { assertInstallationCandidate, ExtensionError, type Extensions, type InstallationStore, type PreparedPackage } from '../../core/extensions';
 import { preparePluginMigration } from '../../core/sources';
 import type { createDesktopPlugins } from './plugins';
+import { getLogger } from '@logtape/logtape';
+import { errorFields } from '../../infrastructure/logging';
 
 /** Compatible installs stay immediate; schema upgrades use durable candidate preparation. */
 export function createDesktopChanges(input: { store: PluginChangeStore & InstallationStore;
@@ -37,8 +39,9 @@ export function createDesktopChanges(input: { store: PluginChangeStore & Install
         if (!lease || terminalChange(lease.record.view)) return true;
         const module = await input.plugins.candidate(lease.record.manifest, lease.record.revision);
         await activation.step(lease, module, AbortSignal.any([signal, AbortSignal.timeout(25_000)]));
-      } catch {
+      } catch (error) {
         signal.throwIfAborted();
+        getLogger(['musicfs', 'plugins']).error('Candidate plugin preparation failed', { operationId: id, ...errorFields(error) });
         if (lease) await activation.fail(lease, 'candidate_failed', t("无法准备候选插件，原安装和实例数据保持不变。"));
       } finally { await input.store.releaseChange(id, token); }
       return true;

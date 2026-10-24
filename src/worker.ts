@@ -3,6 +3,7 @@ import { createWorkerChanges } from './hosts/worker/changes';
 import { createWorkerRuntime, createWorkerService, type WorkerAssets, type WorkerRuntime } from './hosts/worker/service';
 import type { RegisteredPlugin } from './hosts/worker/plugins';
 import { createManagementAuth, type ManagementAuth } from './infrastructure/management-auth';
+import { configureWorkerLogging } from './infrastructure/logging';
 export { assertPluginModule } from './core/extensions';
 
 declare const FixedLengthStream: { new(size: number): TransformStream<Uint8Array, Uint8Array> };
@@ -10,6 +11,7 @@ declare const FixedLengthStream: { new(size: number): TransformStream<Uint8Array
 export type WorkerBindings = {
   DB: D1Database; ASSETS: WorkerAssets; ADMIN_TOKEN: string; DAV_USERNAME: string; DAV_PASSWORD: string;
   CF_ACCOUNT_ID: string; CF_WORKER_NAME: string; CF_API_TOKEN: string;
+  MUSICFS_LOG_LEVEL?: string;
 };
 export default function createWorker(registrations: RegisteredPlugin[]) {
   const runtimes = new WeakMap<D1Database, WorkerRuntime>();
@@ -22,13 +24,14 @@ export default function createWorker(registrations: RegisteredPlugin[]) {
   const authentication = (env: WorkerBindings) => {
     let value = authentications.get(env.DB);
     if (!value || value.token !== env.ADMIN_TOKEN) {
-      value = { token: env.ADMIN_TOKEN, service: createManagementAuth({ database: env.DB, adminToken: env.ADMIN_TOKEN }) };
+      value = { token: env.ADMIN_TOKEN, service: createManagementAuth({ database: env.DB, adminToken: env.ADMIN_TOKEN, host: 'worker' }) };
       authentications.set(env.DB, value);
     }
     return value.service;
   };
   return {
     fetch(request: Request, env: WorkerBindings, context: { waitUntil(promise: Promise<unknown>): void }) {
+      configureWorkerLogging(env.MUSICFS_LOG_LEVEL);
       const changes = createWorkerChanges({ db: env.DB, registrations, waitUntil: promise => context.waitUntil(promise),
         accountId: env.CF_ACCOUNT_ID, scriptName: env.CF_WORKER_NAME, apiToken: env.CF_API_TOKEN });
       const service = createWorkerService({ db: env.DB, registrations, adminToken: env.ADMIN_TOKEN,
@@ -38,6 +41,7 @@ export default function createWorker(registrations: RegisteredPlugin[]) {
       return service.app.fetch(request);
     },
     async scheduled(_event: unknown, env: WorkerBindings) {
+      configureWorkerLogging(env.MUSICFS_LOG_LEVEL);
       const changes = createWorkerChanges({ db: env.DB, registrations, waitUntil: () => {},
         accountId: env.CF_ACCOUNT_ID, scriptName: env.CF_WORKER_NAME, apiToken: env.CF_API_TOKEN });
       const signal = AbortSignal.timeout(60_000);

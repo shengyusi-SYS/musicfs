@@ -1,4 +1,6 @@
 {
+  "使用 ADMIN_TOKEN 登录后，可在设置中重设账号密码。": "Sign in with ADMIN_TOKEN, then reset your account credentials in Settings.",
+  "错误编号：{{id}}": "Error ID: {{id}}",
   "请求失败（{{value0}}）": "Request failed ({{value0}})",
   "音乐库": "Library",
   "连接与挂载": "Connect",
@@ -16,7 +18,8 @@
   "记住登录": "Remember me",
   "登录": "Sign in",
   "使用管理令牌": "Use an admin token",
-  "云端请使用部署时设置的 ADMIN_TOKEN；桌面版可重新运行 MusicFS 获取登录入口。": "For cloud hosting, enter the ADMIN_TOKEN you set during deployment. On desktop, run MusicFS again to get a login link.",
+  "输入部署时设置的 ADMIN_TOKEN，进入后可在设置中创建登录账号。": "Enter the ADMIN_TOKEN you set during deployment. You can create a login account in Settings afterward.",
+  "重新运行 MusicFS 获取登录入口，也可输入本机管理令牌。": "Run MusicFS again to get a login link, or enter your local admin token.",
   "正在退出 MusicFS": "Stopping MusicFS",
   "下次使用时，重新运行 MusicFS 即可。": "Run MusicFS again next time you want to use it.",
   "退出登录": "Sign out",

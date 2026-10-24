@@ -77,5 +77,8 @@ Windows 双击托盘图标打开页面，右键可打开手机访问或退出 Mu
 | 来源显示需要登录 | 在该来源重新登录；QQ 与微信可能对应不同内容账号 |
 | 启动失败 | 查看数据目录的 `startup.log`、`launcher.log` |
 | 挂载读取异常 | 查看数据目录的 `mounts/rclone.log` |
+| WebDAV 或后台读取异常 | 查看 `logs/musicfs.log`，有错误编号时可对应查询 |
+
+普通读取默认不写日志；需要排查耗时时可临时开启 debug，见[IO 诊断](architecture/logging.md)。
 
 反馈问题时附 MusicFS 与插件版本、系统、使用方式、出错步骤和对应错误信息即可。

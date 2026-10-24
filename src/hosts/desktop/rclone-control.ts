@@ -1,7 +1,12 @@
 import { t } from './locale';
+import { withContext } from '@logtape/logtape';
+import { observeFetch } from '../../infrastructure/io-diagnostics';
+
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
+
+const controlFetch = observeFetch(fetch, 'rclone');
 
 export class MountError extends Error {
   override readonly name = 'MountError';
@@ -42,10 +47,10 @@ export function createRcloneControl(input: { directory: string; binary: string; 
   const configPath = join(input.directory, 'rclone.conf');
 
   async function request<T>(current: Runtime, method: string, parameters: Record<string, unknown> = {}, timeout = 30_000): Promise<T> {
-    const response = await fetch(`http://127.0.0.1:${current.port}/${method}`, {
+    const response = await withContext({ ioOperation: method }, () => controlFetch(`http://127.0.0.1:${current.port}/${method}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Basic ${btoa(`musicfs:${current.password}`)}` },
       body: JSON.stringify(parameters), signal: AbortSignal.timeout(timeout)
-    });
+    }));
     const body: unknown = await response.json();
     if (!response.ok) {
       const error = z.object({ error: z.string() }).safeParse(body);
@@ -93,7 +98,8 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       if (!await Bun.file(configPath).exists()) await writeFile(configPath, '', { mode: 0o600 });
       if (!await Bun.file(logPath).exists()) await writeFile(logPath, '', { mode: 0o600 });
       child = Bun.spawn([input.binary, 'rcd', '--rc-addr', `127.0.0.1:${port}`, '--config', configPath,
-        '--cache-dir', join(input.directory, 'cache'), '--log-file', logPath, '--log-level', 'ERROR'], {
+        '--cache-dir', join(input.directory, 'cache'), '--log-file', logPath, '--log-level', 'ERROR',
+        '--log-file-max-size', '2M', '--log-file-max-backups', '3', '--use-json-log'], {
         windowsHide: true, env: { ...process.env, RCLONE_RC_USER: 'musicfs', RCLONE_RC_PASS: password }, stdin: 'ignore', stdout: 'ignore', stderr: 'ignore'
       });
       launched = child;
