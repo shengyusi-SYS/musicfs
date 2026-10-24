@@ -47,7 +47,9 @@ export function createRcloneControl(input: { directory: string; binary: string; 
   const configPath = join(input.directory, 'rclone.conf');
 
   async function request<T>(current: Runtime, method: string, parameters: Record<string, unknown> = {}, timeout = 30_000): Promise<T> {
-    const response = await withContext({ ioOperation: method }, () => controlFetch(`http://127.0.0.1:${current.port}/${method}`, {
+    // Readiness/recovery probes can fail normally while the native process starts.
+    const fetcher = method === 'core/pid' ? fetch : controlFetch;
+    const response = await withContext({ ioOperation: method }, () => fetcher(`http://127.0.0.1:${current.port}/${method}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Basic ${btoa(`musicfs:${current.password}`)}` },
       body: JSON.stringify(parameters), signal: AbortSignal.timeout(timeout)
     }));
