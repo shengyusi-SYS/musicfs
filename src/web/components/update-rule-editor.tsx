@@ -12,7 +12,7 @@ const weekdays = () => [t("周日"), t("周一"), t("周二"), t("周三"), t("�
 const localTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai';
 const timezones = [...new Set([localTimezone(), 'Asia/Shanghai', 'UTC', ...Intl.supportedValuesOf('timeZone')])];
 export const ruleTargetLabel = (rule: Pick<UpdateRule, 'target' | 'label'>) => rule.target.kind === 'instance' ? t("全部内容")
-  : rule.target.kind === 'roots' ? t("入口清单") : (rule.label || t("目录")) + (rule.target.recursive ? t("及子目录") : '');
+  : rule.target.kind === 'roots' ? t("顶层目录") : (rule.label || t("目录")) + (rule.target.recursive ? t("及子目录") : '');
 export function ruleTimingLabel(timing: UpdateTiming) {
   if (timing.kind === 'interval') return t("每隔 {{value0}}", { value0: timing.minutes >= 60 && timing.minutes % 60 === 0 ? t('{{count, number}} 小时', { count: timing.minutes / 60 }) : t('{{count, number}} 分钟', { count: timing.minutes }) });
   return `${timing.kind === 'daily' ? t("每天") : timing.weekdays.map(day => weekdays()[day]).join(', ')} ${timing.time} · ${timing.timezone}`;
@@ -45,7 +45,7 @@ export function UpdateRuleSettings({ api, rule, instanceId, target, label, insta
       disabled={!!instanceId} placeholder={t("选择音乐来源")} onChange={value => { setSelectedInstance(value); setScope('instance'); }} /></Form.Item>}
     <Form.Item label={t("更新范围")}><Select aria-label={t("更新范围")} value={scope} onChange={setScope} options={[
       ...(directoryTarget && selectedInstance === (rule?.instanceId ?? instanceId) ? [{ value: 'directory', label: directoryName || t("此目录") }, { value: 'recursive', label: (directoryName || t("此目录")) + t("及子目录") }] : []),
-      { value: 'instance', label: t("全部内容") }, { value: 'roots', label: t("仅入口清单") }
+      { value: 'instance', label: t("全部内容") }, { value: 'roots', label: t("仅更新顶层目录") }
     ]} /></Form.Item>
   </>;
   return <>

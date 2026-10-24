@@ -125,7 +125,7 @@ export default function Mounts({ api }: { api: Api }) {
         <Form.Item label={prerequisites.data?.kind === 'winfsp' ? t("盘符或挂载目录（可选）") : t("挂载目录")} name="mountPoint"
           extra={prerequisites.data?.kind === 'winfsp' ? t("留空时自动分配盘符。") : undefined}
           rules={prerequisites.data?.kind === 'winfsp' ? [] : [{ required: true, whitespace: true, message: t("请输入挂载目录") }]}>
-          <Input placeholder={prerequisites.data?.kind === 'winfsp' ? t("M:，或留空自动选择") : '/home/me/MusicFS'} />
+          <Input placeholder={prerequisites.data?.kind === 'winfsp' ? 'M:' : '/home/me/MusicFS'} />
         </Form.Item>
         <Collapse ghost items={[{ key: 'options', label: t("更多设置"), forceRender: true, children: <><Form.Item label={t("启动时自动挂载")} name="autoMount" valuePropName="checked"><Switch /></Form.Item><MountCacheFields /></> }]} />
         <Failure error={mount.error} />{mountError && <Alert className="feedback" type="error" showIcon title={messageText(mountError)} />}

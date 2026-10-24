@@ -62,7 +62,7 @@ export default function Plugins({ api, addSource, startInstalling, addAfterInsta
   } });
   const busy = !!operationId || remove.isPending;
   function install() { setContinueAdding(false); setInstalling(true); }
-  return <><div className="page-actions"><Typography.Text type="secondary">{t("为 MusicFS 接入更多音乐来源")}</Typography.Text><Button type="primary" disabled={busy} icon={<PlusOutlined aria-hidden="true" />} onClick={install}>{t("安装插件")}</Button></div>
+  return <><div className="page-actions plugin-actions"><Button type="primary" disabled={busy} icon={<PlusOutlined aria-hidden="true" />} onClick={install}>{t("安装插件")}</Button></div>
     {operationId && <Alert className="feedback" type="info" showIcon title={change.data ? changeLabels[change.data.status] : t("正在查询安装进度")} />}
     {changeError && <Alert className="feedback" type="error" showIcon title={t(changeError)} closable onClose={() => setChangeError('')} />}
     <Failure error={change.error} retry={() => void change.refetch()} /><Failure error={plugins.error} retry={() => void plugins.refetch()} /><Failure error={remove.error} />

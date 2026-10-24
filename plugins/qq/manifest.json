@@ -1,9 +1,9 @@
 {
   "formatVersion": 1,
   "id": "org.musicfs.qq",
-  "name": "QQ 音乐（开发预览）",
-  "nameTranslations": { "en": "QQ Music (preview)" },
-  "version": "0.1.0-alpha.20",
+  "name": "QQ 音乐",
+  "nameTranslations": { "en": "QQ Music" },
+  "version": "0.1.0-alpha.21",
   "apiRange": ">=0.1.12 <0.2.0",
   "hosts": {
     "desktop": "index.mjs",

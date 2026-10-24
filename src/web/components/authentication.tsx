@@ -52,7 +52,7 @@ export default function Authentication({ api, instance, close, done, needsReauth
       {step?.kind === 'waiting' && current && <Waiting api={api} instance={instance} session={current} paused={action.isPending} reload={() => void session.refetch()} />}
       {step?.kind === 'input' && current && <div className="auth-input"><Typography.Paragraph>{t(step.message)}</Typography.Paragraph>
         {current.error && !action.error && <Alert showIcon type="error" title={messageText(current.error)} />}
-        <ErrorBoundary key={step.challengeId} fallbackRender={() => <Alert type="error" showIcon title={t("无法显示此来源的授权表单，请重新开始或联系插件作者。")} />}><Suspense fallback={<Skeleton active />}>
+        <ErrorBoundary key={step.challengeId} fallbackRender={() => <Alert type="error" showIcon title={t("登录表单未能加载，请重试。")} />}><Suspense fallback={<Skeleton active />}>
           <SchemaForm configuration={step.configuration} value={{}} pending={action.isPending} error={action.error} submitLabel={t("提交授权信息")}
             onSubmit={input => action.mutate({ kind: 'submit', operationId: current.operationId, challengeId: step.challengeId, input })} />
         </Suspense></ErrorBoundary>
@@ -86,7 +86,7 @@ function Waiting({ api, instance, session, paused, reload }: { api: Api; instanc
   });
   if (step?.kind !== 'waiting') return null;
   return <div className="auth-waiting"><Typography.Paragraph>{t(step.message)}</Typography.Paragraph>
-    {step.qrImage ? <img className="auth-qr-image" src={step.qrImage} alt={t("来源授权二维码")} /> : step.qrCode && <ErrorBoundary fallbackRender={() => <Alert type="error" title={t("二维码暂时无法显示，请使用授权链接或重新开始。")} />}><QRCode value={step.qrCode} size={208} /></ErrorBoundary>}
+    {step.qrImage ? <img className="auth-qr-image" src={step.qrImage} alt={t("来源授权二维码")} /> : step.qrCode && <ErrorBoundary fallbackRender={() => <Alert type="error" title={t("二维码未能显示，请重新登录。")} />}><QRCode value={step.qrCode} size={208} /></ErrorBoundary>}
     {step.url && <Typography.Paragraph><a href={step.url} target="_blank" rel="noreferrer noopener">{t("在新窗口打开授权页面")}</a></Typography.Paragraph>}
     <Failure error={poll.error} retry={() => { if (poll.error instanceof ApiError && poll.error.status === 409) reload(); else void poll.refetch(); }} />
   </div>;

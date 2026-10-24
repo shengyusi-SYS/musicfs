@@ -42,7 +42,6 @@
     "网易云扫码授权不需要提交表单。": "NetEase QR authorization does not require a form.",
     "网易云二维码已过期，请重新开始。": "The NetEase QR code expired. Start again.",
     "网易云返回了无法识别的授权状态。": "NetEase returned an unrecognized authorization status.",
-    "网易云音乐（开发预览）": "NetEase Cloud Music (preview)",
     "网易云补标签文件引用无效。": "Invalid tagged NetEase file reference.",
     "网易云补标签需要支持插件资料缓存的宿主。": "NetEase tagging requires a host with plugin metadata caching.",
     "网易云补标签文件资料已丢失，请重新刷新目录。": "Tagged NetEase file metadata is missing. Refresh the folder.",
@@ -107,16 +106,12 @@
     "网易云未返回完整的音频资料区段。": "NetEase did not return the complete audio metadata range.",
     "网易云音频区段长度不一致。": "The NetEase audio range length is inconsistent.",
     "音乐资料缓存天数": "Metadata cache days",
-    "新获取的封面、歌词和补充音乐资料保留天数；0 表示长期保留。已有资料按原期限复用，可在目录菜单重新获取。缺失结果最多保留 30 天。": "Keep newly fetched covers, lyrics and extra metadata for this many days. 0 keeps them indefinitely. Existing data keeps its original expiry; refresh metadata from the folder menu. Missing results are cached for at most 30 days.",
     "单版本目标音质": "Single-version quality",
-    "只在单版本模式生效；多版本模式使用下方的多版本目标音质。": "Used in single-version mode only. Multiple-version mode uses the selection below.",
     "音频版本": "Audio versions",
-    "按当前账号提供的完整版本导出。当前适配支持 Hi-Res、无损、极高和标准；回退依此顺序向下查找，不使用试听，不切换账号或歌曲。": "Export full versions available to this account: Hi-Res, lossless, high and standard. Fallback tries lower qualities in that order, without previews or switching accounts or tracks.",
     "导出模式": "Export mode",
     "单版本": "Single version",
     "多版本": "Multiple versions",
     "多版本目标音质": "Multiple-version qualities",
-    "只在多版本模式生效。单版本模式使用上方的单版本目标音质。": "Used in multiple-version mode only. Single-version mode uses the quality above.",
     "目标音质缺失": "When target quality is missing",
     "隐藏缺失版本": "Hide unavailable versions",
     "自动回退到较低音质": "Fall back to a lower quality",
@@ -126,6 +121,9 @@
     "网易云歌单在准备期间已变化，请重新刷新。": "The NetEase playlist changed during preparation. Refresh again.",
     "网易云未返回完整歌曲详情。": "NetEase returned incomplete track details.",
     "网易云歌曲详情分页不完整。": "NetEase track detail pagination is incomplete.",
-    "无效的网易云文件引用。": "Invalid NetEase file reference."
+    "无效的网易云文件引用。": "Invalid NetEase file reference.",
+    "封面、歌词等资料的保留天数，0 表示长期保留。修改后用于新获取的资料，缺失结果最多保留 30 天。需要更新时可在目录菜单重新获取。": "Days to keep covers, lyrics and other music metadata; 0 keeps them indefinitely. Changes apply to newly fetched metadata. Missing results are cached for up to 30 days. Refetch metadata from the folder menu when needed.",
+    "单版本每首保留一个文件，多版本按所选音质分别显示。可用音质取决于当前账号，仅导出完整歌曲。": "Single version shows one file per song; multiple versions show separate files for the selected qualities. Available qualities depend on your account. Only full songs are exported.",
+    "所选音质不可用时，可隐藏该版本，或按 Hi-Res、无损、极高、标准的顺序向下尝试。": "When a selected quality is unavailable, hide it or try lower qualities in this order: Hi-Res, lossless, high, standard."
   }
 }

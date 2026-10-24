@@ -45,12 +45,12 @@ function NamingForm({ api, instanceId, directoryRef, settings, close }: {
   return <Form layout="vertical" onFinish={() => save.mutate()} className="file-naming-form">
     <Form.Item label={directoryRef === undefined ? t("来源默认命名") : t("此目录命名")}><Select aria-label={t("文件命名方式")} value={mode} onChange={setMode} options={[
       ...(directoryRef === undefined ? [] : [{ value: 'inherit', label: t("跟随来源设置") }]),
-      { value: 'original', label: t("插件原文件名") }, { value: 'template', label: t("自定义模板") }
+      { value: 'original', label: t("来源文件名") }, { value: 'template', label: t("自定义模板") }
     ]} /></Form.Item>
     {mode === 'template' && <><Form.Item label={t("文件名模板")} htmlFor={templateId} extra={t("扩展名自动追加。")} required>
       <Input.TextArea id={templateId} value={template.template} autoSize={{ minRows: 2, maxRows: 5 }} placeholder="{{title}} - {{artist}}" onChange={event => setTemplate(current => ({ ...current, template: event.target.value }))} />
     </Form.Item><div className="naming-field-picker"><span>{t("插入字段")}</span><Space wrap size={[6, 6]}>{fields.map(([field, fieldLabel]) => <Button key={field} size="small" onClick={() => insertField(field)}>{fieldLabel}</Button>)}</Space></div>
-      <Form.Item label={t("从示例开始")}><Select<string> aria-label={t("命名模板示例")} placeholder={t("选择后可继续编辑")} value={null} options={[
+      <Form.Item label={t("常用模板")}><Select<string> aria-label={t("选择常用模板")} placeholder={t("选择模板")} value={null} options={[
         { value: '{{title}} - {{artist}}', label: t("歌名 - 歌手"), fields: ['title', 'artist'] },
         { value: '{{originalName}}', label: t("原文件名"), fields: ['originalName'] },
         { value: '{{artist}} - {{title}} [{{quality}}]', label: t("歌手 - 歌名 [音质]"), fields: ['artist', 'title', 'quality'] },

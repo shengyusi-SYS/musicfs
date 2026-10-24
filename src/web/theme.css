@@ -21,6 +21,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .page-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; gap: 16px; }
 .page-heading h1.ant-typography { margin: 0; font-size: 30px; letter-spacing: -.7px; font-weight: 650; }
 .page-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; margin-bottom: 20px; }
+.plugin-actions { justify-content: flex-end; }
 .surface { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
 .surface > .ant-empty { padding: 48px 16px; }
 .secondary-id, .muted-note { color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }

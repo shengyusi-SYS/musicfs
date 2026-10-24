@@ -20,11 +20,11 @@ function CacheDuration({ value = 0, onChange, unit, id }: { value?: number; onCh
 }
 
 export function MountCacheFields() {
-  return <><Form.Item label={t("挂载目录缓存")} name="directoryCacheSeconds" extra={t("MusicFS 发布有变化的本机目录后会主动更新；远程目录也可手动刷新。")} rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483_647 }]}>
+  return <><Form.Item label={t("挂载目录缓存")} name="directoryCacheSeconds" extra={t("本机目录更新后会自动刷新；远程目录可手动刷新。")} rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483_647 }]}>
     <CacheDuration unit="seconds" />
-  </Form.Item><Form.Item label={t("读取缓存上限（MiB）")} name="fileCacheMaxMiB" extra={t("0：关闭缓存。8192 MiB = 8 GiB。")} rules={[{ required: true, type: 'integer', min: 0, max: 1_048_576 }]}>
+  </Form.Item><Form.Item label={t("读取缓存上限（MiB）")} name="fileCacheMaxMiB" extra={t("0 表示关闭缓存，1024 MiB = 1 GiB。")} rules={[{ required: true, type: 'integer', min: 0, max: 1_048_576 }]}>
     <InputNumber min={0} max={1_048_576} precision={0} style={{ width: '100%' }} />
-  </Form.Item><Form.Item label={t("未使用音频缓存保留时间")} name="fileCacheMaxAgeHours" rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483 }]}>
+  </Form.Item><Form.Item label={t("闲置缓存保留时间")} name="fileCacheMaxAgeHours" rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483 }]}>
     <CacheDuration unit="hours" />
   </Form.Item></>;
 }
@@ -48,12 +48,12 @@ export function SharedReadCacheDialog({ api, onClose }: { api: Api; onClose: () 
   const clear = useMutation({ mutationFn: () => api.clearDesktopReadCache(), onSuccess: value => { update(value); message.success(t("缓存已清理")); } });
   const changing = configure.isPending || clear.isPending; const value = status.data;
   return <Modal title={t("WebDAV 读取缓存")} open onCancel={onClose} footer={null} destroyOnHidden>
-    <Typography.Paragraph type="secondary">{t("供直接连接本机 WebDAV 的播放器使用。")}</Typography.Paragraph>
+    <Typography.Paragraph type="secondary">{t("用于 WebDAV 播放和扫描；磁盘挂载的缓存单独设置。")}</Typography.Paragraph>
     <Failure error={status.error} retry={() => void status.refetch()} />
     {value && <><CacheSummary value={value} />
       <Form form={form} layout="vertical" initialValues={value.settings} onFinish={settings => configure.mutate(settings)}>
-        <Form.Item label={t("缓存上限（MiB）")} name="maxMiB" extra={t("0：关闭缓存。16384 MiB = 16 GiB。")} rules={[{ required: true, type: 'integer', min: 0, max: 1_048_576 }]}><InputNumber min={0} max={1_048_576} precision={0} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item label={t("未使用音频缓存保留时间")} name="maxAgeHours" rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483 }]}><CacheDuration unit="hours" /></Form.Item>
+        <Form.Item label={t("缓存上限（MiB）")} name="maxMiB" extra={t("0 表示关闭缓存，1024 MiB = 1 GiB。")} rules={[{ required: true, type: 'integer', min: 0, max: 1_048_576 }]}><InputNumber min={0} max={1_048_576} precision={0} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item label={t("闲置缓存保留时间")} name="maxAgeHours" rules={[{ required: true, type: 'integer', min: 0, max: 2_147_483 }]}><CacheDuration unit="hours" /></Form.Item>
         <Failure error={configure.error} /><Failure error={clear.error} />
         <div className="dialog-actions"><Space><Button danger disabled={changing} loading={clear.isPending} onClick={() => clear.mutate()}>{t("清理缓存")}</Button><Button loading={status.isFetching} disabled={changing} onClick={() => void status.refetch()}>{t("刷新统计")}</Button></Space>
           <Button type="primary" htmlType="submit" loading={configure.isPending} disabled={changing}>{t("保存")}</Button></div>

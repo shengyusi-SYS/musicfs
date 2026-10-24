@@ -5,13 +5,13 @@
   "properties": {
     "label": { "type": "string", "title": "目录名称", "minLength": 1, "maxLength": 80, "default": "QQ 音乐" },
     "metadataCacheDays": { "type": "integer", "title": "音乐资料缓存天数", "minimum": 0, "default": 365,
-      "description": "新获取的封面、歌词和补充音乐资料保留天数；0 表示长期保留。已有资料按原期限复用，可在目录菜单重新获取。缺失结果最多保留 30 天。" },
+      "description": "封面、歌词等资料的保留天数，0 表示长期保留。修改后用于新获取的资料，缺失结果最多保留 30 天。需要更新时可在目录菜单重新获取。" },
     "channel": { "type": "string", "title": "授权方式", "default": "qq", "oneOf": [
       { "const": "qq", "title": "手机 QQ 扫码" }, { "const": "wechat", "title": "微信扫码" }
     ] },
     "audio": {
       "type": "object", "title": "音频版本", "additionalProperties": false,
-      "description": "按当前账号可取得的完整音频导出。FLAC 与 APE 是同级无损格式；回退时均依次尝试 320k MP3、128k MP3、M4A，不以试听替代。",
+      "description": "单版本每首保留一个文件，多版本按所选音质分别显示。可用音质取决于当前账号，仅导出完整歌曲。",
       "default": { "mode": "single", "qualities": ["128"], "missingQuality": "hide" },
       "required": ["mode", "qualities", "missingQuality"],
       "properties": {
@@ -22,7 +22,7 @@
           { "const": "flac", "title": "FLAC 无损" }, { "const": "ape", "title": "APE 无损" },
           { "const": "320", "title": "MP3 320k" }, { "const": "128", "title": "MP3 128k" }, { "const": "m4a", "title": "M4A 普通" }
         ] } },
-        "missingQuality": { "type": "string", "title": "目标音质缺失", "default": "hide", "oneOf": [
+        "missingQuality": { "type": "string", "title": "目标音质缺失", "description": "FLAC 与 APE 同为无损；回退时依次尝试 MP3 320k、MP3 128k、M4A。", "default": "hide", "oneOf": [
           { "const": "hide", "title": "隐藏缺失版本" }, { "const": "fallback", "title": "自动回退到较低音质" }
         ] }
       },

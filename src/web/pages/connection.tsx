@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { useState } from 'react';
-import { Button, Collapse, Divider, Skeleton, Tabs, Typography } from 'antd';
+import { Button, Collapse, Divider, Skeleton, Tabs } from 'antd';
 import { DesktopOutlined, LinkOutlined, SettingOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { Api } from '../api';
@@ -25,7 +25,7 @@ function DavConnection({ api, desktop }: { api: Api; desktop: boolean }) {
   const connection = useQuery({ queryKey: ['connection'], queryFn: ({ signal }) => api.connection(signal) });
   const prerequisites = useQuery({ queryKey: ['mount-prerequisites'], queryFn: ({ signal }) => api.mountPrerequisites(signal), enabled: desktop });
   const value = connection.data;
-  return <><section className="surface connection-card"><div className="section-heading"><Typography.Title level={3}>{t("填入播放器，就能开始听")}</Typography.Title></div>
+  return <><section className="surface connection-card">
     {desktop && <><DesktopNetwork api={api} scope="dav" /><Divider /></>}
     <Failure error={connection.error} retry={() => void connection.refetch()} />{connection.isPending ? <Skeleton active /> : value && <>
       <DavConnectionDetails api={api} value={value} desktop={desktop} />

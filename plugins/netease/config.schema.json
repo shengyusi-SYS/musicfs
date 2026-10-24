@@ -5,10 +5,9 @@
   "properties": {
     "label": { "type": "string", "title": "目录名称", "minLength": 1, "maxLength": 80, "default": "网易云音乐" },
     "metadataCacheDays": { "type": "integer", "title": "音乐资料缓存天数", "minimum": 0, "default": 365,
-      "description": "新获取的封面、歌词和补充音乐资料保留天数；0 表示长期保留。已有资料按原期限复用，可在目录菜单重新获取。缺失结果最多保留 30 天。" },
+      "description": "封面、歌词等资料的保留天数，0 表示长期保留。修改后用于新获取的资料，缺失结果最多保留 30 天。需要更新时可在目录菜单重新获取。" },
     "quality": {
       "type": "string", "title": "单版本目标音质", "default": "standard",
-      "description": "只在单版本模式生效；多版本模式使用下方的多版本目标音质。",
       "oneOf": [
         { "const": "hires", "title": "Hi-Res" }, { "const": "lossless", "title": "无损" },
         { "const": "exhigh", "title": "极高" }, { "const": "standard", "title": "标准" }
@@ -16,18 +15,18 @@
     },
     "audio": {
       "type": "object", "title": "音频版本", "additionalProperties": false,
-      "description": "按当前账号提供的完整版本导出。当前适配支持 Hi-Res、无损、极高和标准；回退依此顺序向下查找，不使用试听，不切换账号或歌曲。",
+      "description": "单版本每首保留一个文件，多版本按所选音质分别显示。可用音质取决于当前账号，仅导出完整歌曲。",
       "default": { "mode": "single", "qualities": ["standard"], "missingQuality": "hide" },
       "required": ["mode", "qualities", "missingQuality"],
       "properties": {
         "mode": { "type": "string", "title": "导出模式", "default": "single", "oneOf": [
           { "const": "single", "title": "单版本" }, { "const": "multiple", "title": "多版本" }
         ] },
-        "qualities": { "type": "array", "title": "多版本目标音质", "description": "只在多版本模式生效。单版本模式使用上方的单版本目标音质。", "minItems": 1, "maxItems": 4, "uniqueItems": true, "default": ["standard"], "items": { "type": "string", "oneOf": [
+        "qualities": { "type": "array", "title": "多版本目标音质", "minItems": 1, "maxItems": 4, "uniqueItems": true, "default": ["standard"], "items": { "type": "string", "oneOf": [
           { "const": "hires", "title": "Hi-Res" }, { "const": "lossless", "title": "无损" },
           { "const": "exhigh", "title": "极高" }, { "const": "standard", "title": "标准" }
         ] } },
-        "missingQuality": { "type": "string", "title": "目标音质缺失", "default": "hide", "oneOf": [
+        "missingQuality": { "type": "string", "title": "目标音质缺失", "description": "所选音质不可用时，可隐藏该版本，或按 Hi-Res、无损、极高、标准的顺序向下尝试。", "default": "hide", "oneOf": [
           { "const": "hide", "title": "隐藏缺失版本" }, { "const": "fallback", "title": "自动回退到较低音质" }
         ] }
       }

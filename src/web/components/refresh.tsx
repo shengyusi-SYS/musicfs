@@ -121,14 +121,14 @@ export function RefreshProgress({ operation, labels, reload, reauthorize }: {
   const progress = value?.current?.progress;
   const waitingTitle = value?.error?.sourceFault?.kind === 'temporary'
     ? t("来源暂时请求失败，稍后从当前进度继续") : t("来源限流，等待后自动继续");
-  const title = !value ? t("正在读取准备状态") : waiting ? waitingTitle
-    : updatingMetadata ? value.status === 'queued' ? t("音乐资料已加入更新队列")
+  const title = !value ? t("正在读取更新进度") : waiting ? waitingTitle
+    : updatingMetadata ? value.status === 'queued' ? t("等待更新音乐资料")
       : value.status === 'running' ? t("正在重新获取音乐资料")
       : value.status === 'completed' ? t("音乐资料已更新")
       : value.status === 'cancelled' ? t("资料更新已取消")
       : value.status === 'superseded' ? t("资料更新已被较新的操作替代")
       : t("音乐资料更新失败，已保留上次成功内容")
-    : value.status === 'queued' ? preparingFiles ? t("文件已加入准备队列") : t("目录清单已加入准备队列")
+    : value.status === 'queued' ? preparingFiles ? t("等待准备文件") : t("等待更新目录")
     : value.status === 'running' ? preparingFiles ? t("正在准备文件") : t("正在更新目录清单")
     : value.status === 'completed' ? preparingFiles ? (value.failures.length ? t("文件准备完成，部分目录仍需重试") : t("文件已准备"))
       : value.failures.length ? t("清单更新完成，部分目录保留上次内容") : t("清单已更新")

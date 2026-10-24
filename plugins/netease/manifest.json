@@ -1,9 +1,9 @@
 {
   "formatVersion": 1,
   "id": "org.musicfs.netease",
-  "name": "网易云音乐（开发预览）",
-  "nameTranslations": { "en": "NetEase Cloud Music (preview)" },
-  "version": "0.1.0-alpha.21",
+  "name": "网易云音乐",
+  "nameTranslations": { "en": "NetEase Cloud Music" },
+  "version": "0.1.0-alpha.22",
   "apiRange": ">=0.1.12 <0.2.0",
   "hosts": {
     "desktop": "index.mjs",

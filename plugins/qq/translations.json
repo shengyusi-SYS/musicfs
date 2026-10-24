@@ -21,7 +21,6 @@
     "合并重复版本": "Duplicate versions merged",
     "配置无效": "Invalid configuration",
     "音乐资料缓存天数": "Metadata cache days",
-    "新获取的封面、歌词和补充音乐资料保留天数；0 表示长期保留。已有资料按原期限复用，可在目录菜单重新获取。缺失结果最多保留 30 天。": "Keep newly fetched covers, lyrics and extra metadata for this many days. 0 keeps them indefinitely. Existing data keeps its original expiry; refresh metadata from the folder menu. Missing results are cached for at most 30 days.",
     "音频版本": "Audio versions",
     "导出模式": "Export mode",
     "单版本": "Single version",
@@ -66,7 +65,6 @@
     "QQ 返回了无法识别的授权状态。": "QQ returned an unrecognized authorization status.",
     "请使用微信扫描二维码。": "Scan with WeChat.",
     "请使用手机 QQ 扫描二维码。": "Scan with mobile QQ.",
-    "QQ 音乐（开发预览）": "QQ Music (preview)",
     "QQ 补标签文件引用无效。": "Invalid tagged QQ file reference.",
     "QQ 补标签文件资料已丢失，请重新刷新目录。": "Tagged QQ file metadata is missing. Refresh the folder.",
     "QQ 补标签文件版本已变化，请刷新目录。": "The tagged QQ file version changed. Refresh the folder.",
@@ -112,7 +110,6 @@
     "授权方式": "Authorization method",
     "手机 QQ 扫码": "Scan with mobile QQ",
     "微信扫码": "Scan with WeChat",
-    "按当前账号可取得的完整音频导出。FLAC 与 APE 是同级无损格式；回退时均依次尝试 320k MP3、128k MP3、M4A，不以试听替代。": "Export full audio available to this account. FLAC and APE are equivalent lossless formats. Fallback tries MP3 320k, MP3 128k, then M4A, without using previews.",
     "目标音质": "Target quality",
     "FLAC 无损": "FLAC lossless",
     "APE 无损": "APE lossless",
@@ -133,6 +130,9 @@
     "QQ 音频地址没有按请求返回范围。": "The QQ audio URL did not return the requested range.",
     "QQ 音频未提供可核对的完整文件信息。": "QQ audio did not provide verifiable full-file information.",
     "QQ 音频地址暂时无法连接，请稍后重试。": "Could not connect to the QQ audio URL. Try again shortly.",
-    "QQ 音频的完整文件信息暂时无法确认。": "Could not verify complete QQ audio file details right now."
+    "QQ 音频的完整文件信息暂时无法确认。": "Could not verify complete QQ audio file details right now.",
+    "封面、歌词等资料的保留天数，0 表示长期保留。修改后用于新获取的资料，缺失结果最多保留 30 天。需要更新时可在目录菜单重新获取。": "Days to keep covers, lyrics and other music metadata; 0 keeps them indefinitely. Changes apply to newly fetched metadata. Missing results are cached for up to 30 days. Refetch metadata from the folder menu when needed.",
+    "单版本每首保留一个文件，多版本按所选音质分别显示。可用音质取决于当前账号，仅导出完整歌曲。": "Single version shows one file per song; multiple versions show separate files for the selected qualities. Available qualities depend on your account. Only full songs are exported.",
+    "FLAC 与 APE 同为无损；回退时依次尝试 MP3 320k、MP3 128k、M4A。": "FLAC and APE are both lossless. Fallback tries MP3 320k, MP3 128k, then M4A."
   }
 }
