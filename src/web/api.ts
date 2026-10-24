@@ -11,6 +11,7 @@ import type { RefreshPolicy, UpdateRule, UpdateRuleInput } from '../contracts/re
 import type { ReadCacheSettings, ReadCacheStatus } from '../contracts/read-cache';
 import type { ManagementAccess, ManagementTicket } from '../contracts/management-auth';
 import type { DavCredentials } from '../contracts/dav-access';
+import type { DesktopDiagnosticsView, DiagnosticSettings } from '../contracts/diagnostics';
 import type { FileNamingPolicy, FileNamingPreview, FileNamingSettings } from '../contracts/file-naming';
 
 export class ApiError extends Error {
@@ -48,7 +49,7 @@ export type AccessView = ManagementAccess;
 export type AccessTicket = ManagementTicket;
 
 export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthorized?: () => void) {
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  async function request<T>(path: string, init: RequestInit = {}, decode?: (response: Response) => Promise<T>): Promise<T> {
     const headers = new Headers(init.headers);
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const response = await fetcher(`/api${path}`, { ...init, headers, cache: 'no-store', credentials: 'same-origin' });
@@ -57,7 +58,7 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
       const detail: unknown = await response.json().catch(() => null);
       throw new ApiError(response.status, detail, response.headers.get('X-MusicFS-Request-ID'));
     }
-    return response.status === 204 ? undefined as T : response.json() as Promise<T>;
+    return response.status === 204 ? undefined as T : decode ? decode(response) : response.json() as Promise<T>;
   }
   const json = (method: string, value: unknown): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
   return {
@@ -103,6 +104,9 @@ export function createApi(token = '', fetcher: typeof fetch = fetch, onUnauthori
     desktopNetwork: (signal: AbortSignal) => request<DesktopNetworkView>('/desktop/network', { signal }),
     saveDesktopNetwork: (settings: Partial<DesktopNetworkSettings>) => request<DesktopNetworkView>('/desktop/network', json('PATCH', settings)),
     desktopPreferences: (signal?: AbortSignal) => request<DesktopPreferencesView>('/desktop/preferences', signal ? { signal } : {}),
+    diagnostics: () => request<DesktopDiagnosticsView>('/desktop/diagnostics'),
+    saveDiagnostics: (settings: DiagnosticSettings) => request<DesktopDiagnosticsView>('/desktop/diagnostics', json('PUT', settings)),
+    downloadDiagnostics: () => request<Blob>('/desktop/diagnostics/download', {}, response => response.blob()),
     saveDesktopPreferences: (settings: DesktopPreferences) => request<DesktopPreferencesView>('/desktop/preferences', json('PUT', settings)),
     configuration: async (id: string, signal: AbortSignal) => {
       const value = await request<SourceConfiguration>(`/plugins/${encodeURIComponent(id)}/configuration`, { signal });

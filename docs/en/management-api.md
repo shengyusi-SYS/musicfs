@@ -96,3 +96,15 @@ Desktop network fields are `managementAccess/managementPort/davAccess/davPort`; 
 Malformed input returns 400; plugin config/authentication failures use 422 and structured fields; conflicts use 409. Source faults keep their specific kind and optional display translation. Private state candidates never reach the browser. Management responses use `Cache-Control: no-store`.
 
 The read-only `/dav/` surface implements OPTIONS, Depth 0/1 PROPFIND, GET and HEAD with exact range/conditional handling. The [plugin contract](plugin-interface.md) explains byte identity, deferred attributes and stream behavior. Desktop-only APIs are not available in Worker or the minimal development service.
+
+## Desktop diagnostics
+
+These desktop-only endpoints use the same administrator session or Bearer authentication:
+
+| Method and path | Purpose |
+|---|---|
+| `GET /api/desktop/diagnostics` | Active settings, version, start time, file output and native-service capability |
+| `PUT /api/desktop/diagnostics` | Save `{level, nativeLevel}` and update live logging without restarting the backend or mounts |
+| `GET /api/desktop/diagnostics/download` | Download logs and a runtime summary as a ZIP |
+
+Application levels follow LogTape. Native levels are `ERROR`, `NOTICE`, `INFO`, `DEBUG`. Worker uses Cloudflare runtime variables; see [logging](logging.md).

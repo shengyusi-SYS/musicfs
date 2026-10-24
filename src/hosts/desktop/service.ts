@@ -22,10 +22,12 @@ import { createDesktopDavAccess } from './dav-access';
 import { getLogger } from '@logtape/logtape';
 import { errorFields } from '../../infrastructure/logging';
 import { observeFetch, observeSources } from '../../infrastructure/io-diagnostics';
+import { createDesktopDiagnosticsHttp } from './diagnostics-http';
+import type { DesktopLogging } from './logging';
 
 const logger = getLogger(['musicfs', 'mounts']);
 
-export async function createDesktopService(input: { directory: string; adminToken: string; instanceId?: string; dav: ReadCredentials; webRoot?: string; mounts?: MountManager; mountAction?: (id: string) => void; readCache?: { control: RcloneControl; controlDirectory: string } }) {
+export async function createDesktopService(input: { directory: string; adminToken: string; instanceId?: string; dav: ReadCredentials; webRoot?: string; logging?: DesktopLogging; mounts?: MountManager; mountAction?: (id: string) => void; readCache?: { control: RcloneControl; controlDirectory: string } }) {
   await mkdir(input.directory, { recursive: true, mode: 0o700 });
   const davAccess = await createDesktopDavAccess(input.directory, input.dav);
   const database = openSqlite(join(input.directory, 'state.sqlite'));
@@ -98,7 +100,18 @@ export async function createDesktopService(input: { directory: string; adminToke
   const background = createDesktopRunner(async signal => {
     const changed = await changes.stepNext(signal);
     if (changed) return true;
-    return Boolean(await library.schedules.stepNext(signal) || await library.refreshes.stepNext(signal));
+    const refresh = await library.schedules.stepNext(signal) || await library.refreshes.stepNext(signal);
+    if (refresh) {
+      const failure = refresh.error ?? refresh.failures[0]?.error;
+      const fields = { operationId: refresh.operationId, instanceId: refresh.instanceId, status: refresh.status,
+        pages: refresh.current?.pages, failures: refresh.failures.length, retryAt: refresh.retryAt,
+        ...(failure ? { errorCode: failure.code, sourceFaultKind: failure.sourceFault?.kind } : {}) };
+      const progress = getLogger(['musicfs', 'io', 'refresh']);
+      if (refresh.status === 'failed' || refresh.failures.length) progress.warning('Refresh contains failures', fields);
+      else if (refresh.status === 'completed') progress.info('Refresh completed', fields);
+      else progress.debug('Refresh checkpoint', fields);
+    }
+    return Boolean(refresh);
   }, async () => {
     const instants = [store.nextBackgroundWorkAt(), await library.schedules.nextAt()].filter((value): value is number => value !== null);
     return instants.length ? Math.min(...instants) : null;
@@ -108,6 +121,7 @@ export async function createDesktopService(input: { directory: string; adminToke
     ...input.readCache, view: library.files, current: file => sources.current(file.handle.stamp) }) : undefined;
   const app = new Hono();
   app.route('/', access.app);
+  if (input.logging) app.route('/', createDesktopDiagnosticsHttp({ logging: input.logging, adminToken: input.adminToken, managementAuth: access.middleware }));
   app.route('/', createManagementApi({ host: 'desktop', adminToken: input.adminToken, managementAuth: access.middleware, sources, library, extensions,
     davAccess,
     ...(input.mounts ? { mounts: input.mounts } : {}),

@@ -127,7 +127,8 @@ export async function startDesktopBackground(input: { directory?: string; resour
   const runtimePath = join(directory, 'runtime.json');
   let closeLogging: (() => void) | undefined;
   try {
-    closeLogging = await configureDesktopLogging(directory);
+    const logging = await configureDesktopLogging(directory);
+    closeLogging = () => logging.close();
     const credentialsPath = join(directory, 'credentials.json');
     let credentials: DesktopCredentials;
     try { credentials = credentialsSchema.parse(JSON.parse(await readFile(credentialsPath, 'utf8'))); }
@@ -156,13 +157,14 @@ export async function startDesktopBackground(input: { directory?: string; resour
     const prerequisites = createMountPrerequisites({ resourcesDirectory: resources });
     const controlDirectory = join(directory, 'mounts');
     const binary = join(resources, process.platform === 'win32' ? 'rclone.exe' : 'rclone');
-    const control = createRcloneControl({ directory: controlDirectory, binary });
+    const control = createRcloneControl({ directory: controlDirectory, binary, logLevel: logging.inspect().settings.nativeLevel });
+    logging.attachNative(level => control.configureLogging!(level));
     const mounts = await createMountManager({ control, manageControl: false, directory: controlDirectory, binary,
       localConnection: () => service?.readCache?.mountConnection ?? ({ url: `${davOrigin}/dav/`, ...(service?.davAccess.get() ?? { username: credentials.username, password: credentials.password }) }),
       ...(process.platform === 'win32' ? { checkDependencies: () => prerequisites.check() } : {}) });
     restore = createMountRestore({ mounts, settings: { enabled: preferences.autoMount, retry: preferences.retryAutoMount },
       onError: error => getLogger(['musicfs', 'mounts']).warning('Saved mount restoration failed', errorFields(error)) });
-    service = await createDesktopService({ directory, adminToken: credentials.adminToken, instanceId: credentials.instanceId,
+    service = await createDesktopService({ directory, adminToken: credentials.adminToken, instanceId: credentials.instanceId, logging,
       mountAction: id => restore!.cancel(id),
       dav: { username: credentials.username, password: credentials.password }, webRoot: join(resources, 'web'), mounts, readCache: { control, controlDirectory } });
     const app = new Hono();

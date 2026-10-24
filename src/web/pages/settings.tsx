@@ -6,6 +6,7 @@ import type { Api } from '../api';
 import DesktopNetwork from '../components/desktop-network';
 import { Failure } from '../components/feedback';
 import { UpdateRules } from '../components/update-rules';
+import DesktopDiagnostics from '../components/desktop-diagnostics';
 
 export default function Settings({ api, desktop }: { api: Api; desktop: boolean }) {
   const client = useQueryClient(); const { message } = App.useApp();
@@ -20,7 +21,7 @@ export default function Settings({ api, desktop }: { api: Api; desktop: boolean 
       <Form.Item label={access.data?.passwordConfigured ? t("新密码") : t("密码")} name="password" rules={[{ required: true, message: t("请输入密码") }, { min: 8, max: 128, message: t("密码须为 8—128 个字符") }]}><Input.Password autoComplete="new-password" /></Form.Item>
       <Failure error={account.error} /><Button type="primary" htmlType="submit" loading={account.isPending}>{access.data?.passwordConfigured ? t("保存账号与密码") : t("设置登录账号")}</Button>
     </Form>}
-  </section>{desktop && <><DesktopStartup api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("管理页面访问")}</Typography.Title></div><DesktopNetwork api={api} scope="management" /></section></>}<UpdateRules api={api} /></div>;
+  </section>{desktop && <><DesktopStartup api={api} /><section className="surface"><div className="section-heading"><Typography.Title level={3}>{t("管理页面访问")}</Typography.Title></div><DesktopNetwork api={api} scope="management" /></section><DesktopDiagnostics api={api} /></>}<UpdateRules api={api} /></div>;
 }
 
 function DesktopStartup({ api }: { api: Api }) {

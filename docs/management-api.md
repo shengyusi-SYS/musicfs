@@ -98,3 +98,15 @@
 配置声明响应可带插件的可选 `statistics` 标签映射。目录状态返回当前来源戳下的最近成功时间、计数与该目录最近失败代码，不暴露来源戳、私有状态或文件引用。旧快照没有计数时statistics为null；失败刷新保留原内容与计数，并持续显示失败标记，直到该目录成功刷新。其他目录成功或重开页面不清除此标记。界面更新配置、安装/移除插件及刷新后使相关查询失效；计数的每页语义见[插件合同](architecture/plugin-interface.md#稳定身份分页与目录)。
 
 `/dav` 和 `/dav/*` 统一提供 OPTIONS、Depth 0/1 PROPFIND、GET/HEAD；单范围、条件验证器及不支持范围的行为见 [ADR 0004](adr/0004-shared-fetch-readonly-dav.md)。实际用户旅程验证见[P0 记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p0-library-dav.md)。
+
+## 桌面日志
+
+这些接口使用同一管理员会话或 Bearer，保持仅桌面可用：
+
+| 方法与路径 | 用途 |
+|---|---|
+| `GET /api/desktop/diagnostics` | 当前日志设置、版本、启动时间、文件输出及原生服务能力 |
+| `PUT /api/desktop/diagnostics` | 保存 `{level, nativeLevel}` 并更新运行中的日志；不重启后台或挂载 |
+| `GET /api/desktop/diagnostics/download` | 下载含日志和运行摘要的 ZIP |
+
+应用级别沿用 LogTape；原生级别为 `ERROR`、`NOTICE`、`INFO`、`DEBUG`。Worker 通过 Cloudflare 运行变量选择级别，见[日志说明](architecture/logging.md)。

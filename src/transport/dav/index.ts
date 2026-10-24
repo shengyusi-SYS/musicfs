@@ -7,7 +7,7 @@ import { LibraryError, PendingRefreshError, type FileView } from '../../core/lib
 import { SourceError } from '../../core/sources';
 import { needsFileMetadata, parsePropfind, propfindResponse } from './xml';
 import type { DavCredentials } from '../../contracts/dav-access';
-import { reportRequestFailure, reportSourceFailure, requestDiagnostics } from '../diagnostics';
+import { reportPendingRead, reportRequestFailure, reportSourceFailure, requestDiagnostics } from '../diagnostics';
 import { observeAudio } from '../../infrastructure/io-diagnostics';
 
 export type ReadCredentials = DavCredentials;
@@ -44,9 +44,13 @@ export function createDav(view: FileView, credentials: ReadCredentials | (() => 
     : basicAuth(credentials);
   const limit = bodyLimit({ maxSize: 64 * 1024 });
   app.onError((error, c) => {
-    if (error instanceof HTTPException) return error.getResponse();
+    if (error instanceof HTTPException) {
+      if (error.status >= 500) reportSourceFailure(c, error, error.status);
+      return error.getResponse();
+    }
     if (error instanceof PendingRefreshError) {
       c.header('Retry-After', '2'); c.header('X-MusicFS-Refresh', error.operationId);
+      reportPendingRead(c, error);
     }
     if (davStatus(error) === 500) reportRequestFailure(c, error);
     else if (!(error instanceof PendingRefreshError) && davStatus(error) >= 500) reportSourceFailure(c, error, davStatus(error));
@@ -57,15 +61,18 @@ export function createDav(view: FileView, credentials: ReadCredentials | (() => 
     if (method === 'OPTIONS') return new Response(null, { headers: { Allow: allow, DAV: '1', 'Content-Length': '0' } });
     if (!['GET', 'HEAD', 'PROPFIND'].includes(method)) return new Response(null, { status: 405, headers: { Allow: allow } });
     const signal = c.req.raw.signal; const path = logicalPath(c.req.url);
+    c.set('ioStage', 'stat');
     const description = await view.stat(path, signal);
     if (method === 'PROPFIND') {
       const depth = c.req.header('Depth') ?? 'infinity';
       if (depth === 'infinity') return new Response('<D:error xmlns:D="DAV:"><D:propfind-finite-depth/></D:error>', { status: 403, headers: { 'Content-Type': 'application/xml; charset=utf-8' } });
       if (depth !== '0' && depth !== '1') throw new HTTPException(400, { message: 'Depth must be 0 or 1' });
       const request = parsePropfind(await c.req.text());
+      c.set('ioStage', 'list');
       const entries = description.kind === 'directory' && depth === '1' ? await view.list(path, signal) : [];
       // A deferred bulk preparation belongs to the whole request (503 + retry
       // headers), not a misleading successful XML list of unavailable files.
+      c.set('ioStage', 'statMany');
       let descriptions = entries.length && needsFileMetadata(request) ? await view.statMany(entries, signal) : undefined;
       const xml = await propfindResponse(description, entries, request, async entry => {
         const values = descriptions ??= await view.statMany(entries, signal);
@@ -102,8 +109,10 @@ export function createDav(view: FileView, credentials: ReadCredentials | (() => 
     headers.set('Content-Length', String(length));
     if (range) headers.set('Content-Range', `bytes ${range.start}-${range.end}/${content.size}`);
     if (method === 'HEAD') return new Response(null, { headers });
+    c.set('ioStage', 'open');
     const result = await view.open(description, range, signal);
-    let body = observeAudio(result.body, { requestId: c.get('requestId'), expectedBytes: length, ranged: !!range }, signal);
+    let body = observeAudio(result.body, { requestId: c.get('requestId'), expectedBytes: length, ranged: !!range,
+      contentId: description.etag, rangeStart: range?.start ?? 0, rangeEnd: range?.end ?? content.size - 1 }, signal);
     if (options.fixedLength) {
       const fixed = options.fixedLength(length);
       // pipeTo propagates cancellation and errors to both ends; the response owns the pipeline lifetime.

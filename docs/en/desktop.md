@@ -80,3 +80,5 @@ Quit normally and copy the entire data directory to back up accounts, plugins, f
 | Mount reads fail | Inspect `mounts/rclone.log` in the data directory |
 
 When reporting a problem, include MusicFS and plugin versions, system, connection method, steps and the relevant error.
+
+Use **Settings → Logs and diagnostics** to change application or mount logging immediately and download a diagnostic ZIP. See [IO diagnostics](logging.md).

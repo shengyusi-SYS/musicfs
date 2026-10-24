@@ -79,6 +79,6 @@ Windows 双击托盘图标打开页面，右键可打开手机访问或退出 Mu
 | 挂载读取异常 | 查看数据目录的 `mounts/rclone.log` |
 | WebDAV 或后台读取异常 | 查看 `logs/musicfs.log`，有错误编号时可对应查询 |
 
-普通读取默认不写日志；需要排查耗时时可临时开启 debug，见[IO 诊断](architecture/logging.md)。
+在「设置 → 日志与诊断」选择「详细」，复现后下载日志。应用与挂载日志分别配置，立即生效，无需重启；普通读取默认不逐次记录。详见[IO 诊断](architecture/logging.md)。
 
 反馈问题时附 MusicFS 与插件版本、系统、使用方式、出错步骤和对应错误信息即可。

@@ -1,6 +1,8 @@
 import { t } from './locale';
-import { withContext } from '@logtape/logtape';
+import { getLogger, withContext } from '@logtape/logtape';
 import { observeFetch } from '../../infrastructure/io-diagnostics';
+import { errorFields } from '../../infrastructure/logging';
+import type { NativeLogLevel } from '../../contracts/diagnostics';
 
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -20,6 +22,7 @@ export interface RcloneControl {
   call<T = Record<string, unknown>>(method: string, parameters?: Record<string, unknown>): Promise<T>;
   removeRemote(name: string): Promise<void>;
   close(): Promise<void>;
+  configureLogging?(level: NativeLogLevel): Promise<void>;
 }
 
 const runtimeSchema = z.object({ pid: z.number().int().positive(), port: z.number().int().min(1).max(65535), password: z.string().min(32) }).strict();
@@ -39,7 +42,8 @@ export async function writePrivateJson(path: string, value: unknown) {
 }
 
 /** One private, authenticated rclone RC process; all filesystem work stays in rclone. */
-export function createRcloneControl(input: { directory: string; binary: string; startupTimeoutMs?: number }): RcloneControl {
+export function createRcloneControl(input: { directory: string; binary: string; startupTimeoutMs?: number; logLevel?: NativeLogLevel }): RcloneControl {
+  let logLevel = input.logLevel ?? 'ERROR';
   let runtime: Runtime | undefined;
   let child: ReturnType<typeof Bun.spawn> | undefined;
   let starting: Promise<Runtime> | undefined;
@@ -82,7 +86,11 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       if (saved) {
         try {
           const identity = await request<{ pid: number }>(saved, 'core/pid', {}, 1_000);
-          if (identity.pid === saved.pid) return runtime = saved;
+          if (identity.pid === saved.pid) {
+            await request(saved, 'options/set', { main: { LogLevel: logLevel } }, 1_000).catch(error =>
+              getLogger(['musicfs', 'io', 'rclone']).warning('Native log level not applied', errorFields(error)));
+            return runtime = saved;
+          }
         } catch { /* Probe the recorded process without signalling or replacing it. */ }
         let alive = true;
         try { process.kill(saved.pid, 0); }
@@ -100,7 +108,7 @@ export function createRcloneControl(input: { directory: string; binary: string; 
       if (!await Bun.file(configPath).exists()) await writeFile(configPath, '', { mode: 0o600 });
       if (!await Bun.file(logPath).exists()) await writeFile(logPath, '', { mode: 0o600 });
       child = Bun.spawn([input.binary, 'rcd', '--rc-addr', `127.0.0.1:${port}`, '--config', configPath,
-        '--cache-dir', join(input.directory, 'cache'), '--log-file', logPath, '--log-level', 'ERROR',
+        '--cache-dir', join(input.directory, 'cache'), '--log-file', logPath, '--log-level', logLevel,
         '--log-file-max-size', '2M', '--log-file-max-backups', '3', '--use-json-log'], {
         windowsHide: true, env: { ...process.env, RCLONE_RC_USER: 'musicfs', RCLONE_RC_PASS: password }, stdin: 'ignore', stdout: 'ignore', stderr: 'ignore'
       });
@@ -142,6 +150,14 @@ export function createRcloneControl(input: { directory: string; binary: string; 
 
   return {
     call,
+    async configureLogging(next) {
+      const previous = logLevel;
+      logLevel = next;
+      try {
+        const current = runtime ?? (starting ? await starting : undefined);
+        if (current) await request(current, 'options/set', { main: { LogLevel: next } }, 3_000);
+      } catch (error) { logLevel = previous; throw error; }
+    },
     async removeRemote(name) {
       // A dependency check can fail before rclone creates any config. Removing that
       // saved mount must not require starting a missing or unused rclone binary.

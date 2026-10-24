@@ -120,7 +120,8 @@ for (const selectedTarget of selected as Target[]) {
   const helper = join(resources, selectedTarget === 'windows-x64' ? 'desktop-helper.exe' : 'desktop-helper');
   await buildDesktopNative({ target: selectedTarget, output: helper });
   if (selectedTarget === 'windows-x64') await copyWinFspPrerequisite(resources);
-  const result = await Bun.build({ entrypoints: ['src/desktop.ts'], minify: true, metafile: true, define: { MUSICFS_COMPILED: 'true' },
+  const result = await Bun.build({ entrypoints: ['src/desktop.ts'], minify: true, metafile: true,
+    define: { MUSICFS_COMPILED: 'true', MUSICFS_BUILD_REVISION: JSON.stringify(identity.source.revision + (identity.source.dirty ? "-dirty" : "")) },
     compile: { target: target.compile, outfile: executable, ...(runtimeExecutable ? { executablePath: runtimeExecutable } : {}),
       ...(selectedTarget === 'windows-x64' ? { windows: { hideConsole: true } } : {}) } });
   if (!result.success) throw new AggregateError(result.logs, `Desktop compilation failed for ${selectedTarget}`);

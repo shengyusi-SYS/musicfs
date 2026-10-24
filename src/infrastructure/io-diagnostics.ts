@@ -1,15 +1,38 @@
 import { getLogger, withContext } from '@logtape/logtape';
 import { errorFields } from './logging';
 import type { Sources } from '../core/sources';
+import type { Outcome } from '@musicfs/plugin-api';
+
+function deadlineExceeded(signal?: AbortSignal | null): boolean {
+  const reason: unknown = signal?.reason;
+  return signal?.aborted === true && typeof reason === 'object' && reason !== null && 'name' in reason && reason.name === 'TimeoutError';
+}
 
 /** Add source ownership at the host seam without coupling the source domain to a logger. */
 export function observeSources(sources: Sources): Sources {
-  const run = <T>(instanceId: string, sourceOperation: string, work: () => T) => withContext({ instanceId, sourceOperation }, work);
+  const logger = getLogger(['musicfs', 'io', 'source']);
+  const run = <T>(instanceId: string, sourceOperation: string, signal: AbortSignal, work: () => Promise<Outcome<T>>) =>
+    withContext({ instanceId, sourceOperation }, async () => {
+      const started = performance.now();
+      try {
+        const result = await work();
+        const fields = { elapsedMs: Math.round(performance.now() - started),
+          ...(!result.ok ? { sourceFaultKind: result.error.kind, retryAfterSeconds: result.error.retryAfterSeconds } : {}) };
+        if (!result.ok && !['not_found', 'content_changed', 'not_supported'].includes(result.error.kind)) logger.warning('Source returned a fault', fields);
+        else logger.debug('Source operation completed', fields);
+        return result;
+      } catch (error) {
+        const fields = { elapsedMs: Math.round(performance.now() - started), timedOut: deadlineExceeded(signal), ...errorFields(error) };
+        if (signal.aborted && !deadlineExceeded(signal)) logger.debug('Source operation cancelled', fields);
+        else logger.warning('Source operation threw', fields);
+        throw error;
+      }
+    });
   return { ...sources,
-    roots: (id, ...args) => run(id, 'roots', () => sources.roots(id, ...args)),
-    list: (id, ...args) => run(id, 'list', () => sources.list(id, ...args)),
-    stat: (id, ...args) => run(id, 'stat', () => sources.stat(id, ...args)),
-    open: (id, ...args) => run(id, 'open', () => sources.open(id, ...args))
+    roots: (id, signal, ...args) => run(id, 'roots', signal, () => sources.roots(id, signal, ...args)),
+    list: (id, directory, signal, ...args) => run(id, 'list', signal, () => sources.list(id, directory, signal, ...args)),
+    stat: (id, file, signal) => run(id, 'stat', signal, () => sources.stat(id, file, signal)),
+    open: (id, file, range, signal) => run(id, 'open', signal, () => sources.open(id, file, range, signal))
   };
 }
 
@@ -27,8 +50,8 @@ export function observeFetch(fetcher: typeof fetch, peer: 'source' | 'cache' | '
       else logger.debug('Upstream response ready', fields);
       return response;
     } catch (error) {
-      const fields = { method, elapsedMs: Math.round(performance.now() - started), ...errorFields(error) };
-      if (signal?.aborted) logger.debug('Upstream request cancelled', fields);
+      const fields = { method, elapsedMs: Math.round(performance.now() - started), timedOut: deadlineExceeded(signal), ...errorFields(error) };
+      if (signal?.aborted && !deadlineExceeded(signal)) logger.debug('Upstream request cancelled', fields);
       else logger.warning('Upstream connection failed', fields);
       throw error;
     }
@@ -36,12 +59,17 @@ export function observeFetch(fetcher: typeof fetch, peer: 'source' | 'cache' | '
 }
 
 /** One observation at EOF/error/cancellation, never one per audio chunk. HWM 0 preserves backpressure. */
-export function observeAudio(body: ReadableStream<Uint8Array>, fields: { requestId: string; expectedBytes: number; ranged: boolean }, signal: AbortSignal) {
+export function observeAudio(body: ReadableStream<Uint8Array>, fields: { requestId: string; expectedBytes: number; ranged: boolean;
+  contentId?: string; rangeStart?: number; rangeEnd?: number }, signal: AbortSignal) {
   const logger = getLogger(['musicfs', 'io', 'dav']).with(fields);
-  const reader = body.getReader(); const started = performance.now(); let bytes = 0; let finished = false;
-  const finish = (event: 'completed' | 'failed' | 'cancelled', error?: unknown) => {
+  const reader = body.getReader(); const started = performance.now(); let lastByteAt = started; let bytes = 0; let finished = false;
+  const finish = (event: 'completed' | 'failed' | 'cancelled', error?: unknown, cancellation?: string) => {
     if (finished) return; finished = true;
-    const details = { bytes, elapsedMs: Math.round(performance.now() - started), ...(error ? errorFields(error) : {}) };
+    const details = { ioStage: 'body', bytes, elapsedMs: Math.round(performance.now() - started),
+      timedOut: deadlineExceeded(signal),
+      idleMs: Math.round(performance.now() - lastByteAt),
+      ...(event === 'failed' ? { failureKind: error ? 'stream_error' : 'unexpected_eof' } : {}),
+      ...(cancellation ? { cancellation } : {}), ...(error ? errorFields(error) : {}) };
     if (event === 'failed') logger.warning('Audio stream failed', details);
     else logger.debug(event === 'completed' ? 'Audio stream completed' : 'Audio stream cancelled', details);
   };
@@ -49,10 +77,22 @@ export function observeAudio(body: ReadableStream<Uint8Array>, fields: { request
     async pull(controller) {
       try {
         const next = await reader.read();
-        if (next.done) { finish(signal.aborted ? 'cancelled' : bytes === fields.expectedBytes ? 'completed' : 'failed'); reader.releaseLock(); controller.close(); return; }
-        bytes += next.value.byteLength; controller.enqueue(next.value);
-      } catch (error) { finish(signal.aborted ? 'cancelled' : 'failed', error); controller.error(error); }
+        if (next.done) {
+          const cancelled = signal.aborted && !deadlineExceeded(signal);
+          finish(cancelled ? 'cancelled' : deadlineExceeded(signal) || bytes !== fields.expectedBytes ? 'failed' : 'completed',
+            deadlineExceeded(signal) ? signal.reason : undefined, cancelled ? 'request_aborted' : undefined);
+          reader.releaseLock(); controller.close(); return;
+        }
+        bytes += next.value.byteLength; lastByteAt = performance.now(); controller.enqueue(next.value);
+      } catch (error) {
+        const cancelled = signal.aborted && !deadlineExceeded(signal);
+        finish(cancelled ? 'cancelled' : 'failed', error, cancelled ? 'request_aborted' : undefined); controller.error(error);
+      }
     },
-    async cancel(reason) { finish('cancelled'); await reader.cancel(reason); }
+    async cancel(reason) {
+      finish(deadlineExceeded(signal) ? 'failed' : 'cancelled', deadlineExceeded(signal) ? signal.reason : undefined,
+        deadlineExceeded(signal) ? undefined : signal.aborted ? 'request_aborted' : 'consumer_cancelled');
+      await reader.cancel(reason);
+    }
   }, { highWaterMark: 0 });
 }

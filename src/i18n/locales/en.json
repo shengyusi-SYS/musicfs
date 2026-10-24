@@ -795,5 +795,21 @@
   "本机目录更新后会自动刷新；远程目录可手动刷新。": "Local folder changes refresh automatically. Remote folders can be refreshed manually.",
   "0 表示关闭缓存，1024 MiB = 1 GiB。": "Set to 0 to turn off caching. 1024 MiB = 1 GiB.",
   "用于 WebDAV 播放和扫描；磁盘挂载的缓存单独设置。": "For playback and scanning over WebDAV. Drive mounts have their own cache settings.",
-  "已加载目录预览": "Loaded folder preview"
+  "已加载目录预览": "Loaded folder preview",
+  "日志与诊断": "Logs and diagnostics",
+  "下载日志": "Download logs",
+  "应用日志": "Application logs",
+  "挂载与缓存日志": "Mount and cache logs",
+  "跟踪": "Trace",
+  "详细": "Debug",
+  "常规": "Normal",
+  "警告和错误": "Warnings and errors",
+  "仅错误": "Errors only",
+  "仅致命错误": "Fatal only",
+  "运行信息": "Information",
+  "日志设置已生效": "Log settings applied",
+  "复现问题前切到详细，完成后下载日志。设置立即生效，无需重启。": "Choose Debug before reproducing the problem, then download logs. Changes apply without restarting.",
+  "文件日志不可用，应用日志正输出到终端。": "File logging is unavailable. Application logs are being written to the terminal.",
+  "日志操作未完成，请重试。": "The log operation failed. Try again.",
+  "请选择有效的日志级别。": "Choose a valid log level."
 }
