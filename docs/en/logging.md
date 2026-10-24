@@ -13,6 +13,8 @@ Diagnostics follow the player request through WebDAV, the library, source operat
 
 Set `MUSICFS_LOG_LEVEL=debug` in the desktop process environment or Worker runtime variables, restart or deploy the variable change, then reproduce once. Common levels are `warning`, `info` and `debug`; missing or unrecognized values use `warning`.
 
+The source development service uses the same setup. If file logging is unavailable, it falls back to process output without blocking service startup.
+
 Routine traffic is debug-only. Each kind of IO event allows 20 records per minute and summarizes suppressed counts, tracking at most 128 event keys. No logs are emitted for every song, SQL query or audio chunk. Response-header timing and completed-stream timing describe different stages.
 
 ## Follow a request
