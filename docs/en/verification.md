@@ -16,7 +16,7 @@ This page summarizes representative checks. Development checks and specialist pr
 
 ## Sources and audio metadata
 
-The NetEase and QQ examples have real QR authorization, session persistence and limited content-read evidence. Login channels, content, quality and playback rights belong to the provider.
+The NetEase and QQ examples have real QR authorization, session persistence and limited content-read evidence. Login channels, content, quality and playback rights belong to the provider. Natural real-account renewal windows remain unverified.
 
 | Format | Existing implementation and evidence | Scope |
 |---|---|---|
