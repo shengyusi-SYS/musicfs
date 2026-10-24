@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { PluginManifest } from '@musicfs/plugin-api';
 import type { WorkerModule } from '../src/hosts/worker/publisher';
 import { buildWorkerUpgrade } from '../scripts/build-worker-upgrade';
+import { prepareWorkerDeployment } from '../scripts/deploy-worker';
 
 test('a core/WebUI upgrade keeps the live registry, exact plugin revisions, typed modules and deployment configuration', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-worker-upgrade-'));
@@ -75,5 +76,16 @@ test('a core/WebUI upgrade keeps the live registry, exact plugin revisions, type
     expect(await Bun.file(join(out, 'web/index.html')).text()).toBe(await Bun.file('dist/web/index.html').text());
     expect(bundle.identity.webDigest).toBeString();
     expect(await Bun.file(join(out, 'migrations/0007.sql')).exists()).toBe(true);
+
+    // A source checkout's root configuration can deploy into its generated dist directory.
+    const deployment = await prepareWorkerDeployment({ config: configPath, out: join(previous, 'dist/worker'),
+      accountId: 'fixture-account', apiToken: 'fixture-token', fetcher });
+    expect(deployment.mode).toBe('upgrade');
+    expect(await Bun.file(join(previous, 'dist/worker/registry.mjs')).text()).toBe(registry);
+    expect(deployment.bundle.identity.plugins).toEqual(bundle.identity.plugins);
+    const deployConfig = await Bun.file(deployment.config).json();
+    expect(deployConfig.d1_databases[0].database_id).toBe('retained-d1');
+    expect(deployConfig.vars.CF_WORKER_NAME).toBe('musicfs-fixture');
+    expect(await Bun.file(configPath).text()).toBe(configText);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

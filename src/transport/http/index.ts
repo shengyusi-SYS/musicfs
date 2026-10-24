@@ -44,10 +44,11 @@ async function json(c: Context): Promise<unknown> {
   try { return await c.req.json(); } catch { throw new HTTPException(400, { message: 'Invalid JSON body' }); }
 }
 
-async function download(url: string, signal: AbortSignal, maxSize: number): Promise<Uint8Array> {
+async function download(url: string, source: Request, maxSize: number,
+  fetchPackage: (request: Request, origin: string) => Promise<Response> = request => fetch(request)): Promise<Uint8Array> {
   const location = new URL(url);
   if (!['https:', 'http:'].includes(location.protocol) || location.username || location.password) throw new HTTPException(400, { message: 'Use an HTTP(S) plugin release URL without embedded credentials' });
-  const response = await fetch(location, { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) });
+  const response = await fetchPackage(new Request(location, { signal: AbortSignal.any([source.signal, AbortSignal.timeout(30_000)]) }), new URL(source.url).origin);
   if (!response.ok || !response.body) { await response.body?.cancel(); throw new HTTPException(502, { message: 'Plugin download failed' }); }
   const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let length = 0;
   try {
@@ -68,6 +69,7 @@ export function createManagementApi(input: {
   managementAuth?: import('hono').MiddlewareHandler;
   connection?: Connection;
   davAccess?: DavAccess;
+  fetchPackage?: (request: Request, origin: string) => Promise<Response>;
   mounts?: MountManager;
   mountAction?: (id: string) => void;
   maxPackageBytes: number; install: (archive: Uint8Array, signal: AbortSignal) => Promise<Installation | PluginChange>;
@@ -110,13 +112,13 @@ export function createManagementApi(input: {
   app.post('/api/plugins/inspect', async c => c.json(await inspectPackage(new Uint8Array(await c.req.arrayBuffer()), input.host, c.req.raw.signal)));
   app.post('/api/plugins/inspect-url', async c => {
     const { url } = urlInput.parse(await json(c));
-    return c.json(await inspectPackage(await download(url, c.req.raw.signal, input.maxPackageBytes), input.host, c.req.raw.signal));
+    return c.json(await inspectPackage(await download(url, c.req.raw, input.maxPackageBytes, input.fetchPackage), input.host, c.req.raw.signal));
   });
   const installed = (c: Context, result: Installation | PluginChange) => c.json(result, 'operationId' in result ? 202 : 201);
   app.post('/api/plugins', async c => installed(c, await input.install(new Uint8Array(await c.req.arrayBuffer()), c.req.raw.signal)));
   app.post('/api/plugins/from-url', async c => {
     const { url } = urlInput.parse(await json(c));
-    return installed(c, await input.install(await download(url, c.req.raw.signal, input.maxPackageBytes), c.req.raw.signal));
+    return installed(c, await input.install(await download(url, c.req.raw, input.maxPackageBytes, input.fetchPackage), c.req.raw.signal));
   });
   app.delete('/api/plugins/:id', async c => {
     const result = await input.remove(c.req.param('id'), c.req.raw.signal);

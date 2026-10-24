@@ -6,7 +6,7 @@ import { isPackagePath, parsePackageManifest } from '../src/core/extensions';
 import { createWorkerPublisher, type WorkerModule } from '../src/hosts/worker/publisher';
 import { buildWorker, type WorkerBundle } from './build-worker';
 
-type UpgradeConfig = Record<string, unknown> & {
+export type UpgradeConfig = Record<string, unknown> & {
   name?: string; account_id?: string; vars?: Record<string, unknown>;
   assets?: Record<string, unknown>;
 };
@@ -18,16 +18,16 @@ const within = (parent: string, child: string) => {
 
 /** Prepare one Wrangler input; deployment and D1 migrations remain explicit operator steps. */
 export async function buildWorkerUpgrade(input: {
-  config: string; out: string; apiToken?: string; fetcher?: typeof fetch;
+  config: string; out: string; accountId?: string; apiToken?: string; fetcher?: typeof fetch;
 }): Promise<WorkerBundle> {
   const configPath = resolve(input.config); const directory = resolve(input.out);
-  if (within(directory, dirname(configPath)) || within(dirname(configPath), directory)) {
+  if (within(directory, dirname(configPath))) {
     throw new Error('Use an upgrade output directory separate from the existing configuration directory');
   }
   const parsed = parseConfigFileTextToJson(configPath, await Bun.file(configPath).text());
   if (parsed.error) throw new Error(flattenDiagnosticMessageText(parsed.error.messageText, '\n'));
   const config = parsed.config as UpgradeConfig;
-  const accountId = config.account_id ?? config.vars?.CF_ACCOUNT_ID;
+  const accountId = input.accountId ?? config.account_id ?? config.vars?.CF_ACCOUNT_ID;
   const apiToken = input.apiToken ?? process.env.CF_API_TOKEN ?? process.env.CLOUDFLARE_API_TOKEN;
   if (typeof accountId !== 'string' || !config.name || !config.assets) {
     throw new Error('The existing Worker config must specify account_id (or CF_ACCOUNT_ID), name and assets');

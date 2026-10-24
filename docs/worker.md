@@ -2,9 +2,26 @@
 
 [English](en/worker.md)
 
-Worker 版通过 HTTPS 提供同一套音乐库、管理页面和 WebDAV。准备 Cloudflare 账号、Bun 和 Wrangler；使用发行附件中的 Worker 包，或从源码运行 `bun run build:web`、`bun run build:worker` 生成 `dist/worker/`。
+Worker 版通过 HTTPS 提供同一套音乐库、管理页面和 WebDAV。可以直接在浏览器部署，也可以使用发行附件中的 Worker 包。
 
-## 首次部署
+## 一键部署
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
+
+1. 连接 GitHub 和 Cloudflare，创建自己的仓库副本、Worker 和 D1 数据库。
+2. 填写 `ADMIN_TOKEN`（首次进入管理页的令牌）、`DAV_USERNAME`、`DAV_PASSWORD`（播放器账号密码）和 `CF_API_TOKEN`。最后一项需要当前账号的 **Workers Scripts → Edit** 权限，用于在管理页安装、更新和移除插件。
+3. 构建命令使用 `bun run build`，部署命令使用 `bun run deploy`，根目录保持仓库根目录。完成后打开返回的网址，用 `ADMIN_TOKEN` 进入。
+4. 在「插件 → 安装插件 → 下载链接」填写自己域名下的插件地址：网易云为 `https://你的域名/plugin-packages/org.musicfs.netease.zip`，QQ 音乐为 `https://你的域名/plugin-packages/org.musicfs.qq.zip`。安装后添加来源并登录。
+
+账号 ID 和 Worker 名称由部署工具填写，数据库迁移自动执行。来源平台的扫码登录仍在 MusicFS 中完成。官方流程见 [Deploy to Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/)。
+
+之后更新自己的仓库，沿用同一部署命令即可保留 D1、凭据和云端已安装插件，替换核心与页面。更新前先等管理页中的插件安装或移除完成。源码部署也可用 `bun run deploy --dry-run` 只组装并检查部署文件。
+
+<a id="首次部署"></a>
+
+## 用发行包部署
+
+准备 Cloudflare 账号、Bun 和 Wrangler。解压 Worker 发行包；从源码生成发行目录可运行 `bun run build` 和 `bun run build:worker`。
 
 在解压的 Worker 目录中执行：
 

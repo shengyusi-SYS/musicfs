@@ -64,6 +64,10 @@ Windows 首次挂载时，可按页面提示安装 WinFsp；Linux 挂载需要 F
 
 除了桌面版，MusicFS 也可以独立部署到 Cloudflare Worker，通过 WebDAV 提供音乐目录。安装插件、管理来源和整理目录，使用的是同一套页面。
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
+
+按页面提示连接 GitHub 和 Cloudflare，填写管理令牌、WebDAV 账号密码和插件发布 Token。数据库会自动创建，部署后即可打开管理页面。
+
 → [Worker 部署指南](docs/worker.md)
 
 ## 继续了解

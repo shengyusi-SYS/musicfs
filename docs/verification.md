@@ -40,7 +40,7 @@ dev.22 复评少量增删：修正同目录旧版本挤掉其他LRU索引的问�
 | 大目录索引保留预算 | [场景复评](../outputs/musicfs-performance-review.md#有界核对与证据等级)、[匿名结果](verification/data/published-view-budget-2026-10-22.json) | 正式Module与合成条目，证明超预算大项不保留；不是实际用户目录、SQL或GUI计时 |
 | 补标签 | [原文件标签检查](verification/metadata-current-file-tags.md)、[格式可行性](verification/metadata-tagging-feasibility.md)、[实现](verification/metadata-implementation.md) | 工具格式支持与真实来源样本覆盖分别说明 |
 | 桌面与 Windows 连接 | [桌面](verification/p2-desktop-host.md)、[Windows](verification/p2-windows-mount.md) | 实际 WinFsp、本机 HTTPS、跨原生上限读取/恢复已有记录；不等于全部 GUI/恢复通过 |
-| 云端部署、升级与有限来源 | [真实 Worker](verification/p4-worker-cloud.md) | 已用付费账号；不代替免费 CPU/配额证据 |
+| 云端部署、升级与有限来源 | [真实 Worker](verification/p4-worker-cloud.md) · [一键部署接入](verification/worker-oneclick.md) | 已用付费账号；不代替免费 CPU/配额证据 |
 | 原始交付与作者接入 | [发行验证](verification/p4-release-artifacts.md) | 各检查点归档、源码/插件身份、仓库外构建；最新归档以发行页为准 |
 
 ## 当前有限剩余清单

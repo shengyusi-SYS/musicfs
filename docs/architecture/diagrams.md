@@ -292,14 +292,23 @@ flowchart TD
 
 ```mermaid
 flowchart LR
+  Button[官方部署按钮] --> Clone[用户仓库与自动创建的 D1]
+  Clone --> Source[根配置与 build / deploy 命令]
+  Source --> Detect{目标 Worker 已存在?}
+  Detect -->|不存在| Initial[初始核心与随包插件]
+  Detect -->|存在| Live
   Live[云端实际 registry 与插件模块] --> Assemble[新 core 与 WebUI 组装]
   Config[目标配置与绑定] --> Assemble
+  Initial --> Output
   Assemble --> Output[独立目录与准确模块清单]
-  Output --> Deploy[Wrangler 部署并保留变量]
+  Output --> Migrate[按 DB 绑定应用 D1 迁移]
+  Migrate --> Deploy[Wrangler 部署并保留变量与 Secrets]
   Deploy --> Current[同一 Worker 与精确插件修订]
 ```
 
-操作以[Worker 升级说明](../worker.md#升级核心与-webui保留云端插件)为准，不能只保留 D1 而覆盖已安装插件代码。
+源码按钮入口读取 Cloudflare 已填写的根配置；可携带资源的发行包继续使用包内配置。两者复用同一核心构建与升级组装工具。仅远程 Worker 不存在时采用初始注册表；授权或网络错误直接返回。源码部署额外把随包插件 ZIP 放进静态资源，供浏览器安装；公开下载文件不代表已经在 D1 中激活。
+
+操作以[Worker 部署说明](../worker.md)为准，升级前先完成正在进行的插件变更；只保留 D1 而覆盖可执行插件代码不能完成升级。
 
 ## 当前桌面生命周期
 

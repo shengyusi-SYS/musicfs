@@ -55,6 +55,10 @@ export function createWorkerService(input: {
   app.route('/', createManagementApi({ host: 'worker', adminToken: input.adminToken, managementAuth: authentication.middleware, sources, library,
     extensions: { list: () => store.installations() },
     davAccess, maxPackageBytes: DEFAULT_PACKAGE_LIMITS.compressedBytes,
+    ...(input.assets ? { fetchPackage: (request: Request, origin: string) => {
+      const url = new URL(request.url);
+      return url.origin === origin && url.pathname.startsWith('/plugin-packages/') ? input.assets!.fetch(request) : fetch(request);
+    } } : {}),
     install: (archive, signal) => input.changes.install(archive, signal),
     remove: (id, signal) => input.changes.remove(id, signal), pluginChange: id => input.changes.get(id) }));
   app.route('/', createDav(library.files, davAccess.get, input.fixedLength ? { fixedLength: input.fixedLength } : {}));

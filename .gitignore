@@ -13,3 +13,5 @@ plugins/netease/generated-*.mjs
 .env
 .env.*
 !.env.example
+.dev.vars*
+!.dev.vars.example

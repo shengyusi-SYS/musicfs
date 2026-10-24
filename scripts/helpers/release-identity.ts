@@ -10,7 +10,7 @@ export type ReleaseIdentity = {
 };
 
 const inputs = ['.github', 'src', 'native/desktop', 'packages/plugin-api', 'packages/audio-tags/src', 'packages/audio-tags/package.json', 'plugins', 'scripts/build*.ts', 'scripts/package-release.ts', 'scripts/helpers',
-  'package.json', 'bun.lock', 'tsconfig*.json', 'vite.config.ts', 'worker-template', 'third-party', 'LICENSE',
+  'package.json', 'bun.lock', 'tsconfig*.json', 'vite.config.ts', 'wrangler.jsonc', '.dev.vars.example', 'scripts/deploy-worker.ts', 'worker-template', 'third-party', 'LICENSE',
   'docs/desktop.md', 'docs/headless.md', 'docs/worker.md', 'docs/clients.md', 'docs/user-guide.md', 'docs/plugin-authoring.md',
   'docs/architecture/plugin-interface.md', 'docs/architecture/i18n.md', 'docs/en'];
 function git(args: string[]): string {

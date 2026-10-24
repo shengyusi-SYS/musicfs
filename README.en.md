@@ -34,6 +34,10 @@ Running on a NAS or over SSH? Use `./musicfs --headless --language en` for acces
 
 MusicFS can also run on Cloudflare Workers with the same management interface. [Worker deployment](docs/en/worker.md)
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
+
+Connect GitHub and Cloudflare, then enter a management token, WebDAV credentials and a plugin publishing token. The database is created automatically.
+
 ## Keep exploring
 
 [Development](docs/en/development.md) · [Documentation](docs/en/README.md)

@@ -73,6 +73,11 @@ test('the production Worker factory reuses completed directory views across HTTP
     expect(status.status).toBe(200); await status.body?.cancel();
     const assets = await mf.dispatchFetch('http://fixture/', { headers: { 'X-Probe-Assets': 'latest-binding' } });
     expect(await assets.text()).toBe('latest-binding');
+    const inspection = await mf.dispatchFetch('http://fixture/api/plugins/inspect-url', { method: 'POST',
+      headers: { Authorization: 'Bearer fixture-admin', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: new URL('/plugin-packages/fixture.zip', await mf.ready).href }) });
+    expect(inspection.status).toBe(200);
+    expect(await inspection.json()).toMatchObject({ manifest: { id: 'org.musicfs.package-fixture' } });
 
     // Each start gets a new wrapper/context. Its page belongs to that invocation's waitUntil.
     for (const ref of ['background-a', 'background-b']) {

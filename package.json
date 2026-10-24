@@ -10,7 +10,9 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --project tsconfig.worker.json && tsc --project tsconfig.web.json",
-    "check": "bun run build:sample && bun run build:qq && bun run build:netease && bun run typecheck && bun run check:boundaries && bun run check:i18n && bun test",
+    "build": "bun run build:web && bun run build:sample && bun run build:qq && bun run build:netease",
+    "deploy": "bun run scripts/deploy-worker.ts",
+    "check": "bun run build && bun run typecheck && bun run check:boundaries && bun run check:i18n && bun test",
     "check:i18n": "bun run scripts/check-i18n.ts",
     "check:boundaries": "depcruise --config .dependency-cruiser.cjs src packages plugins tests",
     "test": "bun test",
@@ -92,5 +94,14 @@
     "typescript": "6.0.3",
     "vite": "8.3.4"
   },
-  "license": "GPL-3.0-only"
+  "license": "GPL-3.0-only",
+  "cloudflare": {
+    "bindings": {
+      "DB": { "description": "Stores your MusicFS sources, folders and settings. / 保存音乐来源、目录和设置。" },
+      "ADMIN_TOKEN": { "description": "Choose a private token for your first management login. / 设置首次进入管理页的令牌。" },
+      "DAV_USERNAME": { "description": "Username for WebDAV players, for example musicfs. / 播放器使用的 WebDAV 用户名。" },
+      "DAV_PASSWORD": { "description": "Choose a password for WebDAV players. / 设置播放器使用的 WebDAV 密码。" },
+      "CF_API_TOKEN": { "description": "An API Token with Workers Scripts Edit permission for this account, used to install and update plugins. / 当前账号具备 Workers Scripts Edit 权限的 Token，用于安装和更新插件。" }
+    }
+  }
 }

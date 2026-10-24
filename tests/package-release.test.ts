@@ -28,6 +28,8 @@ test('packages each version together and replaces only that version on a repeat 
     await json('package.json', { version: releaseVersion, packageManager: `bun@${Bun.version}`, type: 'module' });
     await write('src/fixture.ts', 'export const fixture = true;\n');
     await write('.github/workflows/release.yml', 'name: Release fixture\n');
+    await write('wrangler.jsonc', '{"name":"musicfs"}\n');
+    await write('.dev.vars.example', 'ADMIN_TOKEN=\n');
     await command(directory, ['git', 'init', '--quiet']);
     await command(directory, ['git', 'add', 'package.json', 'src/fixture.ts']);
     await command(directory, ['git', '-c', 'user.name=MusicFS fixture', '-c', 'user.email=fixture@musicfs.invalid', 'commit', '--quiet', '-m', 'Fixture']);
@@ -71,6 +73,8 @@ test('packages each version together and replaces only that version on a repeat 
     expect(manifest.identity).toEqual(identity);
     const sourceArchive = unzipSync(new Uint8Array(await Bun.file(join(output, `musicfs-${releaseVersion}-source.zip`)).arrayBuffer()));
     expect(strFromU8(sourceArchive[`musicfs-${releaseVersion}-source/.github/workflows/release.yml`]!)).toBe('name: Release fixture\n');
+    expect(strFromU8(sourceArchive[`musicfs-${releaseVersion}-source/wrangler.jsonc`]!)).toBe('{"name":"musicfs"}\n');
+    expect(strFromU8(sourceArchive[`musicfs-${releaseVersion}-source/.dev.vars.example`]!)).toBe('ADMIN_TOKEN=\n');
     for (const line of (await Bun.file(join(output, 'SHA256SUMS')).text()).trim().split('\n')) {
       const [checksum, file] = line.split('  ') as [string, string];
       expect(hash(new Uint8Array(await Bun.file(join(output, file)).arrayBuffer()))).toBe(checksum);

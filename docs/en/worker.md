@@ -2,9 +2,26 @@
 
 [简体中文](../worker.md)
 
-The Worker serves the same library, management interface and WebDAV over HTTPS. Prepare a Cloudflare account, Bun and Wrangler. Use the Worker release archive, or run `bun run build:web` and `bun run build:worker` from source to create `dist/worker/`.
+The Worker serves the same library, management interface and WebDAV over HTTPS. Deploy in your browser or use the Worker release archive.
 
-## First deployment
+## Deploy in your browser
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
+
+1. Connect GitHub and Cloudflare to create your repository copy, Worker and D1 database.
+2. Enter `ADMIN_TOKEN` for the first management login, `DAV_USERNAME` and `DAV_PASSWORD` for players, and `CF_API_TOKEN`. The last token needs **Workers Scripts → Edit** permission for this account so management can install, update and remove plugins.
+3. Keep the repository root, use `bun run build` as the build command and `bun run deploy` as the deploy command. Open the resulting URL and enter `ADMIN_TOKEN`.
+4. In **Plugins → Install plugin → Download link**, use a bundled ZIP on your own domain: `https://your-domain/plugin-packages/org.musicfs.netease.zip` for NetEase or `https://your-domain/plugin-packages/org.musicfs.qq.zip` for QQ. Then add a source and sign in.
+
+The deployment tool fills in the account ID and Worker name and applies database migrations. Sign in to your music providers inside MusicFS afterward. [Official deployment flow](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
+
+Future repository updates use the same deploy command, retaining D1, credentials and the exact plugins installed through management while replacing the core and WebUI. Let any plugin install or removal finish before updating. For source deployments, `bun run deploy --dry-run` assembles and checks the files without applying migrations or deploying.
+
+<a id="first-deployment"></a>
+
+## Deploy a release archive
+
+Prepare a Cloudflare account, Bun and Wrangler, then extract the Worker release. To generate the directory from source, run `bun run build` and `bun run build:worker`.
 
 In the extracted Worker directory:
 

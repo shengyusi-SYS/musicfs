@@ -1,5 +1,6 @@
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import type { SourcePlugin } from '@musicfs/plugin-api';
+import { strToU8, zipSync } from 'fflate';
 import createWorker, { type WorkerBindings } from '../../src/worker';
 import { snapshotEntriesSQL } from '../../src/infrastructure/persistence/refresh-sql';
 
@@ -13,6 +14,11 @@ const plugin: SourcePlugin = {
     body: new Blob([input.range ? 'CD' : 'ABCDEFGH']).stream() } })
 };
 const worker = createWorker([{ id: 'org.musicfs.runtime-fixture', revision: 'a'.repeat(64), module: plugin }]);
+const packageArchive = zipSync({
+  'manifest.json': strToU8(JSON.stringify({ formatVersion: 1, id: 'org.musicfs.package-fixture', name: 'Package fixture', version: '1.0.0',
+    apiRange: '^0.1.12', configVersion: 1, stateVersion: 1, hosts: { worker: 'index.mjs' }, files: ['index.mjs'] })),
+  'index.mjs': strToU8('export default {};')
+});
 type Measurements = { id: number; reads: number; rows: number; statements: number; delayNextSnapshot?: boolean };
 const databases = new WeakMap<D1Database, { db: D1Database; measurements: Measurements }>();
 let bindingIds = 0;
@@ -48,7 +54,7 @@ export default {
     const assetsMarker = request.headers.get('X-Probe-Assets') ?? 'initial';
     const response = await worker.fetch(request, { ...env, DB: db,
       ADMIN_TOKEN: rotated ? 'rotated-admin' : 'fixture-admin', DAV_USERNAME: 'reader', DAV_PASSWORD: rotated ? 'rotated-password' : 'fixture-password',
-      ASSETS: { fetch: async () => new Response(assetsMarker) } }, {
+      ASSETS: { fetch: async assetRequest => new Response(new URL(assetRequest.url).pathname.startsWith('/plugin-packages/') ? packageArchive : assetsMarker) } }, {
       waitUntil(promise) { work.push(promise); context.waitUntil(promise); }
     });
     // Probe-only: complete this invocation's background page before reporting its ownership/count.
