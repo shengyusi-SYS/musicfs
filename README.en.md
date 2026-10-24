@@ -1,6 +1,8 @@
 # MusicFS
 
 > This project is only a conversion and adaptation tool. It does not provide membership benefits or copyrighted content.
+>
+> In development. Testing, compatibility, performance and cost optimization need further work. Feedback is welcome.
 
 [简体中文](README.md)
 
