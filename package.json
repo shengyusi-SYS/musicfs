@@ -33,6 +33,7 @@
     "probe:worker:service": "bun run scripts/probe-worker-service.ts",
     "build:desktop": "bun run scripts/build-desktop.ts",
     "build:author-kit": "bun run scripts/build-author-kit.ts",
+    "version:set": "bun run scripts/set-version.ts",
     "package:release": "bun run scripts/package-release.ts"
   },
   "dependencies": {

@@ -2,7 +2,8 @@
 
 [简体中文](../release.md)
 
-The current archive is **0.1.0-dev.31**, with bilingual UI, headless access and bilingual user/developer guides. It remains a development preview.
+<!-- release-version -->
+Current version: **0.1.0-dev.31** (prerelease).
 
 ## Choose a package
 

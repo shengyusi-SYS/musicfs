@@ -86,6 +86,14 @@ bun run build:worker
 
 Output is `dist/worker/`. No plugin arguments means an empty registry; pass already-built ZIP paths to include modules. Users activate plugins through management. [Deploying and retaining cloud plugins](worker.md)
 
+## Set the application version
+
+```sh
+bun run version:set 0.1.0-dev.32
+```
+
+This updates `package.json`, the version and all download/checksum links in both release guides, and the prerelease label. Plugins, the plugin API and historical records keep their own versions. The command only edits files; build locally or commit and publish as described below.
+
 ## Prepare a release
 
 Choose the version and targets, update their docs, complete checks appropriate to the change, then build in sequence from the same source:
@@ -107,10 +115,13 @@ Local packaging checks source, WebUI and plugin identity; the GitHub workflow be
 [Build and release](../../.github/workflows/release.yml) builds Windows x64, Linux x64, Worker, the author kit, source and all three example plugins on GitHub.
 
 - To try a build, open **Actions → Build and release → Run workflow** and select a branch. Download the complete package set from that run's **Artifacts**, retained for 7 days.
-- To publish, update `package.json`, commit the version change, then push a matching tag with a `v` prefix. For version `0.1.0-dev.32`:
+- To publish, update the version with `version:set`, commit, then push a matching tag with a `v` prefix. For version `0.1.0-dev.32`:
 
 ```sh
+git add package.json docs/release.md docs/en/release.md
+git commit -m "release: 0.1.0-dev.32"
 git tag v0.1.0-dev.32
+git push origin HEAD
 git push origin v0.1.0-dev.32
 ```
 

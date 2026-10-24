@@ -86,6 +86,14 @@ bun run build:worker
 
 生成 `dist/worker/`。空参数生成空插件注册表；也可在命令后传入已经构建的插件 ZIP。日常安装在管理页完成，部署与保留云端插件的升级见[Worker 指南](worker.md)。
 
+## 更新主程序版本
+
+```sh
+bun run version:set 0.1.0-dev.32
+```
+
+命令同步 `package.json`、中英文发行说明中的版本和全部下载/校验清单链接，并按版本自动调整预发布标记。插件、插件 API 和历史发行记录使用各自的版本。命令只更新文件，随后按下面的流程构建或提交发布。
+
 ## 准备一次发行
 
 先确定版本和要分发的目标，更新对应文档，完成本次改动需要的检查，再从同一份源码顺序构建：
@@ -107,10 +115,13 @@ bun run package:release -- --targets windows-x64,linux-x64
 [Build and release](../.github/workflows/release.yml) 在 GitHub 上构建 Windows x64、Linux x64、Worker、插件作者包、源码包和三个示例插件。
 
 - 试构建：进入仓库 **Actions → Build and release → Run workflow**，选择分支。完成后从该次运行的 **Artifacts** 下载整套包，保留 7 天。
-- 发布：先修改 `package.json` 的版本并提交，再推送同名的 `v` 前缀标签。例如版本为 `0.1.0-dev.32` 时：
+- 发布：用 `version:set` 更新版本，再提交并推送同名的 `v` 前缀标签。例如版本为 `0.1.0-dev.32` 时：
 
 ```sh
+git add package.json docs/release.md docs/en/release.md
+git commit -m "release: 0.1.0-dev.32"
 git tag v0.1.0-dev.32
+git push origin HEAD
 git push origin v0.1.0-dev.32
 ```
 
