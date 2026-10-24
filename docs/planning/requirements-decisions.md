@@ -2,7 +2,7 @@
 
 日期：2026-10-21（原记录始于 2026-10-18）
 
-状态：原需求及插件 Q1—Q11 的澄清保留在下方，相关实现已形成开发预览。音乐资料扩展已按确认架构实现，当前结果见[实现记录](../docs/verification/metadata-implementation.md)；下方保留需求决定与路线比较，不作为追加验收清单。
+状态：原需求及插件 Q1—Q11 的澄清保留在下方，相关实现已形成开发预览。音乐资料扩展已按确认架构实现，当前结果见[实现记录](../verification/metadata-implementation.md)；下方保留需求决定与路线比较，不作为追加验收清单。
 
 ## 音乐资料扩展（已实现）
 
@@ -18,7 +18,7 @@
 | 元数据：格式范围 | 验证现有来源实际支持的格式；不因通用库支持而增加上游没有的格式，不把单曲/单账号缺失误判为平台不支持 | 已确认 |
 | 元数据：插件自主处理 | 允许来源插件自带补标签能力，也可透传或选用共用工具；不强制所有插件补标签，核心不插入统一改写步骤 | 已确认 |
 
-本次“音乐资料”指歌名、歌手、专辑等音乐内容信息，区别于文件接口中的内容身份、精确大小与媒体类型，术语见[GLOSSARY.md](GLOSSARY.md)。实现前的[完整文件检查](../docs/verification/metadata-current-file-tags.md)确认：QQ 代表 MP3 只有部分基础字段，网易云代表 MP3 仅有编码器标签；两者均缺本次其他字段、内嵌封面和歌词。这个事实促成补全实现，不推断所有曲目都一样。
+本次“音乐资料”指歌名、歌手、专辑等音乐内容信息，区别于文件接口中的内容身份、精确大小与媒体类型，术语见[术语表](../glossary.md)。实现前的[完整文件检查](../verification/metadata-current-file-tags.md)确认：QQ 代表 MP3 只有部分基础字段，网易云代表 MP3 仅有编码器标签；两者均缺本次其他字段、内嵌封面和歌词。这个事实促成补全实现，不推断所有曲目都一样。
 
 ```text
 已确认：优先播放器识别音乐信息
@@ -31,9 +31,9 @@
 └── 已实现：来源范围内格式、最终文件身份、小资料缓存与双宿主区段读取
 ```
 
-继续沿用来源资料归插件、核心保持通用、两个示例覆盖桌面与Worker的既有边界。当前源码和开发插件包已完成，现有云端已[原地升级](../docs/verification/p4-worker-cloud.md#音乐资料功能原地升级)，冻结发行归档保持不变。
+继续沿用来源资料归插件、核心保持通用、两个示例覆盖桌面与Worker的既有边界。当前源码和开发插件包已完成，现有云端已[原地升级](../verification/p4-worker-cloud.md#音乐资料功能原地升级)，冻结发行归档保持不变。
 
-2026-10-21 先完成有限离线[可行性验证](../docs/verification/metadata-tagging-feasibility.md)，再接通两个示例和可选 `@musicfs/audio-tags`。四格式均通过标签与原音频区段组合；M4A 采用保留原音频位置、尾部追加更新元数据的方案，不走实验中的整文件 buffer。双宿主缓存、正式 workerd/DAV 与两源各一首真实 MP3 已取得限定证据，见[实现记录](../docs/verification/metadata-implementation.md)。
+2026-10-21 先完成有限离线[可行性验证](../verification/metadata-tagging-feasibility.md)，再接通两个示例和可选 `@musicfs/audio-tags`。四格式均通过标签与原音频区段组合；M4A 采用保留原音频位置、尾部追加更新元数据的方案，不走实验中的整文件 buffer。双宿主缓存、正式 workerd/DAV 与两源各一首真实 MP3 已取得限定证据，见[实现记录](../verification/metadata-implementation.md)。
 
 Windows 虚拟机原生字段/WMP COM 读回基础资料，封面/歌词有消费端差异；可见播放器逐行滚动仍未验收。资料准备已收敛到现有小页，`Entry.info` 在快照发布前对应最终字节；跨请求复用小资料与不可变表示计划，不将音乐字段加入核心。
 
@@ -72,7 +72,7 @@ flowchart LR
 
 原 Q5 在没有确认音乐字段是否存在的情况下，先让用户决定全局标签合并规则，扩大了问题。当前需要区分：插件已从接口取得的曲目资料、音频文件中的标签、播放器最终能否识别资料。这三者不是同一件事。
 
-用户要求先验证实际文件后，已用当时本地插件与会话读取两个完整 MP3 并解析标签，见[验证记录](../docs/verification/metadata-current-file-tags.md)。QQ 样本已有部分基础字段，网易云样本缺少这些字段，证实不能预设统一的空标签起点；后续才按来源事实选定当前写入与缓存路线。
+用户要求先验证实际文件后，已用当时本地插件与会话读取两个完整 MP3 并解析标签，见[验证记录](../verification/metadata-current-file-tags.md)。QQ 样本已有部分基础字段，网易云样本缺少这些字段，证实不能预设统一的空标签起点；后续才按来源事实选定当前写入与缓存路线。
 
 沿用已确认的插件职责：网易云、QQ 示例插件负责取得各自来源资料，并依据来源与文件格式决定如何补充导出标签；其他插件可按自身来源提供已带资料的文件，无需执行同一补标签流程。是否读取、补充或保留原标签由具体插件实现及已知来源事实确定，不新增所有插件必经的通用合并机制。
 
@@ -111,7 +111,7 @@ Q6 已明确优先随音频自动携带资料，当前内嵌路线已实现，�
 
 现有需求只明确 OpenList 接入，未指定最终播放器；mpv 是既有验收工具，Navidrome 是上述资料中的示例，不能当作用户已选择的客户端。
 
-当前 QQ 文件类型覆盖 MP3、M4A、FLAC、APE（[文件类型](../plugins/qq/file-info.ts)），网易云接受实际返回的 MP3、FLAC、M4A（[媒体实现](../plugins/netease/media.ts)）；音质名称与容器格式分别处理。示例已接入各自歌词与专辑资料；来源某首歌没有的资料留空。Windows 本机 MusicFS 挂载与原生 HTTPS 目录映射已通过，HTTP 原生映射仍未通过，见[记录](../docs/verification/p2-windows-mount.md)。
+当前 QQ 文件类型覆盖 MP3、M4A、FLAC、APE（[文件类型](../../plugins/qq/file-info.ts)），网易云接受实际返回的 MP3、FLAC、M4A（[媒体实现](../../plugins/netease/media.ts)）；音质名称与容器格式分别处理。示例已接入各自歌词与专辑资料；来源某首歌没有的资料留空。Windows 本机 MusicFS 挂载与原生 HTTPS 目录映射已通过，HTTP 原生映射仍未通过，见[记录](../verification/p2-windows-mount.md)。
 
 ## 插件式数据源补充（已确认）
 
@@ -146,7 +146,7 @@ Q6 已明确优先随音频自动携带资料，当前内嵌路线已实现，�
 
 此处记录产品决定，不表示 Worker 动态插件加载已经验证。旧文档中的 API 内嵌方案仅保留为示例插件内部可参考的实现调查，不能据此把平台规则写入核心。
 
-已确认的架构变更见 [ADR 0001](../docs/adr/0001-installable-source-plugins.md) 与 [ADR 0002](../docs/adr/0002-worker-plugin-installation-by-deployment.md)。接受安装路线不代表相关 API、免费配额、更新恢复与音频连续性已经验证。
+已确认的架构变更见 [ADR 0001](../adr/0001-installable-source-plugins.md) 与 [ADR 0002](../adr/0002-worker-plugin-installation-by-deployment.md)。接受安装路线不代表相关 API、免费配额、更新恢复与音频连续性已经验证。
 
 ### 设计与验收核对范围
 
@@ -162,7 +162,7 @@ Q6 已明确优先随音频自动携带资料，当前内嵌路线已实现，�
 
 当前没有待答复的产品问题。用户已接受 Worker 安装、更新、移除插件时由后台自动发布新版本；优先验证预构建核心与插件模块的组装部署，保留其他路线为技术备选。不会将付费 Dynamic Workers 定为首版的必要部署前提。
 
-候选与证据边界见 [Worker 免费插件机制调查](research-worker-free-plugin-loading.md)。2026-10-18 调查因联网失败未完成标准上传接口与免费限额核查；后续 P0 需给出完整运行链路、绑定保留、失败恢复和版本切换影响的证据。若结果确实需要改变已确认的产品范围或部署前提，再带具体差距对齐。
+候选与证据边界见 [Worker 免费插件机制调查](../research/worker-free-plugin-loading.md)。2026-10-18 调查因联网失败未完成标准上传接口与免费限额核查；后续 P0 需给出完整运行链路、绑定保留、失败恢复和版本切换影响的证据。若结果确实需要改变已确认的产品范围或部署前提，再带具体差距对齐。
 
 ### Worker 动态插件事实核查（2026-10-18）
 
@@ -227,4 +227,4 @@ TypeScript 实现；Windows、Linux、macOS 与 Cloudflare Worker；通过可安
 
 网易云必要接口在 Worker 中的适配、QQ 接口能力、真实 CF 出口取流、WebDAV 与 Range、rclone 三端挂载、登录持久化和大歌单分页，都由技术验证给出事实。验证尚未完成不等于需求不明确，也不构成添加外部 API 服务或额外部署组件的授权。
 
-术语见 [GLOSSARY.md](GLOSSARY.md)。WebUI 技术依据与示例见 [变更评估](musicfs-webui-design-evaluation.md)。后续以 [统一需求与技术方案](musicfs-requirements-and-technical-design.md) 为准。
+术语见 [术语表](../glossary.md)。WebUI 技术依据与示例见 [变更评估](../research/webui-direction.md)。后续以 [统一需求与技术方案](../requirements.md) 为准。

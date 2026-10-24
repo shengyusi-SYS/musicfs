@@ -16,7 +16,7 @@
     "../../docs/architecture/cache-policy.md",
     "../../docs/architecture/shared-read-cache.md",
     "../../docs/engineering-lessons.md",
-    "../../outputs/musicfs-implementation-plan.md"
+    "../../docs/planning/implementation.md"
   ],
   "responsibility": "产品使用旅程与管理界面领域的独立评估。"
 }

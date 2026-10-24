@@ -1,6 +1,6 @@
 # MusicFS 缓存优化：决定与重开条件
 
-当前直接 DAV 共享读取方案已随 dev.11 交付。本文只保留取舍与后续候选，现行默认值、所有权及流程见[缓存策略](../docs/architecture/cache-policy.md)和[共享读取设计](../docs/architecture/shared-read-cache.md)；版本证据见[缓存消费](../docs/verification/cache-consumption-2026-10-21.md)与[共享读取验证](../docs/verification/shared-read-cache.md)。
+当前直接 DAV 共享读取方案已随 dev.11 交付。本文只保留取舍与后续候选，现行默认值、所有权及流程见[缓存策略](../architecture/cache-policy.md)和[共享读取设计](../architecture/shared-read-cache.md)；版本证据见[缓存消费](../verification/cache-consumption-2026-10-21.md)与[共享读取验证](../verification/shared-read-cache.md)。
 
 ## 已确定的方案
 
@@ -41,4 +41,4 @@
 
 缓存容量按实际常用工作集评估。已有 Windows 单曲读取范围的外推只能作为容量模型，不能宣称真实全库占用或卡顿根因已测定。管理状态是原生取样，可能滞后；一次命中也不证明整曲已缓存。
 
-依赖调查中 HTTP 缓存策略、字节存储和范围协调的能力边界见[主源记录](../docs/research/shared-read-cache-options.md)。该调查保留当时日期，当前实现不再由其中的旧“尚未实现”措辞决定。
+依赖调查中 HTTP 缓存策略、字节存储和范围协调的能力边界见[主源记录](../research/shared-read-cache-options.md)。该调查保留当时日期，当前实现不再由其中的旧“尚未实现”措辞决定。

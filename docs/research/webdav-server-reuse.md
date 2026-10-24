@@ -2,7 +2,7 @@
 
 ## 实施后的状态（2026-10-20）
 
-后续已安装并运行 Nephele alpha.67/只读插件、Bun 与本地 workerd 探针，得到比下文只读调查更强的证据。当前已按原备选采用共用 Fetch 只读映射、xmldom 和 range-parser；Nephele 的 Worker 完整取流失败保留为调查，不作为第二套产品路径。决定见 [ADR 0004](../docs/adr/0004-shared-fetch-readonly-dav.md)，已通过与尚缺范围见[P0 记录](../docs/verification/p0-library-dav.md)。下文保留调查时的证据边界，不代表最新采用状态。
+后续已安装并运行 Nephele alpha.67/只读插件、Bun 与本地 workerd 探针，得到比下文只读调查更强的证据。当前已按原备选采用共用 Fetch 只读映射、xmldom 和 range-parser；Nephele 的 Worker 完整取流失败保留为调查，不作为第二套产品路径。决定见 [ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)，已通过与尚缺范围见[P0 记录](../verification/p0-library-dav.md)。下文保留调查时的证据边界，不代表最新采用状态。
 
 ## 2026-10-20 补充：采用边界与本轮证据
 

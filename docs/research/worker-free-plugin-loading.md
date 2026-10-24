@@ -2,9 +2,9 @@
 
 日期：2026-10-18。问题：满足 WebUI 安装、更新、移除插件，避免以付费 Dynamic Workers 为必要前提。
 
-2026-10-20 决定更新：用户已接受安装、更新和移除插件时由后台自动发布新 Worker 版本，A 路线作为 P0 首选。此更新记录产品决定，不补充任何技术通过证据，见 [ADR 0002](../docs/adr/0002-worker-plugin-installation-by-deployment.md)。
+2026-10-20 决定更新：用户已接受安装、更新和移除插件时由后台自动发布新 Worker 版本，A 路线作为 P0 首选。此更新记录产品决定，不补充任何技术通过证据，见 [ADR 0002](../adr/0002-worker-plugin-installation-by-deployment.md)。
 
-2026-10-20 依赖证据补充：[新增依赖核查](research-architecture-dependencies.md#5-worker-自动部署官方-sdk-处理-api-机制)已读取 Cloudflare 官方 SDK，确认其 Bun/Workers 运行时声明及普通 Scripts 版本上传/部署入口，优先复用 SDK。下文原联网失败属于 2026-10-18 调查记录；普通免费额度、完整自部署、绑定保留和结果核对仍无本项目实测。
+2026-10-20 依赖证据补充：[新增依赖核查](architecture-dependencies.md#5-worker-自动部署官方-sdk-处理-api-机制)已读取 Cloudflare 官方 SDK，确认其 Bun/Workers 运行时声明及普通 Scripts 版本上传/部署入口，优先复用 SDK。下文原联网失败属于 2026-10-18 调查记录；普通免费额度、完整自部署、绑定保留和结果核对仍无本项目实测。
 
 ## 证据状态
 

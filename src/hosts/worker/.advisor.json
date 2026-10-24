@@ -21,7 +21,7 @@
     "../../../docs/architecture/README.md",
     "../../../docs/architecture/cache-policy.md",
     "../../../docs/engineering-lessons.md",
-    "../../../outputs/musicfs-implementation-plan.md"
+    "../../../docs/planning/implementation.md"
   ],
   "responsibility": "Worker宿主、插件生命周期与发行领域的独立评估。"
 }

@@ -4,7 +4,7 @@
 
 ## 版本与责任
 
-插件 `org.musicfs.qq@0.1.0-alpha.2`，公开合同 0.1.1，SDK `@yakult-green-tea/qq-music-api@3.3.3`。通过 npm 正式发布包核查源码与许可，使用 `/serverless`，未导入会启动 Koa 的根入口。npm 发布包完整性见原[调查补充](../../outputs/qq-api-integration-research.md)。插件 ZIP 为 124,275 字节，SHA-256 为 `d1806c370a5e0866cc7d3158da696e5a6f9007571e52c383075b2ab7bbd5191d`。
+插件 `org.musicfs.qq@0.1.0-alpha.2`，公开合同 0.1.1，SDK `@yakult-green-tea/qq-music-api@3.3.3`。通过 npm 正式发布包核查源码与许可，使用 `/serverless`，未导入会启动 Koa 的根入口。npm 发布包完整性见原[调查补充](../research/qq-api.md)。插件 ZIP 为 124,275 字节，SHA-256 为 `d1806c370a5e0866cc7d3158da696e5a6f9007571e52c383075b2ab7bbd5191d`。
 
 来源认证、SDK、分页、可读性判断、文件身份与取流均在 `plugins/qq`。核心只增加通用 `waiting.qrImage`，页面按公开步骤显示受限内嵌 PNG/JPEG，没有按 QQ ID 判断的路径。
 

@@ -36,4 +36,4 @@ Worker 部署从[部署指南](worker.md)开始。插件作者从[作者指南](
 
 由旧共享端口版本升级时，旧地址优先保留给 WebDAV；管理页面从启动器重新打开。Worker 升级会保留原 D1 与精确插件模块，按[核心升级步骤](worker.md#升级核心与-webui保留云端插件)操作。
 
-备份位置见[桌面指南](desktop.md#数据备份与常见问题)。历史下载、构建与实测范围分别见[发行历史](release-history.md)和[验收台账](verification.md)。
+备份位置见[桌面指南](desktop.md#数据备份与常见问题)。版本变化与实测范围分别见[发行历史](release-history.md)和[验收台账](verification.md)。

@@ -2,7 +2,7 @@
 
 目标是**从实际使用角度持续优化性能，直到没有足够高 ROI 的方向**。优先桌面端，多平台共用领域模型和算法，Worker 以免费版约束评估并允许必要的宿主差异。
 
-本文件定义执行与完成标准，不代表目标工具当前正在运行，也不自动创建或恢复目标。当前进展和候选只在[实施计划](../outputs/musicfs-implementation-plan.md)维护，已交付版本见[发行页](release.md)，工程经验见[经验总结](engineering-lessons.md)。
+本文件定义执行与完成标准，不代表目标工具当前正在运行，也不自动创建或恢复目标。当前进展和候选只在[实施计划](planning/implementation.md)维护，已交付版本见[发行页](release.md)，工程经验见[经验总结](engineering-lessons.md)。
 
 ## 持续执行循环
 

@@ -14,11 +14,11 @@
 
 桌面与 Worker 独立部署；使用任意一种都不依赖另一种常驻。不要求额外部署网易云 API、QQ API 或签名服务器。产品不再提供面向用户的 CLI 操作流程。
 
-桌面宿主建议采用 Bun，将运行时、后端与 WebUI 打包为可执行程序；这条路线待 P0 实测，当前不是已完成的兼容承诺。[Bun 评估](musicfs-bun-desktop-evaluation.md)
+桌面宿主建议采用 Bun，将运行时、后端与 WebUI 打包为可执行程序；这条路线待 P0 实测，当前不是已完成的兼容承诺。[Bun 评估](research/bun-desktop.md)
 
 前端保留 React + Vite 与成熟交互组件。Vite 统一生成 WebUI 静态产物，Bun 负责桌面后端及发行打包，不为采用 Bun 替换前端工具链。
 
-Worker 插件安装、更新和移除允许由后台自动发布普通 Worker 新版本，用户无需手工编译或部署。这是避免付费动态加载前提的优先验证路线，普通Worker的实际发布/配置保留和核心升级已有证据；免费计划结论及切换影响仍按台账收口。[插件边界](../docs/adr/0001-installable-source-plugins.md)、[Worker 安装决定](../docs/adr/0002-worker-plugin-installation-by-deployment.md)
+Worker 插件安装、更新和移除允许由后台自动发布普通 Worker 新版本，用户无需手工编译或部署。这是避免付费动态加载前提的优先验证路线，普通Worker的实际发布/配置保留和核心升级已有证据；免费计划结论及切换影响仍按台账收口。[插件边界](adr/0001-installable-source-plugins.md)、[Worker 安装决定](adr/0002-worker-plugin-installation-by-deployment.md)
 
 ## 1 范围与已确定方向
 
@@ -173,7 +173,7 @@ Worker 不提供本机挂载操作。WebUI 是管理入口，首版不附加播�
 
 区分插件身份、安装版本、数据源实例、来源对象、对象在目录中的一次出现和实际音频身份。内容以实例与插件给出的稳定对象身份关联，不以账号显示名、路径或临时 URL 当主键；两个实例即使连接同一服务也分别保存凭据与状态。插件更新保留实例身份，示例插件保留同曲在歌单中的不同出现位置。
 
-插件提供目录/文件显示名称及可用元数据，示例插件以曲序、歌手、歌名和实际音质生成原始名称。用户可选择自定义模板，来源默认及单目录覆盖独立于内容配置保存；命名资料由插件可选提供，不为命名额外抓取音频或资料。核心统一处理 Windows 保留名、禁止字符、尾部空格和点、大小写冲突、Unicode、路径长度与稳定的冲突后缀；不要求所有插件都有歌手或曲序字段，不强制展示内部技术版本号。现行职责见[自动更新与命名](../docs/architecture/updates-and-naming.md)。
+插件提供目录/文件显示名称及可用元数据，示例插件以曲序、歌手、歌名和实际音质生成原始名称。用户可选择自定义模板，来源默认及单目录覆盖独立于内容配置保存；命名资料由插件可选提供，不为命名额外抓取音频或资料。核心统一处理 Windows 保留名、禁止字符、尾部空格和点、大小写冲突、Unicode、路径长度与稳定的冲突后缀；不要求所有插件都有歌手或曲序字段，不强制展示内部技术版本号。现行职责见[自动更新与命名](architecture/updates-and-naming.md)。
 
 目录改名、拖拽、曲序和音质设置变化会影响路径。客户端刷新后看到新布局；不承诺所有第三方目录缓存立即更新。
 
@@ -217,7 +217,7 @@ Worker 不提供本机挂载操作。WebUI 是管理入口，首版不附加播�
 
 ## 6 总体架构与 TS 边界
 
-领域、Module、Interface、状态所有者与依赖方向的设计见 [架构设计](../docs/architecture/README.md)。结构与关键时序统一维护在 [架构与流程图](../docs/architecture/diagrams.md)，公开插件操作与字节合同见 [插件 Interface 草案](../docs/architecture/plugin-interface.md)。本文保留需求层面的职责约束，不另维护一套图或实现目录。
+领域、Module、Interface、状态所有者与依赖方向的设计见 [架构设计](architecture/README.md)。结构与关键时序统一维护在 [架构与流程图](architecture/diagrams.md)，公开插件操作与字节合同见 [插件 Interface 草案](architecture/plugin-interface.md)。本文保留需求层面的职责约束，不另维护一套图或实现目录。
 
 桌面和 Worker 独立运行共用核心与合同；插件根据兼容声明进入对应宿主。桌面建议使用包含 Bun 运行时的编译产物、外置安装的插件及随包 rclone；Worker 优先验证预构建模块组装与自动部署。两种宿主均不依赖另一端常驻。
 
@@ -278,7 +278,7 @@ QQ 示例插件优先集成 `@yakult-green-tea/qq-music-api` 的 `/serverless` �
 
 ### 8.1 音频表示与元数据
 
-音乐资料补全属于来源插件的可选能力：可以直接提供原文件、自带补标签，或选用共用工具。核心不强制改写、不要求所有插件提供歌曲/封面/歌词字段、不新增格式白名单；共用工具作为插件依赖打包。QQ、网易云本次扩展以基础资料、封面和来源已有歌词随音频携带为目标，保持音频编码与音质不变；缺失资料不自行生成，保留已有时间轴、译文和罗马音。按来源实际格式验证，未提供的格式不纳入该来源范围。模块设计与当前实现状态见[可选补标签设计](../docs/architecture/audio-tags.md)。
+音乐资料补全属于来源插件的可选能力：可以直接提供原文件、自带补标签，或选用共用工具。核心不强制改写、不要求所有插件提供歌曲/封面/歌词字段、不新增格式白名单；共用工具作为插件依赖打包。QQ、网易云本次扩展以基础资料、封面和来源已有歌词随音频携带为目标，保持音频编码与音质不变；缺失资料不自行生成，保留已有时间轴、译文和罗马音。按来源实际格式验证，未提供的格式不纳入该来源范围。模块设计与当前实现状态见[可选补标签设计](architecture/audio-tags.md)。
 
 来源对象身份与实际音频文件身份分开。插件提供属于某个实例的实际文件身份、格式、准确大小及可读取能力；临时 URL、请求头、过期处理和来源音质语义可留在插件内部。核心不能将 URL 作为内容身份，也不能要求插件必须返回 URL。示例插件记录目标与实际音质，但最终缓存和读取必须对应实际音频。
 
@@ -314,7 +314,7 @@ QQ 示例插件优先集成 `@yakult-green-tea/qq-music-api` 的 `/serverless` �
 
 通过复用服务端或薄适配提供 OPTIONS、PROPFIND Depth 0/1、GET、HEAD；正确处理 207、属性状态、中文路径、URL 编码、XML 转义和目录尾斜杠。写入方法明确拒绝，深度无限遍历与未实现的锁能力不宣称支持。
 
-WebDAV 已执行 Nephele 自定义资源与官方 Worker Node HTTP 桥接的 PoC；本地 Worker 完整取流未通过，因此按原备选采用共用 Fetch 只读映射，复用 xmldom 的 XML/命名空间与 range-parser。当前 Bun、本地 workerd 和真实 rclone 路径已有证据，真实云端、平台、OpenList 和播放器仍待验。[ADR 0004](../docs/adr/0004-shared-fetch-readonly-dav.md)、[P0 记录](../docs/verification/p0-library-dav.md)
+WebDAV 已执行 Nephele 自定义资源与官方 Worker Node HTTP 桥接的 PoC；本地 Worker 完整取流未通过，因此按原备选采用共用 Fetch 只读映射，复用 xmldom 的 XML/命名空间与 range-parser。当前 Bun、本地 workerd 和真实 rclone 路径已有证据，真实云端、平台、OpenList 和播放器仍待验。[ADR 0004](adr/0004-shared-fetch-readonly-dav.md)、[P0 记录](verification/p0-library-dav.md)
 
 插件原始接口仅在内部使用，不整套映射到公网。首版音频经当前部署流式代理，插件负责来源认证与必要请求头，核心负责 DAV/HTTP 响应与取消传递；直接重定向仅作为通过验证后的优化。
 
@@ -340,7 +340,7 @@ WebDAV 已执行 Nephele 自定义资源与官方 Worker Node HTTP 桥接的 PoC
 
 使用 rclone VFS 缓存，不另做第二套音频磁盘缓存。`--vfs-cache-mode full` 是建议起点，大小和保留期可调；其上限为软目标，需如实显示磁盘不足等错误。[VFS 缓存](https://rclone.org/commands/rclone_mount/#vfs-file-caching)
 
-前端先由 Vite 构建为普通静态资源。桌面使用 `bun build --compile` 编译核心后端与运行时，在打包阶段完整收录这些已生成的 WebUI 文件，保持分块和资源路径关系，不再使用 Bun 重编译前端源码。可安装插件使用真实的应用数据目录，安装新插件不得要求用户重新编译可执行程序；外置加载须在编译产物内验证。rclone 可随发行包并列提供；若选择单文件下载，则内嵌为资产，首次使用释放到真实路径再启动。实例数据库、设置与缓存不写入内嵌资源。详细依据与未验证边界见 [Bun 发行核查](research-bun-executable-packaging.md)。
+前端先由 Vite 构建为普通静态资源。桌面使用 `bun build --compile` 编译核心后端与运行时，在打包阶段完整收录这些已生成的 WebUI 文件，保持分块和资源路径关系，不再使用 Bun 重编译前端源码。可安装插件使用真实的应用数据目录，安装新插件不得要求用户重新编译可执行程序；外置加载须在编译产物内验证。rclone 可随发行包并列提供；若选择单文件下载，则内嵌为资产，首次使用释放到真实路径再启动。实例数据库、设置与缓存不写入内嵌资源。详细依据与未验证边界见 [Bun 发行核查](research/bun-executable-packaging.md)。
 
 发行物包含锁定的应用产物、rclone 和依赖许可，提供适合各系统的安装或解压运行方式。Windows 可使用隐藏控制台选项，macOS 按实际路线做薄 `.app` 包装；具体格式、签名和公证按实际发行路线验证，不预先作为额外产品门槛。至少测试 Windows x64、Linux x64、macOS Intel 与 Apple Silicon，其他架构标明实际验证范围。交叉编译不替代目标系统运行验收。
 
@@ -352,7 +352,7 @@ WebUI 统一由 Vite 构建，Worker 复用其静态产物，不执行 Bun 可�
 
 ### 10.1 插件变更与自动部署
 
-用户已接受“预构建模块 + 后台自动部署普通 Worker”为 P0 优先路线。作者预先构建插件并处理依赖，宿主组装预构建核心、插件模块与注册入口，通过部署接口发布新版本；不为安装插件重新构建 React/Vite 前端。具体上传接口、模块组织和部署生命周期尚未验证。[决定](../docs/adr/0002-worker-plugin-installation-by-deployment.md)、[候选调查与证据边界](research-worker-free-plugin-loading.md)
+用户已接受“预构建模块 + 后台自动部署普通 Worker”为 P0 优先路线。作者预先构建插件并处理依赖，宿主组装预构建核心、插件模块与注册入口，通过部署接口发布新版本；不为安装插件重新构建 React/Vite 前端。具体上传接口、模块组织和部署生命周期尚未验证。[决定](adr/0002-worker-plugin-installation-by-deployment.md)、[候选调查与证据边界](research/worker-free-plugin-loading.md)
 
 目标是避免付费动态加载成为首版部署前提，并核查普通免费计划能否承载应用与示例插件；不承诺任意插件数量、体积或使用量均免费。需要在部署时配置能更新目标 Worker 的凭据，具体权限与保存方式按实际 API 验证。付费 Dynamic Workers、独立插件 Worker 或解释器保留为技术备选，不自动改为必需条件。
 
@@ -438,15 +438,15 @@ Worker 内存只作短期缓存，插件和核心的持久状态都不能依赖�
 
 ## 13 工程组织
 
-核心保持一个应用，领域 Module 不机械拆成独立服务；插件公开合同需要独立提供给作者，示例插件拥有独立交付产物。具体源码层级和禁止依赖方向只在 [架构设计](../docs/architecture/README.md#模块组织)维护，通用机制的依赖选择与采用条件在 [依赖选择](musicfs-simplification-and-dependencies.md)维护。
+核心保持一个应用，领域 Module 不机械拆成独立服务；插件公开合同需要独立提供给作者，示例插件拥有独立交付产物。具体源码层级和禁止依赖方向只在 [架构设计](architecture/README.md#模块组织)维护，通用机制的依赖选择与采用条件在 [依赖选择](research/dependency-selection.md)维护。
 
-在源码建立时引入现成导入图检查工具执行模块规则，不能等各层穿透后再补限制。新增来源只依赖公开插件合同，核心和 DAV 不导入平台 SDK；SQLite/D1、桌面/Worker 加载发布与流转换留在真实 Adapter。结构校验、表单、归档、版本范围和部署请求优先复用成熟依赖，来源语义与状态提交由本项目负责。[新增依赖依据](research-architecture-dependencies.md)
+在源码建立时引入现成导入图检查工具执行模块规则，不能等各层穿透后再补限制。新增来源只依赖公开插件合同，核心和 DAV 不导入平台 SDK；SQLite/D1、桌面/Worker 加载发布与流转换留在真实 Adapter。结构校验、表单、归档、版本范围和部署请求优先复用成熟依赖，来源语义与状态提交由本项目负责。[新增依赖依据](research/architecture-dependencies.md)
 
-Ant Tree 已覆盖树内拖拽，Query 已覆盖认证轮询；不为相同职责再叠加另一套树、拖拽或服务状态框架。首版可先选择内容源加入树，再拖动排序和改变层级。库只替代通用机制，核心仍负责插件管理、动态布局与实际挂载，示例插件负责平台归一化和音质规则。[依赖选择依据](musicfs-simplification-and-dependencies.md)
+Ant Tree 已覆盖树内拖拽，Query 已覆盖认证轮询；不为相同职责再叠加另一套树、拖拽或服务状态框架。首版可先选择内容源加入树，再拖动排序和改变层级。库只替代通用机制，核心仍负责插件管理、动态布局与实际挂载，示例插件负责平台归一化和音质规则。[依赖选择依据](research/dependency-selection.md)
 
 前端工具与交互依赖按开发体验、实际功能和整体维护成本选择。目录编辑中的拖拽、异步内容、草稿保存与状态反馈需要正常处理；若组件能力有实际缺口，可补充合适依赖。Bun 不限制前端生态，也不要求前端测试统一迁入 `bun:test`。
 
-TS 开启严格检查；在适配边界检查平台响应。Bun 与 Worker 分别构建并核查导入图，将 Bun 专用 API、子进程和本机文件操作留在桌面入口及本地存储实现。锁定版本支持时采用 `bun check`，后端与共享逻辑可使用 `bun:test`；前端按自身工具链执行类型与交互检查，真实 Worker 与三端测试仍需完成。若 DAV 采用官方 Node HTTP 桥接，单独核查其实际依赖，而非笼统禁止所有 Node HTTP 导入。[Bun 设计依据](musicfs-bun-desktop-evaluation.md)
+TS 开启严格检查；在适配边界检查平台响应。Bun 与 Worker 分别构建并核查导入图，将 Bun 专用 API、子进程和本机文件操作留在桌面入口及本地存储实现。锁定版本支持时采用 `bun check`，后端与共享逻辑可使用 `bun:test`；前端按自身工具链执行类型与交互检查，真实 Worker 与三端测试仍需完成。若 DAV 采用官方 Node HTTP 桥接，单独核查其实际依赖，而非笼统禁止所有 Node HTTP 导入。[Bun 设计依据](research/bun-desktop.md)
 
 示例插件依赖与 rclone 锁定版本、来源和校验，记录补丁与回归结果，不在每次挂载时自动下载最新版。第三方插件按用户指定包或发布地址安装，记录实际安装版本与兼容性。发行与插件包保留各自依赖许可及必要说明。[网易云许可](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/blob/19c7dad6db7d660954c7a615a686ff0acb030f91/LICENSE)、[QQ 许可](https://github.com/yakult-green-tea/qq-music-api/blob/e7dff2e1e2496780702bda528362edbdaf6bbf6e/LICENSE)、[rclone 许可](https://rclone.org/licence/)
 
@@ -479,7 +479,7 @@ TS 开启严格检查；在适配边界检查平台响应。Bun 与 Worker 分�
 
 ## 15 实施阶段
 
-具体优先顺序、首条可用链路、当前环境限制及阶段完成条件见 [实施与交付计划](musicfs-implementation-plan.md)。阶段可交错，P0 不构成等待全部目标环境就绪才进行任何业务实现的全局门禁。
+具体优先顺序、首条可用链路、当前环境限制及阶段完成条件见 [实施与交付计划](planning/implementation.md)。阶段可交错，P0 不构成等待全部目标环境就绪才进行任何业务实现的全局门禁。
 
 | 阶段 | 内容 | 完成标志 |
 |---|---|---|
@@ -490,24 +490,23 @@ TS 开启严格检查；在适配边界检查平台响应。Bun 与 Worker 分�
 | P4 双端产品化 | 桌面启动器、外置插件与 rclone；Worker 资源路由与自动部署 | 三端点击启动与挂载，云端独立安装和运行兼容插件 |
 | P5 发布验收 | 真实客户端、故障恢复、发行包、文档与许可 | 第 14 节通过，标明实际测试范围 |
 
-阶段可在合同稳定后交错推进，不预估未经验证的工期。已对齐的需求与设计现由 [Codex 主线目标](../docs/codex-goal.md)承接完整实现与交付；当前处于 P4/P5 收尾，真实进展与未完成义务见[验收台账](../docs/verification.md)。
+阶段可在合同稳定后交错推进，不预估未经验证的工期。已对齐的需求与设计现由 [Codex 主线目标](codex-goal.md)承接完整实现与交付；当前处于 P4/P5 收尾，真实进展与未完成义务见[验收台账](verification.md)。
 
 ## 16 依据与澄清记录
 
 示例插件上游引用锁定到已核查提交；Cloudflare、rclone 与 OpenList 的动态文档在实施时复核。插件合同、目录布局、回退规则、存储与打包路线中标为建议的部分是本项目设计，不是第三方已提供的整套产品。早期调查中的固定双平台范围与静态内嵌核心假设已由本版替代，来源证据保留为插件内部实现参考。
 
-- [需求澄清记录](musicfs-design-review.md)
-- [实施与交付计划](musicfs-implementation-plan.md)
-- [文档索引](../docs/README.md)、[架构](../docs/architecture/README.md)、[插件合同](../docs/architecture/plugin-interface.md)、[图表](../docs/architecture/diagrams.md)
-- [ADR 0001：可安装来源插件](../docs/adr/0001-installable-source-plugins.md)、[ADR 0002：Worker 后台自动部署](../docs/adr/0002-worker-plugin-installation-by-deployment.md)
-- [Worker 免费插件机制候选与待验证项](research-worker-free-plugin-loading.md)
-- [方案精简与依赖替代](musicfs-simplification-and-dependencies.md)
-- [新增通用依赖核查](research-architecture-dependencies.md)
-- [Bun 桌面评估](musicfs-bun-desktop-evaluation.md)、[Bun 发行边界核查](research-bun-executable-packaging.md)
-- [工作量、风险与 ROI 评估](musicfs-effort-risk-roi-assessment.md)，原估算尚未计入插件化增量，当前不能作为完整新范围预算或交付期限。
-- [WebUI 变更评估](musicfs-webui-design-evaluation.md)
-- [领域术语](GLOSSARY.md)
-- [相似项目调研](cloud-music-filesystem-research.md)
-- [OpenList 驱动补充调查](openlist-music-drivers-followup.md)
-- [平台 API 调查](platform-api-integration-research.md)
-- [QQ API 核查](qq-api-integration-research.md)
+- [需求澄清记录](planning/requirements-decisions.md)
+- [实施与交付计划](planning/implementation.md)
+- [文档索引](README.md)、[架构](architecture/README.md)、[插件合同](architecture/plugin-interface.md)、[图表](architecture/diagrams.md)
+- [ADR 0001：可安装来源插件](adr/0001-installable-source-plugins.md)、[ADR 0002：Worker 后台自动部署](adr/0002-worker-plugin-installation-by-deployment.md)
+- [Worker 免费插件机制候选与待验证项](research/worker-free-plugin-loading.md)
+- [方案精简与依赖替代](research/dependency-selection.md)
+- [新增通用依赖核查](research/architecture-dependencies.md)
+- [Bun 桌面评估](research/bun-desktop.md)、[Bun 发行边界核查](research/bun-executable-packaging.md)
+- [WebUI 变更评估](research/webui-direction.md)
+- [领域术语](glossary.md)
+- [相似项目调研](research/cloud-music-filesystems.md)
+- [OpenList 驱动补充调查](research/openlist-music-drivers.md)
+- [平台 API 调查](research/platform-apis.md)
+- [QQ API 核查](research/qq-api.md)

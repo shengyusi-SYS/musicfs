@@ -1,8 +1,8 @@
 # 桌面 Bun 方案评估与精简建议
 
-日期：2026-10-18。依据：Bun、Hono 官方文档与发行源码核查。原调查时未安装 Bun，未编译或运行本项目；以下是推荐设计与待验证范围。2026-10-20 的当前环境检查已发现 Bun 1.4.3，仍无本项目编译或运行通过证据，执行安排见 [实施与交付计划](musicfs-implementation-plan.md)。
+日期：2026-10-18。依据：Bun、Hono 官方文档与发行源码核查。原调查时未安装 Bun，未编译或运行本项目；以下是推荐设计与待验证范围。2026-10-20 的当前环境检查已发现 Bun 1.4.3，仍无本项目编译或运行通过证据，执行安排见 [实施与交付计划](../planning/implementation.md)。
 
-2026-10-20 设计更新：来源能力改为可安装插件，网易云与 QQ 是完整示例；音质配置和规则由插件定义并按实例保存。Bun 仍只负责桌面宿主与核心发行，编译产物必须验证外置插件加载；Worker 已接受后台自动部署的插件安装路线。此更新不增加运行通过证据。[统一方案](musicfs-requirements-and-technical-design.md)
+2026-10-20 设计更新：来源能力改为可安装插件，网易云与 QQ 是完整示例；音质配置和规则由插件定义并按实例保存。Bun 仍只负责桌面宿主与核心发行，编译产物必须验证外置插件加载；Worker 已接受后台自动部署的插件安装路线。此更新不增加运行通过证据。[统一方案](../requirements.md)
 
 ## 1 结论
 
@@ -46,7 +46,7 @@
 
 ## 4 双宿主最小结构
 
-源码层级、领域 Module 和 Adapter 的唯一目录设计见 [架构设计](../docs/architecture/README.md#模块组织)。本评估只保存 Bun 运行与发行方面的依据，不另维护平行目录树。
+源码层级、领域 Module 和 Adapter 的唯一目录设计见 [架构设计](../architecture/README.md#模块组织)。本评估只保存 Bun 运行与发行方面的依据，不另维护平行目录树。
 
 业务层使用标准 Request、Response、fetch、Web Streams 和 AbortSignal。`Bun.*` 与 `bun:sqlite` 留在桌面入口和本地数据实现；Worker 导入图不能触达这些代码。
 
@@ -58,7 +58,7 @@
 
 ## 5 可执行程序与 rclone
 
-Bun 提供 Windows、Linux、macOS 的多种架构目标和交叉编译。每种目标分别生成可执行文件；交叉编译不替代目标系统验证。Windows 可使用隐藏控制台选项，macOS 根据发行方式做薄 `.app` 包装。详细证据见 [发行边界核查](research-bun-executable-packaging.md)。
+Bun 提供 Windows、Linux、macOS 的多种架构目标和交叉编译。每种目标分别生成可执行文件；交叉编译不替代目标系统验证。Windows 可使用隐藏控制台选项，macOS 根据发行方式做薄 `.app` 包装。详细证据见 [发行边界核查](bun-executable-packaging.md)。
 
 建议区分“用户下载的发行物”和“运行时文件”：
 
@@ -89,4 +89,4 @@ Bun 提供 Windows、Linux、macOS 的多种架构目标和交叉编译。每种
 
 这些验证沿用现有验收范围，不是新增产品功能。当前结论是设计适配性高，尚不是完成三端验证的兼容承诺。
 
-关联：[统一方案](musicfs-requirements-and-technical-design.md)、[依赖精简](musicfs-simplification-and-dependencies.md)、[工作量与 ROI](musicfs-effort-risk-roi-assessment.md)。
+关联：[统一方案](../requirements.md)、[依赖精简](dependency-selection.md)、[工作量与 ROI](../planning/implementation.md)。

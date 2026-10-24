@@ -27,3 +27,5 @@ Build and release steps are in the development guide. Native toolchains are desc
 ## Detailed designs and records
 
 The complete source package also contains the [Chinese topic index](../README.md): architecture diagrams, optional tagging, refresh and cache designs, UI decisions, ADRs and specialist verification tools. [Engineering lessons](../engineering-lessons.md) hold reusable conclusions; [verification](../verification.md) and [release history](../release-history.md) retain version-specific evidence.
+
+All documentation lives under `docs/`: current designs in `architecture/`, plans and trade-offs in `planning/`, dependency research in `research/`, version evidence in `verification/`, and reusable lessons in `lessons/`.

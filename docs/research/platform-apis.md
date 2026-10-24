@@ -40,7 +40,7 @@ README 提供 Node.js/TypeScript 直接导入函数的例子，无需先独立�
 
 ## QQ 音乐
 
-详见 [QQ 专项核验](qq-api-integration-research.md)。新发现的 yakult-green-tea/qq-music-api 已有专门的 `/serverless` 导出，不能再把它笼统归为仅能部署 Node 服务的库。根入口与 serverless 入口具有不同副作用和依赖，需要按宿主选择。
+详见 [QQ 专项核验](qq-api.md)。新发现的 yakult-green-tea/qq-music-api 已有专门的 `/serverless` 导出，不能再把它笼统归为仅能部署 Node 服务的库。根入口与 serverless 入口具有不同副作用和依赖，需要按宿主选择。
 
 ## 推荐产品结构
 

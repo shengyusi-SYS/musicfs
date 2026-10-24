@@ -3,7 +3,7 @@
 日期：2026-10-20  
 范围：声明式配置表单、插件包解析、版本兼容、Worker 自动部署、模块依赖检查。仅核查官方文档与维护方源码；没有安装依赖、运行 PoC、读取部署凭据或部署 Worker。现有 Hono、React、Vite、Ant Design、TanStack Query、Zod、p-limit 的选择沿用既有调查。
 
-依据：[统一需求与技术方案](musicfs-requirements-and-technical-design.md)、[精简与依赖替代](musicfs-simplification-and-dependencies.md)。下文“建议”属于本项目设计判断；文档或源码存在某接口，不代表已在本项目两个宿主验证通过。上游 main 和在线文档是浮动证据，接入时须核对实际发布版本、peerDependencies、锁文件与构建结果。
+依据：[统一需求与技术方案](../requirements.md)、[精简与依赖替代](dependency-selection.md)。下文“建议”属于本项目设计判断；文档或源码存在某接口，不代表已在本项目两个宿主验证通过。上游 main 和在线文档是浮动证据，接入时须核对实际发布版本、peerDependencies、锁文件与构建结果。
 
 ## 1 建议结论
 

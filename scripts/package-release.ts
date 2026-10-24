@@ -90,7 +90,7 @@ export async function archive(directory: string, stem: string, staging: string):
 }
 
 export async function copyProjectSource(directory: string, identity: ReleaseIdentity): Promise<void> {
-  const directories = ['.github', 'src', 'native', 'packages', 'plugins', 'scripts', 'tests', 'docs', 'outputs', 'worker-template', 'third-party'];
+  const directories = ['.github', 'src', 'native', 'packages', 'plugins', 'scripts', 'tests', 'docs', 'worker-template', 'third-party'];
   const rootFiles = ['package.json', 'bun.lock', 'bunfig.toml', 'wrangler.jsonc', '.dev.vars.example', 'tsconfig*.json', 'vite.config.*',
     '.dependency-cruiser.cjs', '.gitignore', '.gitattributes', 'README*', 'LICENSE*'];
   const selected = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--',

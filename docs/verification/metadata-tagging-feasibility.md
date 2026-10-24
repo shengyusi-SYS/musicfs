@@ -104,7 +104,7 @@ MP3 已证明有不转码、不缓存整曲的可行路线；FLAC、APE 的小�
 此次对现有代码的有限核对发现，比标签生成 CPU 更早需要收敛的是目录读取成本：
 
 - 插件 `Entry.info` 可省略；提供时必须描述最终字节，不能继续使用未补标签的旧大小和内容身份。
-- 通常的 PROPFIND Depth1 `allprop` 需要每个子文件的完整描述；DAV 调用 `statMany(entries)`，缺少 `info` 时逐项调用插件 `stat`。代码见 [DAV 接线](../../src/transport/dav/index.ts:61)、[批量描述回退](../../src/core/library/index.ts:274)。
+- 通常的 PROPFIND Depth1 `allprop` 需要每个子文件的完整描述；DAV 调用 `statMany(entries)`，缺少 `info` 时逐项调用插件 `stat`。代码见 [DAV 接线](../../src/transport/dav/index.ts)、[批量描述回退](../../src/core/library/index.ts)。
 - HEAD/GET 同样先取得文件描述再计算长度、范围，GET 随后才调用 `open`；最终返回信息不一致会被既有合同拒绝。
 
 因此，将封面/歌词抓取搬到 `stat` 可以满足字节合同，却会在首次列目录时准备该层所有文件；搬到首次 `open` 再悄悄改变长度则不能满足当前合同。单曲流式实验没有解决这一问题，不能据此宣称整目录已能低成本懒加载。

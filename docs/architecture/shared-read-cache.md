@@ -47,4 +47,4 @@ flowchart LR
 
 首次资料准备、新范围、版本变化和淘汰后仍可能取源。开放 GET 的取消时机、预读及区段对齐可使再次打开取得不同范围，不能承诺任意第二次打开零网络。HTTP 源排队、读取器消费和 VFS 实存是不同计数；已缓存一段不代表整曲已保存。
 
-不将单曲回环或 VM 结果外推为真实全库 GUI 耗时，也不将桌面磁盘收益外推为免费 Worker 成本。候选比较及重开条件见[缓存决定](../../outputs/musicfs-cache-optimization-plan.md)。
+不将单曲回环或 VM 结果外推为真实全库 GUI 耗时，也不将桌面磁盘收益外推为免费 Worker 成本。候选比较及重开条件见[缓存决定](../planning/cache-optimization.md)。

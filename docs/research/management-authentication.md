@@ -1,6 +1,6 @@
 # 管理页面登录：选型结论
 
-2026-10-22。已采用固定版本 Better Auth 1.7.12，为 MusicFS 单管理员提供密码校验、数据库会话、Cookie、记住登录和撤销。桌面与 Worker 共用认证模块；现行合同、入口图和存储见[管理访问架构](../docs/architecture/management-access.md)，实际证据见[定向核对](../docs/verification/desktop-access.md)。
+2026-10-22。已采用固定版本 Better Auth 1.7.12，为 MusicFS 单管理员提供密码校验、数据库会话、Cookie、记住登录和撤销。桌面与 Worker 共用认证模块；现行合同、入口图和存储见[管理访问架构](../architecture/management-access.md)，实际证据见[定向核对](../verification/desktop-access.md)。
 
 ## 为什么采用
 

@@ -14,7 +14,7 @@
     "../../../docs/architecture/cache-policy.md",
     "../../../docs/architecture/README.md",
     "../../../docs/engineering-lessons.md",
-    "../../../outputs/musicfs-implementation-plan.md"
+    "../../../docs/planning/implementation.md"
   ],
   "responsibility": "音乐目录与持久化领域的独立评估。"
 }

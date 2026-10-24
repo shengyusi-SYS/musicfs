@@ -152,7 +152,7 @@ Worker构建新增复制`docs/worker.md`为随包`WORKER.md`，用户无需从�
 
 四个桌面可执行文件及Worker核心的摘要与上一检查点完全相同，页面与插件也相同；因此沿用既有运行证据，没有重复启动、媒体、挂载或原生系统验证。Linux程序SHA-256仍为`801d92b2c08ad7fd55cc58b3b83760009be8530e202de58b90a6e6dcafc4c738`。一次构建误用了另一缓存目录，固定Windows运行时下载中断；改回已有完整缓存后续建其余三个目标成功，未变更工具链。去敏打包收据与对比保存在本机忽略目录`.musicfs/final-release-*.json`。
 
-GPL项目正文、独立项目源码、实际打包npm依赖声明、WebUI许可、随包rclone原始说明以及既有固定Bun原始材料均保留；Bun索引仍为`complete:false`。本次未进行音乐平台请求、Cloudflare部署/资源变更、Windows宿主调用或新的测试矩阵。版本化归档与完整摘要以[最终清单](../../dist/releases/release-manifest.json)为准，本次开发预览发行收口完成。
+GPL项目正文、独立项目源码、实际打包npm依赖声明、WebUI许可、随包rclone原始说明以及既有固定Bun原始材料均保留；Bun索引仍为`complete:false`。本次未进行音乐平台请求、Cloudflare部署/资源变更、Windows宿主调用或新的测试矩阵。版本化归档与完整摘要以发行时的 `release-manifest.json`为准，本次开发预览发行收口完成。
 
 ## 最新发行：音乐资料与Windows修复（dev.1）
 
@@ -186,7 +186,7 @@ GPL项目正文、独立项目源码、实际打包npm依赖声明、WebUI许可
 
 Windows ZIP 中的 `MusicFS.exe` 与 VM 实测文件 SHA-256 同为 `9e36ced3fcbfd307d63166099cb0d474f84e90296cb1af92e0d9379e733b536b`。ZIP 确含固定官方 WinFsp `2.1.25156` 安装器，摘要 `073a70e00f77423e34bed98b86e600def93393ba5822204fac57a29324db9f7a`；已有驱动直接复用，没有为覆盖安装分支重装系统组件。
 
-本轮定向自动检查共 19 项/152 次断言通过；三组类型检查通过，依赖图 202 模块/766 依赖无违规。四桌面、Worker、作者包及源码共 7 个新版本归档，另有 3 个独立插件；校验清单共 11 项通过，具体大小和摘要以[发行清单](../../dist/releases/release-manifest.json)为准。初次 Worker 组装未显式选择插件，被既有身份检查拒绝；按仓库已有命令带上三个插件重组后通过，没有修改四桌面程序或跳过检查。
+本轮定向自动检查共 19 项/152 次断言通过；三组类型检查通过，依赖图 202 模块/766 依赖无违规。四桌面、Worker、作者包及源码共 7 个新版本归档，另有 3 个独立插件；校验清单共 11 项通过，具体大小和摘要以发行时的 `release-manifest.json`为准。初次 Worker 组装未显式选择插件，被既有身份检查拒绝；按仓库已有命令带上三个插件重组后通过，没有修改四桌面程序或跳过检查。
 
 本轮未调用 Windows 宿主、音乐平台或 Cloudflare，没有压力测试、云端发布或新增资源；macOS 只有交叉构建，未重复 Linux/FUSE 实际旅程。VM 的测试映射、临时证书信任和后台均正常清理。去敏回执位于本机忽略目录 `.musicfs/windows-mount-dev2/`，最新综合回执为 `.musicfs/latest-release-receipt.json`。
 
@@ -196,7 +196,7 @@ Windows ZIP 中的 `MusicFS.exe` 与 VM 实测文件 SHA-256 同为 `9e36ced3fcb
 
 App 可在原有 Windows 连接设置中提高原生 WebDAV 单文件上限至 4GiB−1，记录并恢复原值；界面说明全局影响及 WebClient 重启中断。四桌面、正式三插件 Worker 与作者包复用固定运行时/依赖缓存构建，没有新增依赖、云部署或音乐平台请求。定向检查 9 项/64 次断言、三组类型检查和模块边界检查通过。实机验收初期受 VM 网络阻塞，用户重连后已用正式 dev.3 程序完成跨 50MB 阈值的 64MiB 原生读取与原值恢复，详见 [Windows 记录](p2-windows-mount.md#dev3原生映射文件上限与恢复)；dev.2 的小文件和挂载证据保留原版本边界。
 
-七份 dev.3 归档与三个独立插件已生成，`SHA256SUMS` 共 11 项全部通过。Windows ZIP 中程序 SHA-256 为 `26ff1bacf65be07e10935eac277a8be1bcd77a723df1a5e2fdb34c1515f3b683`，与构建元数据及 VM 实测一致；随包 WinFsp MSI 摘要保持 `073a70e00f77423e34bed98b86e600def93393ba5822204fac57a29324db9f7a`。源码归档包含新模块与定向测试，未包含临时大文件 fixture 或本机状态。完整归档大小/摘要见 [发行清单](../../dist/releases/release-manifest.json)，本机去敏回执为 `.musicfs/latest-release-receipt.json`；前版证据另存 `release-dev2-receipt.json`，未将前版实测写成 dev.3 通过。
+七份 dev.3 归档与三个独立插件已生成，`SHA256SUMS` 共 11 项全部通过。Windows ZIP 中程序 SHA-256 为 `26ff1bacf65be07e10935eac277a8be1bcd77a723df1a5e2fdb34c1515f3b683`，与构建元数据及 VM 实测一致；随包 WinFsp MSI 摘要保持 `073a70e00f77423e34bed98b86e600def93393ba5822204fac57a29324db9f7a`。源码归档包含新模块与定向测试，未包含临时大文件 fixture 或本机状态。完整归档大小/摘要见 发行时的 `release-manifest.json`，本机去敏回执为 `.musicfs/latest-release-receipt.json`；前版证据另存 `release-dev2-receipt.json`，未将前版实测写成 dev.3 通过。
 
 本次 VM 实测原 DWORD 为 `50,000,000`：原生映射后的文件读取报 `0x800700DF`；正式 App 提高为 `4,294,967,295` 后，完整读取 `67,108,864` 字节并匹配生成器 SHA-256，随后正式恢复入口准确还原 `50,000,000`。两次映射均正常断开，BasicAuthLevel 保持 1，后台正常退出、临时信任与测试文件清理完成。程序、页面及插件无需重建；仅为将实际验收结论纳入对应源码交付，更新本次归档说明。宿主 Windows 禁令始终保持，无平台请求、压力测试或云端资源变更。
 

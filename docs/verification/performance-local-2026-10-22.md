@@ -1,6 +1,6 @@
 # 局部性能优化的离线核对
 
-日期：2026-10-22。覆盖 O2 → O1 → O3 及后续应用场景优化，选择依据和停止条件见[场景复评](../../outputs/musicfs-performance-review.md)。最终dev.12沿用 API0.1.9/schema10；网易云alpha.17、QQ alpha.16。此记录不改写 dev.11 发行物的测试结果。
+日期：2026-10-22。覆盖 O2 → O1 → O3 及后续应用场景优化，选择依据和停止条件见[场景复评](../planning/performance-review.md)。最终dev.12沿用 API0.1.9/schema10；网易云alpha.17、QQ alpha.16。此记录不改写 dev.11 发行物的测试结果。
 
 | 改动 | 核对入口与结果 | 范围 |
 |---|---|---|

@@ -76,4 +76,4 @@ bun run scripts/probe-worker-netease.ts
 
 探针只输出计数与通过状态，临时 D1 完成后删除。不要把账号 Cookie、私有状态、二维码或真实账号截图放入仓库。
 
-SDK 候选与取舍见 [研究记录](../../outputs/research-netease-worker-sdk.md)。插件自有代码采用GPL-3.0-only；发布包保留该正文及实际打包依赖各自的第三方许可和署名。
+SDK 候选与取舍见 [研究记录](../../docs/research/netease-worker-sdk.md)。插件自有代码采用GPL-3.0-only；发布包保留该正文及实际打包依赖各自的第三方许可和署名。

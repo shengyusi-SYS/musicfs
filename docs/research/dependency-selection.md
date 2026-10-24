@@ -1,13 +1,13 @@
 # 方案精简与依赖替代建议
 
 日期：2026-10-21（原调查 2026-10-18）  
-范围：保留已确认功能，减少通用基础设施与手写实现。本文保留原选型调查及候选依据，不是未完成任务清单；当前实际采用以package.json、ADR及[验收台账](../docs/verification.md)为准。
+范围：保留已确认功能，减少通用基础设施与手写实现。本文保留原选型调查及候选依据，不是未完成任务清单；当前实际采用以package.json、ADR及[验收台账](../verification.md)为准。
 
-插件 Q1—Q11 已确认：数据源插件是必要产品能力，网易云与 QQ 是完整示例插件；支持多实例，来源配置及音质规则归插件。核心提供通用合同、实例与目录管理，Worker 插件变更允许后台自动部署，优先验证普通免费路线。本文已按此修订，技术证据仍以原调查和后续 P0 为界。[澄清记录](musicfs-design-review.md)
+插件 Q1—Q11 已确认：数据源插件是必要产品能力，网易云与 QQ 是完整示例插件；支持多实例，来源配置及音质规则归插件。核心提供通用合同、实例与目录管理，Worker 插件变更允许后台自动部署，优先验证普通免费路线。本文已按此修订，技术证据仍以原调查和后续 P0 为界。[澄清记录](../planning/requirements-decisions.md)
 
-本文维护通用依赖选择；领域职责、源码层级和 Interface 见 [架构设计](../docs/architecture/README.md)，新增表单/校验、插件包、部署 SDK 与导入图的证据见 [2026-10-20 核查](research-architecture-dependencies.md)。表中优先采用仍须在实际版本与两个宿主中验证，未安装的候选不写为已集成。
+本文维护通用依赖选择；领域职责、源码层级和 Interface 见 [架构设计](../architecture/README.md)，新增表单/校验、插件包、部署 SDK 与导入图的证据见 [2026-10-20 核查](architecture-dependencies.md)。表中优先采用仍须在实际版本与两个宿主中验证，未安装的候选不写为已集成。
 
-桌面宿主已按本轮讨论更新为 Bun 建议路线，具体收益与发行边界见 [Bun 桌面评估](musicfs-bun-desktop-evaluation.md)。当前已有编译发行物及Linux/WSL运行证据，其他目标系统仍按台账验收。
+桌面宿主已按本轮讨论更新为 Bun 建议路线，具体收益与发行边界见 [Bun 桌面评估](bun-desktop.md)。当前已有编译发行物及Linux/WSL运行证据，其他目标系统仍按台账验收。
 
 前端保留 React + Vite，Bun 只负责桌面宿主及发行打包。精简以减少整体实现和维护成本为准，保留成熟前端工具与复杂交互所需依赖。
 
@@ -60,7 +60,7 @@
 
 Hono 同时支持 [Bun](https://hono.dev/docs/getting-started/bun) 与 [Worker](https://hono.dev/docs/getting-started/cloudflare-workers)，桌面无需 Node adapter。其路由可以承载自定义方法，但不因此自动实现 WebDAV。[路由文档](https://hono.dev/docs/api/routing)
 
-目录树展示继续使用 Ant Design Tree，尺寸调整使用已有 Splitter。来源跨栏添加和布局内部移动已统一为 Pragmatic drag and drop，替换 Tree 内建拖拽；两者共用目标高亮、边缘排序及预览。领域仍只维护一份草稿，不增加另一套树或拖拽引擎。现行呈现与取舍见[共用管理界面](../docs/architecture/web-ui.md)。
+目录树展示继续使用 Ant Design Tree，尺寸调整使用已有 Splitter。来源跨栏添加和布局内部移动已统一为 Pragmatic drag and drop，替换 Tree 内建拖拽；两者共用目标高亮、边缘排序及预览。领域仍只维护一份草稿，不增加另一套树或拖拽引擎。现行呈现与取舍见[共用管理界面](../architecture/web-ui.md)。
 
 组件库是否足够，以实际交互为准；缺口明显时采用合适依赖，不为了减少包数量而大量手写。Vite 统一生成前端静态产物，桌面收录这些文件，Worker 使用 Static Assets；不维护另一套 Bun 前端构建。
 
@@ -74,7 +74,7 @@ TanStack Query 的 [useQuery](https://tanstack.com/query/latest/docs/framework/r
 
 ## 4 WebDAV：复用验证后收敛为共用 Fetch 只读映射
 
-已实际执行 Nephele 的固定版本与官方 Worker Node 桥接探针，Bun 基础行为可运行，本地 Worker 完整音频流仍失败；公开适配没有使其通过，因此采用已规划的 Fetch 备选。当前产品只维护这一条 DAV 路径，取舍和结果见 [ADR 0004](../docs/adr/0004-shared-fetch-readonly-dav.md)及[P0 记录](../docs/verification/p0-library-dav.md)。下表保留候选比较背景。
+已实际执行 Nephele 的固定版本与官方 Worker Node 桥接探针，Bun 基础行为可运行，本地 Worker 完整音频流仍失败；公开适配没有使其通过，因此采用已规划的 Fetch 备选。当前产品只维护这一条 DAV 路径，取舍和结果见 [ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)及[P0 记录](../verification/p0-library-dav.md)。下表保留候选比较背景。
 
 | 候选 | 评估结果 |
 |---|---|
@@ -101,7 +101,7 @@ Worker 官方现在支持 [Node HTTP 桥接](https://developers.cloudflare.com/w
 
 ## 6 最小源码组织
 
-源码层级和各 Module 的公开 Interface 统一见 [架构设计](../docs/architecture/README.md#模块组织)，不另维护一份目录树。
+源码层级和各 Module 的公开 Interface 统一见 [架构设计](../architecture/README.md#模块组织)，不另维护一份目录树。
 
 核心保持一个应用工程，不为每个职责发布包或创建服务；来源插件则提供可独立安装的构建产物。Bun 与 Worker 使用不同后端入口，隔离本机能力。两端共用 Vite 静态资源，新插件不要求重编译前端；Worker 插件变更允许组装预构建模块并后台部署，普通路线发布已有真实证据，免费计划额度结论仍待验。
 
@@ -131,4 +131,4 @@ Worker 官方现在支持 [Node HTTP 桥接](https://developers.cloudflare.com/w
 
 目标是把代码集中在这些规则上，减少为它们另造一层基础设施。平台接口在真实 Worker 中能否使用，以及所有系统能否正确挂载，依然需要运行验证。
 
-关联证据：[WebUI 与宿主依赖核查](research-webui-dependency-reuse.md)、[WebDAV 服务端核查](research-webdav-server-reuse.md)、[统一方案](musicfs-requirements-and-technical-design.md)、[工作量与 ROI](musicfs-effort-risk-roi-assessment.md)。
+关联证据：[WebUI 与宿主依赖核查](webui-dependency-reuse.md)、[WebDAV 服务端核查](webdav-server-reuse.md)、[统一方案](../requirements.md)、[工作量与 ROI](../planning/implementation.md)。

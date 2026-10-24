@@ -1,6 +1,6 @@
 # 桌面系统集成：选型结论
 
-2026-10-22。针对 MusicFS 既有 Bun 后台与浏览器管理页，已采用随包分发的薄 Rust 辅助程序。无需安装完整桌面框架或要求用户安装 Rust；原生源代码与构建方式见[helper](../native/desktop/README.md)。
+2026-10-22。针对 MusicFS 既有 Bun 后台与浏览器管理页，已采用随包分发的薄 Rust 辅助程序。无需安装完整桌面框架或要求用户安装 Rust；原生源代码与构建方式见[helper](../../native/desktop/README.md)。
 
 ## 采用的组合
 
@@ -27,9 +27,11 @@
 
 ## 运行与构建事实
 
-Linux musl 静态 helper 与 Windows x64 GUI 子系统 helper 已在 WSL 构建。Linux 在 D-Bus fixture 验证就绪及父输入关闭后的退出；参数编码有定向检查。Windows 正式包已补齐[必要 VM 证据](../docs/verification/desktop-access.md#windows-vm-续验)，菜单实际点击由用户协助确认；macOS ARM64 只有 cargo check，发行仍需 Apple SDK。Linux 需要桌面会话及 SNI/AppIndicator 宿主，重复启动器始终保留为进入管理页的方式。
+Linux musl 静态 helper 与 Windows x64 GUI 子系统 helper 已在 WSL 构建。Linux 在 D-Bus fixture 验证就绪及父输入关闭后的退出；参数编码有定向检查。Windows 正式包已补齐[必要 VM 证据](../verification/desktop-access.md#windows-vm-续验)，菜单实际点击由用户协助确认；macOS ARM64 只有 cargo check，发行仍需 Apple SDK。Linux 需要桌面会话及 SNI/AppIndicator 宿主，重复启动器始终保留为进入管理页的方式。
 
 构建只收集已下载依赖缓存、当前工具链和 MinGW 中的许可文件，附依赖与运行时索引，不为收集说明再次下载完整源码仓库。具体边界记录在索引中。
+
+当前行为见[桌面指南](../desktop.md)，相关认证选型见[管理登录](management-authentication.md)。
 
 ## 第一方参考
 

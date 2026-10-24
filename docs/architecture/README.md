@@ -2,7 +2,7 @@
 
 [English](../en/architecture.md)
 
-MusicFS 是插件式只读音乐文件服务，桌面与 Worker 独立部署、共用核心和 WebUI。网易云与 QQ 是示例插件，来源专属能力不进入核心。用户结果以[统一需求](../../outputs/musicfs-requirements-and-technical-design.md)为准，名词见[术语](../../outputs/GLOSSARY.md)，结构与时序见[图表](diagrams.md)。本页描述现行职责，实际版本和通过范围查[发行页](../release.md)及[验收台账](../verification.md)。
+MusicFS 是插件式只读音乐文件服务，桌面与 Worker 独立部署、共用核心和 WebUI。网易云与 QQ 是示例插件，来源专属能力不进入核心。用户结果以[统一需求](../requirements.md)为准，名词见[术语](../glossary.md)，结构与时序见[图表](diagrams.md)。本页描述现行职责，实际版本和通过范围查[发行页](../release.md)及[验收台账](../verification.md)。
 
 ## 领域划分与所有权
 
@@ -89,4 +89,4 @@ rclone RC 进程由桌面装配统一拥有，挂载和共享读取模块各管�
 | 系统 / 缓存 | rclone、Bun.spawn、proper-lockfile、env-paths、open、selfsigned、lru-cache | 资源生命周期、缓存身份及必要宿主适配 |
 | DAV / 依赖方向 | Fetch 原生映射、xmldom、range-parser；dependency-cruiser | 只读协议接线、允许的依赖边界 |
 
-采用现成机制不等于把领域责任交给库。缺失的协议或运行时合同须明确比较修正 Adapter 与替代成本；不为“用了依赖”额外造一层框架。历史 DAV 候选取舍见[ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)，依赖解释与比较见[选型说明](../../outputs/musicfs-simplification-and-dependencies.md)。
+采用现成机制不等于把领域责任交给库。缺失的协议或运行时合同须明确比较修正 Adapter 与替代成本；不为“用了依赖”额外造一层框架。历史 DAV 候选取舍见[ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)，依赖解释与比较见[选型说明](../research/dependency-selection.md)。

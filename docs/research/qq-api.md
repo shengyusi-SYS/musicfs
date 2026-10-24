@@ -4,10 +4,10 @@
 
 ## 2026-10-20 实现复核补充
 
-原调查是静态证据。现已核对 npm 正式发布包 3.3.3，完整性为 `sha512-KgNmuZ1v4yYBTXASn8dcbJ8PCkuWsgGgGTCx9z7fODIftNQ2/npSQTVy/l9J/pEFJAN+SMITBZnjYzcTLT7iVw==`；该固定包已进入 QQ 示例插件，实际范围见[真实验证记录](../docs/verification/p1-qq-source.md)。发布来源为 [npm 包](https://www.npmjs.com/package/@yakult-green-tea/qq-music-api/v/3.3.3)。
+原调查是静态证据。现已核对 npm 正式发布包 3.3.3，完整性为 `sha512-KgNmuZ1v4yYBTXASn8dcbJ8PCkuWsgGgGTCx9z7fODIftNQ2/npSQTVy/l9J/pEFJAN+SMITBZnjYzcTLT7iVw==`；该固定包已进入 QQ 示例插件，实际范围见[真实验证记录](../verification/p1-qq-source.md)。发布来源为 [npm 包](https://www.npmjs.com/package/@yakult-green-tea/qq-music-api/v/3.3.3)。
 
 - 手机 QQ 真实扫码、会话恢复、每日推荐与真实 MP3 Range 已验证；本地 workerd 恢复同一会话并校验账号/目录通过，不代表真实云部署已完成。
-- `/user/playlist` 对 created 和 favorites **合并并按 ID 去重**，公共响应没有可靠的来源类别。仅拿此输出无法满足分别分类的要求；不可按歌单名称或所有者推断。后续需要插件内保留原始类别的适配入口，复用 SDK 协议能力；alpha.3 已通过固定 SDK 的原始导出适配保留两类来源，见 [ADR 0005](../docs/adr/0005-pinned-qq-sdk-read-adapter.md)及[实测记录](../docs/verification/p2-qq-catalog.md)。
+- `/user/playlist` 对 created 和 favorites **合并并按 ID 去重**，公共响应没有可靠的来源类别。仅拿此输出无法满足分别分类的要求；不可按歌单名称或所有者推断。后续需要插件内保留原始类别的适配入口，复用 SDK 协议能力；alpha.3 已通过固定 SDK 的原始导出适配保留两类来源，见 [ADR 0005](../adr/0005-pinned-qq-sdk-read-adapter.md)及[实测记录](../verification/p2-qq-catalog.md)。
 - `/serverless` 闭包中的日志模块直接读取 `process.env`，原样浏览器构建在本地 workerd 启动失败。作者构建使用 Bun `define` 固定日志设置后，实际打包模块无需 Node 兼容开关即可执行；没有修改依赖源码或增加全局 process 补丁。
 - SDK 的 HTTP/元数据请求有自己的超时，外层 Request 的信号没有传到所有底层请求。当前媒体读取使用插件自己的 `ctx.fetch` 并传递信号；整体元数据取消仍待完成。
 - sealed 会话的续期有进程内共享 Promise/退避状态。跨请求/跨 isolate 的协调及条件保存仍需实际实现和验证，不能凭本地单次调用推断已满足 MusicFS 续期合同。

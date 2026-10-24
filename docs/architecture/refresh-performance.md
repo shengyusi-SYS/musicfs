@@ -1,6 +1,6 @@
 # 大目录刷新与按需读取
 
-本文描述现行路径。来源资料及文件表示见[可选补标签](audio-tags.md)，缓存期限见[缓存策略](cache-policy.md)，候选与停止条件见[实施计划](../../outputs/musicfs-implementation-plan.md)。历史耗时均保留版本及适用范围，不作为当前实机速度承诺。
+本文描述现行路径。来源资料及文件表示见[可选补标签](audio-tags.md)，缓存期限见[缓存策略](cache-policy.md)，候选与停止条件见[实施计划](../planning/implementation.md)。历史耗时均保留版本及适用范围，不作为当前实机速度承诺。
 
 ## 清单、属性与正文分开
 

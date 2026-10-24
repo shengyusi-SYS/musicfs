@@ -1,9 +1,9 @@
 # WebUI 方向变更评估
 
 日期：2026-10-18  
-状态：WebUI 方向与本轮三个功能边界已确认；已并入 [统一需求与技术方案](musicfs-requirements-and-technical-design.md)。本文保留变更依据，实际音质标注、回退去重等细则随统一草案审阅。
+状态：WebUI 方向与本轮三个功能边界已确认；已并入 [统一需求与技术方案](../requirements.md)。本文保留变更依据，实际音质标注、回退去重等细则随统一草案审阅。
 
-2026-10-20 范围修订：本文是从 CLI 转向 WebUI 的历史评估。当前采用 Bun 桌面宿主和可安装来源插件，WebUI 增加插件/实例管理及通用声明式配置认证；音质、扫码和歌单规则属于示例插件，不属于所有来源或全局设置。Worker 插件变更已接受后台自动部署。下文旧 Node 后台、固定双平台集成及默认分类均不能覆盖 [统一方案](musicfs-requirements-and-technical-design.md) 的新决定。
+2026-10-20 范围修订：本文是从 CLI 转向 WebUI 的历史评估。当前采用 Bun 桌面宿主和可安装来源插件，WebUI 增加插件/实例管理及通用声明式配置认证；音质、扫码和歌单规则属于示例插件，不属于所有来源或全局设置。Worker 插件变更已接受后台自动部署。下文旧 Node 后台、固定双平台集成及默认分类均不能覆盖 [统一方案](../requirements.md) 的新决定。
 
 ## 1 结论
 
@@ -112,4 +112,4 @@ QQ 候选项目提供获取二维码和查询状态的路由，二维码为可�
 
 目前没有新的必须追问的功能边界。组件库、缓存参数、平台兼容性与实际回退顺序由技术设计和验证处理，新增细则在统一草案中清楚标示。
 
-关联文档：[澄清记录](musicfs-design-review.md)、[术语表](GLOSSARY.md)、[统一需求与技术方案](musicfs-requirements-and-technical-design.md)。
+关联文档：[澄清记录](../planning/requirements-decisions.md)、[术语表](../glossary.md)、[统一需求与技术方案](../requirements.md)。

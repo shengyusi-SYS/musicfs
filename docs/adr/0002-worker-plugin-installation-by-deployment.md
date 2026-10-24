@@ -4,4 +4,4 @@
 
 选择自动部署而非要求运行中热加载，是因为当前需求允许版本切换，可以先复用原生 JavaScript 模块执行，减少解释器适配或多 Worker 调用管理。插件业务接口与领域职责不依赖这项宿主选择；免费计划兼容、部署凭据权限、Secrets/D1/静态资源绑定保留、失败恢复与正在读取的音频均须 P0 验证，不承诺无限免费或无中断。
 
-依据：[用户决定](../../outputs/musicfs-design-review.md)、[候选与证据边界](../../outputs/research-worker-free-plugin-loading.md)。
+依据：[用户决定](../planning/requirements-decisions.md)、[候选与证据边界](../research/worker-free-plugin-loading.md)。

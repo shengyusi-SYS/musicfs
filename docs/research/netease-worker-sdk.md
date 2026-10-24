@@ -110,7 +110,7 @@ Cloudflare 官方当前文档称 `node:crypto` 除列出的 DSA/DH keypair、arg
 
 ## 6 首条可安装链路的实际接入记录
 
-已落地 [网易云插件](../plugins/netease/README.md)与 [author build](../scripts/build-netease.ts)，固定 `NeteaseCloudMusicApi@4.32.0`、`tough-cookie@6.0.2`。主代理统一安装并维护根锁文件；没有修改 SDK 源码或替换其密码算法。CookieJar 按实例序列化保存，Fetch 直接使用当次调用的取消信号。
+已落地 [网易云插件](../../plugins/netease/README.md)与 [author build](../../scripts/build-netease.ts)，固定 `NeteaseCloudMusicApi@4.32.0`、`tough-cookie@6.0.2`。主代理统一安装并维护根锁文件；没有修改 SDK 源码或替换其密码算法。CookieJar 按实例序列化保存，Fetch 直接使用当次调用的取消信号。
 
 Bun 的浏览器目标最初会把上游 CJS 内置模块加载留成动态 require；直接 external 在 Worker 中启动失败。随后显式把原始 `require('crypto'/'zlib')` 连接到静态命名空间导入，并保留外部 `node:crypto`、`node:zlib`，实际产物中没有 Bun 浏览器版这两个内置模块的替代实现。中途也检查出虚拟 namespace 被自动 polyfill 的结果，该中间产物没有作为原生模块成功证据。
 
@@ -123,7 +123,7 @@ Bun 的浏览器目标最初会把上游 CJS 内置模块加载留成动态 requ
 | `bun run scripts/probe-worker-netease.ts` 的 Bun 路径 | 动态导入预构建插件；原生密码依赖可加载；实际取得网易云扫码二维码 | 手机授权与会话恢复已经实测 |
 | 同一探针的本地 workerd 路径 | 静态导入预构建插件，启用 `nodejs_compat`；正式管理 API 建立两个独立 CookieJar 的 D1 实例；实际取得网易云扫码二维码 | 已云端部署，或已满足普通免费计划 CPU/请求预算 |
 
-最终 alpha.1 产物为 `dist/netease/org.musicfs.netease.zip`；每次作者构建都随包生成完整第三方许可（含 CryptoJS、forge、tough-cookie、tldts/tldts-core、Zod、Ajv）。扫码/播放真实验收入口及显式会话恢复探针见 [插件说明](../plugins/netease/README.md)。
+最终 alpha.1 产物为 `dist/netease/org.musicfs.netease.zip`；每次作者构建都随包生成完整第三方许可（含 CryptoJS、forge、tough-cookie、tldts/tldts-core、Zod、Ajv）。扫码/播放真实验收入口及显式会话恢复探针见 [插件说明](../../plugins/netease/README.md)。
 
 首次冻结 alpha.1 时只有首条开发预览链路，**完整网易云示例仍未完成**：当时没有真实扫码账号或真实音频证据；音质只有单版本隐藏，尚无完整多版本/向下回退/实际版本去重和会话续期；所有适用内容/权限、大集合、云端与免费资源预算仍须继续验证。后续真实扫码与内容反馈见下节。
 
@@ -144,7 +144,7 @@ alpha.2 构建安装及原账号喜欢全目录的正式刷新复测由主代理
 
 ## 8 alpha.3 音质策略候选
 
-主线随后记录了 alpha.2 的真实喜欢完整刷新（4158 曲）、标准/隐藏下的每日推荐与 MP3 全文/范围/rclone、workerd 实际会话恢复等证据，详见 [真实来源验收](../docs/verification/p2-netease-source.md)。这些都是 alpha.2 的验证范围。
+主线随后记录了 alpha.2 的真实喜欢完整刷新（4158 曲）、标准/隐藏下的每日推荐与 MP3 全文/范围/rclone、workerd 实际会话恢复等证据，详见 [真实来源验收](../verification/p2-netease-source.md)。这些都是 alpha.2 的验证范围。
 
 alpha.3 源码候选按 FR08/FR18 接入单/多版本、隐藏/向下回退、实际标签、相同实际引用去重和可累加目录统计。维持当前已适配的四档，向下顺序为 Hi-Res、无损、极高、标准；特殊音效或未知格式没有借此扩入。每页按唯一歌曲和请求档位做批量/调用内缓存，最后按原始出现位置导出。
 
@@ -154,4 +154,4 @@ alpha.3 源码候选按 FR08/FR18 接入单/多版本、隐藏/向下回退、�
 
 候选源码测试通过不等于实际交付完成。alpha.3 的统一构建安装、真实账号多音质、workerd 和新增多目标请求/CPU 预算仍由主线继续验收；不把 alpha.2 的证据改写为 alpha.3 已通过。
 
-主线随后统一构建安装alpha.3（ZIP245,489字节），真实每日30曲的无损/标准多目标+回退导出35文件，实际极高MP3 17、标准MP3 18，Bun与本地workerd统计一致；7,734,765字节实际极高MP3的DAV/rclone完整与范围通过。真实FLAC、免费云端CPU/请求、续期仍未验；证据统一见[真实来源记录](../docs/verification/p2-netease-source.md)。
+主线随后统一构建安装alpha.3（ZIP245,489字节），真实每日30曲的无损/标准多目标+回退导出35文件，实际极高MP3 17、标准MP3 18，Bun与本地workerd统计一致；7,734,765字节实际极高MP3的DAV/rclone完整与范围通过。真实FLAC、免费云端CPU/请求、续期仍未验；证据统一见[真实来源记录](../verification/p2-netease-source.md)。

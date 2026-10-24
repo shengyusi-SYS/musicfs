@@ -25,8 +25,8 @@
 
 | 内容 | 唯一主要入口 |
 |---|---|
-| 用户结果、产品范围和 FR01—FR25 | [统一需求](../outputs/musicfs-requirements-and-technical-design.md) |
-| 领域词定义 | [术语表](../outputs/GLOSSARY.md) |
+| 用户结果、产品范围和 FR01—FR25 | [统一需求](requirements.md) |
+| 领域词定义 | [术语表](glossary.md) |
 | 模块、层级、依赖和状态所有权 | [架构](architecture/README.md) |
 | 跨模块关系与关键时序 | [图表索引](architecture/diagrams.md) |
 | 标签、最终表示和格式限制 | [可选音频标签](architecture/audio-tags.md) |
@@ -36,11 +36,10 @@
 | 共用页面责任和视觉基线 | [WebUI 设计](architecture/web-ui.md) |
 | 中英文、插件文案和终端语言 | [国际化设计](architecture/i18n.md) |
 | 管理登录、浏览器会话与手机扫码 | [管理访问](architecture/management-access.md) |
-| 使用流程、备选交互和取舍 | [UI / UX 决定](../outputs/musicfs-ui-ux-decisions.md) |
+| 使用流程、备选交互和取舍 | [UI / UX 决定](planning/ui-ux-decisions.md) |
 | 性能主线执行与完成标准 | [Codex 目标](codex-goal.md) |
-| 当前进展、ROI 候选与重开条件 | [实施计划](../outputs/musicfs-implementation-plan.md)、[缓存决定](../outputs/musicfs-cache-optimization-plan.md) |
-| 跨领域、实际场景的优化空间复评 | [六领域评估与主代理核查](../outputs/musicfs-performance-review.md) |
-| 整体复盘与工作量口径 | [方案复盘](../outputs/musicfs-effort-risk-roi-assessment.md) |
+| 当前进展、ROI 候选与重开条件 | [实施计划](planning/implementation.md)、[缓存决定](planning/cache-optimization.md) |
+| 跨领域、实际场景的优化空间复评 | [六领域评估与主代理核查](planning/performance-review.md) |
 | 可跨后续任务复用的结论 | [MusicFS 工程经验](engineering-lessons.md)、[交互、访问与国际化](lessons/interface-and-access.md) |
 
 ## 证据与选型
@@ -49,12 +48,14 @@
 
 | 调查主题 | 资料 |
 |---|---|
-| RJSF、Ajv、ZIP、semver、导入图等依赖 | [选型解释](../outputs/musicfs-simplification-and-dependencies.md)、[主源调查](../outputs/research-architecture-dependencies.md) |
-| HTTP/DAV 与读取缓存 | [DAV 候选](../outputs/research-webdav-server-reuse.md)、[共享缓存候选](research/shared-read-cache-options.md) |
-| Bun 宿主与发行 | [Bun 评估](../outputs/musicfs-bun-desktop-evaluation.md)、[编译资源](../outputs/research-bun-executable-packaging.md) |
-| 来源 SDK | [网易云](../outputs/research-netease-worker-sdk.md)、[QQ](../outputs/qq-api-integration-research.md)、[平台 API](../outputs/platform-api-integration-research.md) |
-| Worker 代码安装 | [免费路线调查](../outputs/research-worker-free-plugin-loading.md) |
-| 页面和客户端 | [WebUI 依赖](../outputs/research-webui-dependency-reuse.md)、[OpenList](../outputs/openlist-music-drivers-followup.md) |
+| RJSF、Ajv、ZIP、semver、导入图等依赖 | [选型解释](research/dependency-selection.md)、[主源调查](research/architecture-dependencies.md) |
+| HTTP/DAV 与读取缓存 | [DAV 候选](research/webdav-server-reuse.md)、[共享缓存候选](research/shared-read-cache-options.md) |
+| Bun 宿主与发行 | [Bun 评估](research/bun-desktop.md)、[编译资源](research/bun-executable-packaging.md) |
+| 运行时固定资料与重建入口 | [Bun 运行时调查](research/bun-runtime-distribution.md) |
+| 托盘、自启与管理登录 | [桌面集成](research/desktop-integration.md)、[认证选型](research/management-authentication.md) |
+| 来源 SDK | [网易云](research/netease-worker-sdk.md)、[QQ](research/qq-api.md)、[平台 API](research/platform-apis.md) |
+| Worker 代码安装 | [免费路线调查](research/worker-free-plugin-loading.md) |
+| 页面和客户端 | [WebUI 依赖](research/webui-dependency-reuse.md)、[OpenList](research/openlist-music-drivers.md) |
 
 ## 决策与历史
 
@@ -66,9 +67,11 @@
 - [ADR 0006 普通 Worker 的代码发布与安装激活](adr/0006-worker-code-publication.md)
 - [ADR 0007 目录刷新按持久页推进](adr/0007-durable-paged-refresh.md)
 
-[需求澄清](../outputs/musicfs-design-review.md)、[相似项目](../outputs/cloud-music-filesystem-research.md)、[早期复用调查](../outputs/research-direct-projects.md)与[WebUI 方向评估](../outputs/musicfs-webui-design-evaluation.md)供追溯。被替代的固定平台假设、阶段工期和中间计划不再并列生效，必要时查 Git 历史。
+[需求澄清](planning/requirements-decisions.md)、[相似项目](research/cloud-music-filesystems.md)、[早期复用调查](research/direct-projects.md)与[WebUI 方向评估](research/webui-direction.md)供追溯。被替代的固定平台假设、阶段工期和中间计划不再并列生效，必要时查 Git 历史。
 
 ## 维护规则
+
+文档统一放在 `docs/`：使用指南位于本层，英文指南位于 `en/`，现行设计归 `architecture/`，计划与备选取舍归 `planning/`，第三方调查归 `research/`，版本证据归 `verification/`，长期经验归 `lessons/`。不再另设临时输出目录保存正式文档。
 
 需求写结果，术语只写定义，设计写现行合同，计划只写决定与下一步，验证写版本证据，发行页写实际产物。改变事实时重写过时段落，避免不断追加“现已完成”来解释旧待办。
 

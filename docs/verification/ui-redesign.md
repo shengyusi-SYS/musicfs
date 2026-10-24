@@ -1,6 +1,6 @@
 # 界面重构走查
 
-2026-10-22，针对仓库当前前端源码。使用 Vite 正式构建和独立 WSL 桌面服务，临时 SQLite 数据、随包 sample 与仓库认证夹具。重构比较见[各环节取舍](../../outputs/musicfs-ui-ux-decisions.md)，当前模块与流程见[界面设计](../architecture/web-ui.md)。
+2026-10-22，针对仓库当前前端源码。使用 Vite 正式构建和独立 WSL 桌面服务，临时 SQLite 数据、随包 sample 与仓库认证夹具。重构比较见[各环节取舍](../planning/ui-ux-decisions.md)，当前模块与流程见[界面设计](../architecture/web-ui.md)。
 
 ## 实际操作
 

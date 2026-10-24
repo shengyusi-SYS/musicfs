@@ -2,7 +2,7 @@
 
 调查日期：2026-10-17。目标：登录网易云、QQ 等音乐平台，将发现、个人歌单、收藏歌单映射为目录，歌曲映射为可由普通播放器读取的音频文件，按需取流，并通过虚拟磁盘、WebDAV 或 SMB 访问。
 
-补查更新：发现前轮遗漏的 FastWebdav，已有“指定网易云歌单 → WebDAV 文件目录”provider，但缺账号登录/完整歌单树，且代码较旧。它不是 OpenList 原生驱动。详见 [非云盘音乐驱动补查](openlist-music-drivers-followup.md)。
+补查更新：发现前轮遗漏的 FastWebdav，已有“指定网易云歌单 → WebDAV 文件目录”provider，但缺账号登录/完整歌单树，且代码较旧。它不是 OpenList 原生驱动。详见 [非云盘音乐驱动补查](openlist-music-drivers.md)。
 
 ## 结论与证据边界
 
@@ -30,7 +30,7 @@
 
 ### 1. YTMusicFS：最值得参考的完整思路
 
-作者将 YouTube Music 库暴露为只读 FUSE 文件系统，浏览器 Cookie 用于私有库访问。目录包含 `playlists`、`liked_songs`、`albums`，普通播放器读取歌曲文件时才获取媒体；项目提供缓存和修复不可播放 ID 等操作。它直接证明“平台内容 → 虚拟音频文件 → 普通播放器”的模式已有开源实现。平台限制是它没有网易云或 QQ 驱动，SMB/WebDAV 也需要另行导出。详见 [仓库及使用文档](https://github.com/astrovm/ytmusicfs)。核实提交为 `a5da8727b8dc7235f2f43d81025931a871053e72`，日期 2026-10-15；代码与维护证据见 [直接项目源码调查](research-direct-projects.md)。
+作者将 YouTube Music 库暴露为只读 FUSE 文件系统，浏览器 Cookie 用于私有库访问。目录包含 `playlists`、`liked_songs`、`albums`，普通播放器读取歌曲文件时才获取媒体；项目提供缓存和修复不可播放 ID 等操作。它直接证明“平台内容 → 虚拟音频文件 → 普通播放器”的模式已有开源实现。平台限制是它没有网易云或 QQ 驱动，SMB/WebDAV 也需要另行导出。详见 [仓库及使用文档](https://github.com/astrovm/ytmusicfs)。核实提交为 `a5da8727b8dc7235f2f43d81025931a871053e72`，日期 2026-10-15；代码与维护证据见 [直接项目源码调查](direct-projects.md)。
 
 ### 2. OpenList：网易云云盘可用作验证入口，不能当歌单挂载
 

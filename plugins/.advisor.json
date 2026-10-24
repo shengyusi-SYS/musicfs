@@ -19,7 +19,7 @@
     "../docs/architecture/refresh-performance.md",
     "../docs/architecture/cache-policy.md",
     "../docs/engineering-lessons.md",
-    "../outputs/musicfs-implementation-plan.md"
+    "../docs/planning/implementation.md"
   ],
   "responsibility": "来源插件、来源SDK与会话领域的独立评估。"
 }
