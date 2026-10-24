@@ -286,7 +286,7 @@ flowchart TD
   Verify -->|明确失败| Fail[失败 保留旧活动版本]
 ```
 
-持久恢复与真实云端的证据范围分别见[插件迁移](../verification/p2-plugin-migration.md)与[云端记录](../verification/p4-worker-cloud.md)，不承诺零中断。
+持久恢复与真实云端的证据范围分别见[插件迁移](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p2-plugin-migration.md)与[云端记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p4-worker-cloud.md)，不承诺零中断。
 
 ## 核心与共用页面升级
 

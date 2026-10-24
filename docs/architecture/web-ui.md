@@ -111,4 +111,4 @@ TanStack Query 管理服务器状态，普通查询保留30秒新鲜期，显式
 
 桌面入口与手机二维码经 URL fragment 传入一次性 ticket，兑换 HttpOnly Cookie 后清除链接片段；旧令牌入口可换取同一会话。退出保留访问状态查询的观察者，清理其余工作区缓存，再重新查询登录入口。账号与会话均由后台保存，前端不另建长期凭据库。完整流程见[管理访问](management-access.md)。
 
-本轮走查和截图见[音乐库工作区核对](../verification/music-workspace.md)；早期界面与目录整理的证据分别保留在[界面重构记录](../verification/ui-redesign.md)、[目录整理工作区](../verification/directory-workspace.md)。
+本轮走查和截图见[音乐库工作区核对](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/music-workspace.md)；早期界面与目录整理的证据分别保留在[界面重构记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/ui-redesign.md)、[目录整理工作区](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/directory-workspace.md)。

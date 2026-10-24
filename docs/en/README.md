@@ -24,8 +24,13 @@ The kit includes a sample, public types and build tools. Users install its ZIP w
 
 Build and release steps are in the development guide. Native toolchains are described in the [desktop helper README](../../native/desktop/README.md).
 
-## Detailed designs and records
+## Design and verification
 
-The complete source package also contains the [Chinese topic index](../README.md): architecture diagrams, optional tagging, refresh and cache designs, UI decisions, ADRs and specialist verification tools. [Engineering lessons](../engineering-lessons.md) hold reusable conclusions; [verification](../verification.md) and [release history](../release-history.md) retain version-specific evidence.
+- [Dependencies and trade-offs](dependencies.md)
+- [Compatibility and verification scope](verification.md)
+- [Detailed Chinese architecture index](../architecture/README.md)
+- [Specialist checks, Chinese](../development-reference.md)
+- [Architecture decisions](../adr/)
+- [Engineering lessons, Chinese](../engineering-lessons.md)
 
-All documentation lives under `docs/`: current designs in `architecture/`, plans and trade-offs in `planning/`, dependency research in `research/`, version evidence in `verification/`, and reusable lessons in `lessons/`.
+Current designs live in `architecture/`, important decisions in `adr/`, specialist references in `research/`, and reusable lessons in `lessons/`. Earlier plans, raw test receipts and development screenshots remain in Git history.

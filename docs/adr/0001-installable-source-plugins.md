@@ -6,4 +6,4 @@ MusicFS 从固定集成网易云与 QQ 调整为可扩展的数据源宿主，�
 
 第三方插件可声明支持桌面、Worker 或两者，示例插件仍要求双宿主验收。用户可上传预构建插件包或通过发布地址安装并主动更新；移除保留实例配置与布局引用，标记缺失并停止读取，重新安装兼容插件后可恢复，彻底删除实例数据是单独操作。
 
-这是 2026-10-18 已确认的领域边界，取代原方案固定双平台与每个平台单账号的限制。2026-10-20 已接受 Worker 插件变更时后台自动部署的优先验证路线，见 [ADR 0002](0002-worker-plugin-installation-by-deployment.md)；免费兼容与执行机制仍未验证。过程见 [需求澄清记录](../planning/requirements-decisions.md)。
+这是 2026-10-18 已确认的领域边界，取代原方案固定双平台与每个平台单账号的限制。2026-10-20 已接受 Worker 插件变更时后台自动部署的优先验证路线，见 [ADR 0002](0002-worker-plugin-installation-by-deployment.md)；免费兼容与执行机制仍未验证。过程见 [需求澄清记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/planning/requirements-decisions.md)。

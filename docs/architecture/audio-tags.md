@@ -1,6 +1,6 @@
 # 可选的音频补标签设计
 
-日期：2026-10-22。来源插件可自行补标签，也可选用共用工具或完全透传。QQ、网易云已通过可选 `@musicfs/audio-tags` 接通资料准备、持久计划和最终读取；当前证据见[实现记录](../verification/metadata-implementation.md)，前期路线比较见[可行性验证](../verification/metadata-tagging-feasibility.md)。
+日期：2026-10-22。来源插件可自行补标签，也可选用共用工具或完全透传。QQ、网易云已通过可选 `@musicfs/audio-tags` 接通资料准备、持久计划和最终读取；当前证据见[实现记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/metadata-implementation.md)，前期路线比较见[可行性验证](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/metadata-tagging-feasibility.md)。
 
 ## 核心只接收最终文件
 
@@ -82,7 +82,7 @@ flowchart LR
   Result -->|失败或取消| Failure[原错误与冷却信号]
 ```
 
-成功路径请求集合、资料字段和缓存期限不变；任一失败时不遗留后台写入，封面限流不会被同时发生的普通资料错误覆盖。并行时另一个资料请求可能已启动，失败不保证与旧串行路径拥有相同的请求前缀；不额外重试，也不在单曲失败后继续安排新曲。[有限离线结果](../verification/performance-local-2026-10-22.md)不能外推真实平台加速比例。
+成功路径请求集合、资料字段和缓存期限不变；任一失败时不遗留后台写入，封面限流不会被同时发生的普通资料错误覆盖。并行时另一个资料请求可能已启动，失败不保证与旧串行路径拥有相同的请求前缀；不额外重试，也不在单曲失败后继续安排新曲。[有限离线结果](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/performance-local-2026-10-22.md)不能外推真实平台加速比例。
 
 ## 格式与实施
 
@@ -92,4 +92,4 @@ flowchart LR
 
 文件准备按有界小页推进，重复歌曲/音质复用资料和表示计划；每日推荐后续页复用本次已取得的列表，不逐页重新取整个推荐。网易云新引用为`version:4`，既有v3延迟引用、v2计划引用及v1透传仍可读取；必要 seed 或计划缺失明确要求刷新，不能把原文件偷换到新标签身份下。歌词时间轴保存与播放器逐行滚动仍分别判断。
 
-大封面由插件自己的存储codec按摘要共享。网易云新codec同时记录共享图片长度，在读取时仅恢复所选Range相交的图片；未选图片的等长占位仅在codec内部交给原读取工具，不对外返回或保存不完整计划。完整恢复Interface保持原合同，旧codec缺长度时仍完整恢复，封面范围和完整下载照常读取图片。纯音频seek因而可跳过无关的大封面查询/解析，实际字节、大小和身份不变，公共工具和核心不认识这种存储形式。[按需挂载证据](../verification/lazy-mount-feasibility.md)记录格式限制；[两阶段验证](../verification/deferred-catalogue.md)保留旧路径证据。清单完成不表示全库标签已准备，播放器入库仍需逐曲读取其需要的标签。
+大封面由插件自己的存储codec按摘要共享。网易云新codec同时记录共享图片长度，在读取时仅恢复所选Range相交的图片；未选图片的等长占位仅在codec内部交给原读取工具，不对外返回或保存不完整计划。完整恢复Interface保持原合同，旧codec缺长度时仍完整恢复，封面范围和完整下载照常读取图片。纯音频seek因而可跳过无关的大封面查询/解析，实际字节、大小和身份不变，公共工具和核心不认识这种存储形式。[按需挂载证据](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/lazy-mount-feasibility.md)记录格式限制；[两阶段验证](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/deferred-catalogue.md)保留旧路径证据。清单完成不表示全库标签已准备，播放器入库仍需逐曲读取其需要的标签。

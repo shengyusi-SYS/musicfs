@@ -85,16 +85,16 @@
 
 `PluginInspection`包含manifest、revision和compatibility（host、apiVersion、apiCompatible、hostCompatible）。结构有效但API或宿主不兼容也返回200，以便安装前说明；坏包仍返回422。检查只读、不执行插件代码，不代表运行已通过；安装继续使用同一规则重新校验。发布地址安装会重新下载，不持有检查缓存或临时上传任务。
 
-`PluginChange`包含 `operationId/kind/pluginId/status/createdAt/updatedAt` 和可选安装结果/错误；status为queued、preparing、uploading、deploying、verifying、migrating、completed或failed。202仅表示受理，页面持续查询到终态，重新打开插件页可用保存的operationId恢复。结构升级只有全部实例候选与安装整体切换才completed，失败保留旧安装和全部活动数据；不返回候选配置或私有状态。未结束变更返回409，Worker发布凭据缺失返回503。恢复边界见[迁移验证](verification/p2-plugin-migration.md)及[Worker指南](worker.md)。
+`PluginChange`包含 `operationId/kind/pluginId/status/createdAt/updatedAt` 和可选安装结果/错误；status为queued、preparing、uploading、deploying、verifying、migrating、completed或failed。202仅表示受理，页面持续查询到终态，重新打开插件页可用保存的operationId恢复。结构升级只有全部实例候选与安装整体切换才completed，失败保留旧安装和全部活动数据；不返回候选配置或私有状态。未结束变更返回409，Worker发布凭据缺失返回503。恢复边界见[迁移验证](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p2-plugin-migration.md)及[Worker指南](worker.md)。
 
-结构错误与坏 JSON 返回 400；配置/认证语义错误返回 422 及插件字段错误。来源失败保留结构化 `sourceError`，包括需认证、限流或临时错误。配置及认证的公开结果过滤 `nextPrivateState`，管理响应统一 `Cache-Control: no-store`。认证绑定、取消/过期和恢复语义见[验证记录](verification/p1-authentication.md)。真实来源的支持范围查[台账](verification.md)，尚未交付的部署和挂载不返回伪成功。
+结构错误与坏 JSON 返回 400；配置/认证语义错误返回 422 及插件字段错误。来源失败保留结构化 `sourceError`，包括需认证、限流或临时错误。配置及认证的公开结果过滤 `nextPrivateState`，管理响应统一 `Cache-Control: no-store`。认证绑定、取消/过期和恢复语义见[验证记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p1-authentication.md)。真实来源的支持范围查[台账](verification.md)，尚未交付的部署和挂载不返回伪成功。
 
 `RefreshView` 的公开合同见 [`refreshes.ts`](../src/contracts/refreshes.ts)：包含 operationId、instanceId、scope、status、当前目录页数/暂存条目/临时计数、refreshedDirectories、failures、可选 error 和创建/更新时间；不暴露游标、租约或来源私有状态。状态为 queued、running、completed、failed、superseded、cancelled。202 仅表示受理，必须检查终态及失败明细；GET 恢复状态，POST step 推进，界面关闭不删除操作。
 
-实例刷新先更新内容入口，再处理全部可达子目录，包括新发现的目录；递归目录范围同样包含未访问后代。普通目录及旧入口请求保持浅层，日常浏览仍按需加载。成功目录数不含入口列表，每目录完整分页后分别发布；部分目录失败仍可得到 completed，但 failures 非空，保留这些目录的旧内容。根入口失败、取消、来源变化或超出目录预算会停止操作；已经发布的目录不回滚。默认目录预算 1000，单目录默认 1000 页/100,000 条目。范围、调度及展示策略见[现行设计](architecture/updates-and-naming.md)，原分页提交见[持久分页](verification/p2-durable-refresh.md)。
+实例刷新先更新内容入口，再处理全部可达子目录，包括新发现的目录；递归目录范围同样包含未访问后代。普通目录及旧入口请求保持浅层，日常浏览仍按需加载。成功目录数不含入口列表，每目录完整分页后分别发布；部分目录失败仍可得到 completed，但 failures 非空，保留这些目录的旧内容。根入口失败、取消、来源变化或超出目录预算会停止操作；已经发布的目录不回滚。默认目录预算 1000，单目录默认 1000 页/100,000 条目。范围、调度及展示策略见[现行设计](architecture/updates-and-naming.md)，原分页提交见[持久分页](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p2-durable-refresh.md)。
 
 正式宿主的 roots、library 或 DAV 冷读取若尚无当前有效快照，会返回 `503 refresh_pending`、`Retry-After: 2` 和 `X-MusicFS-Refresh: <operationId>`。管理 JSON 还包含 operationId；重试复用同一有效活动操作，不反复替换任务。已有成功快照时直接读取它，后台刷新失败不抹空目录。共用页面可根据原操作 ID 恢复并推进；普通 DAV 客户端可以等待后台准备后重试，不获得管理权限。桌面后台持续续步；Worker 每个后台 HTTP/定时调用仅推进一页，见[Worker 指南](worker.md)。
 
 配置声明响应可带插件的可选 `statistics` 标签映射。目录状态返回当前来源戳下的最近成功时间、计数与该目录最近失败代码，不暴露来源戳、私有状态或文件引用。旧快照没有计数时statistics为null；失败刷新保留原内容与计数，并持续显示失败标记，直到该目录成功刷新。其他目录成功或重开页面不清除此标记。界面更新配置、安装/移除插件及刷新后使相关查询失效；计数的每页语义见[插件合同](architecture/plugin-interface.md#稳定身份分页与目录)。
 
-`/dav` 和 `/dav/*` 统一提供 OPTIONS、Depth 0/1 PROPFIND、GET/HEAD；单范围、条件验证器及不支持范围的行为见 [ADR 0004](adr/0004-shared-fetch-readonly-dav.md)。实际用户旅程验证见[P0 记录](verification/p0-library-dav.md)。
+`/dav` 和 `/dav/*` 统一提供 OPTIONS、Depth 0/1 PROPFIND、GET/HEAD；单范围、条件验证器及不支持范围的行为见 [ADR 0004](adr/0004-shared-fetch-readonly-dav.md)。实际用户旅程验证见[P0 记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p0-library-dav.md)。

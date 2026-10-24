@@ -40,13 +40,13 @@ flowchart LR
 
 WinFsp 是挂载所需系统桥接，已有运行时直接复用。证书由 selfsigned 生成，监听由 Bun TLS 承担，不另建反向代理。证书信任与实际 WebClient 连接分别核验，不能用 Bun 客户端结果代替 Windows Schannel。
 
-Windows 连接设置可能涉及机器全局值：先保存本 App 修改前原值（含不存在），按需提权应用并核对；不在每次退出时反复更改。已有目标值不自动取得恢复所有权，显式恢复文件上限与关闭 TLS 是不同操作。具体用户入口见[桌面说明](../desktop.md)，实际验证查[Windows 记录](../verification/p2-windows-mount.md)。
+Windows 连接设置可能涉及机器全局值：先保存本 App 修改前原值（含不存在），按需提权应用并核对；不在每次退出时反复更改。已有目标值不自动取得恢复所有权，显式恢复文件上限与关闭 TLS 是不同操作。具体用户入口见[桌面说明](../desktop.md)，实际验证查[Windows 记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p2-windows-mount.md)。
 
 ## 名称与后台恢复
 
 管理名称复用 MountInput.name，默认 MusicFS；创建、重新挂载和自动恢复统一向 rclone mountOpt.VolumeName 传入卷标，不再用内部 remote 标识作为系统名称。重命名复用正常卸载/启动流程，缓存仍按稳定挂载 ID 命名；忙卸载不提交新名称。Windows 上游对卷标使用 32 字节限制，宿主取完整 UTF-8 前缀，管理名称保留全称，不另建标签存储或系统注册表覆盖。具体上游行为见 [rclone 1.75.2](https://github.com/rclone/rclone/blob/v1.75.2/cmd/mountlib/utils.go)。
 
-自动恢复在 DAV 监听和 runtime 发布后启动，start 不等待原生挂载完成；托盘单独启动。挂载列表在恢复进行时读取内存状态，管理与登录入口可先使用。离线挂起原生来源请求的核对见[名称与启动检查](../verification/mount-names.md)，不将该样本外推为所有机器的启动时长。
+自动恢复在 DAV 监听和 runtime 发布后启动，start 不等待原生挂载完成；托盘单独启动。挂载列表在恢复进行时读取内存状态，管理与登录入口可先使用。离线挂起原生来源请求的核对见[名称与启动检查](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/mount-names.md)，不将该样本外推为所有机器的启动时长。
 
 ## 挂载操作与目录缓存
 
@@ -82,7 +82,7 @@ WebDAV remote 使用支持 Last-Modified 的 rclone 兼容配置参与缓存指�
 
 缓存管理查询实际 VFS 模式、路径、文件数、占用和采样时间，不把配置冒充运行状态；未运行不启动进程或扫描磁盘。清理先正常卸载，再删除该挂载片段并按原设置重挂，失败不删。它与目录清单 `forget` 分开，也不清除来源资料或标签计划。
 
-历史预读对照、播放成本、真实重挂与 Windows 消费证据见[缓存消费记录](../verification/cache-consumption-2026-10-21.md)及[共享读取验证](../verification/shared-read-cache.md)，不在设计页重复运行计数。
+历史预读对照、播放成本、真实重挂与 Windows 消费证据见[缓存消费记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/cache-consumption-2026-10-21.md)及[共享读取验证](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/shared-read-cache.md)，不在设计页重复运行计数。
 
 ## 直接WebDAV与播放器
 

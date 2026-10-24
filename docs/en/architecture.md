@@ -56,4 +56,4 @@ Each browser remembers its display language. Terminal and tray language belongs 
 
 For a provider, use the [plugin author guide](plugin-authoring.md) and [public contract](plugin-interface.md). For application changes and releases, use [development](development.md). Management automation uses the [HTTP API](management-api.md).
 
-Detailed topic diagrams and implementation decisions are maintained in the [Chinese architecture index](../architecture/README.md), including tagging, refresh, cache, desktop mounts, access and UI. Historical results live in the [verification record, Chinese](../verification.md).
+Detailed topic diagrams and implementation decisions are maintained in the [Chinese architecture index](../architecture/README.md), including tagging, refresh, cache, desktop mounts, access and UI. See [compatibility and verification scope](verification.md) for platform and format evidence.

@@ -1,6 +1,6 @@
 # ADR 0004：共用 Fetch 只读 DAV
 
-日期：2026-10-20。状态：按既有 P0 备选收敛的工程决定；真实云部署与全部客户端验收仍待完成。
+日期：2026-10-20。状态：已采用。平台与客户端验证范围见[兼容性说明](../verification.md)。
 
 ## 背景与实际证据
 
@@ -27,4 +27,4 @@ Nephele、其只读插件及专用 Express 类型依赖随历史探针退出当�
 
 ## 影响与验收
 
-共用实现已在 Bun 和本地 workerd 上执行；真实上游 HTTP 测试验证范围、取消、截断及超过 4 GiB 的偏移。rclone 的真实 DAV 客户端结果与发布缺口统一记录于[P0 目录与 DAV 证据](../verification/p0-library-dav.md)。本决定不改变只读、独立双宿主、免费路线优先或第三方插件的产品合同。
+共用实现已在 Bun 和本地 workerd 上执行；真实上游 HTTP 测试验证范围、取消、截断及超过 4 GiB 的偏移。rclone 的真实 DAV 客户端结果与发布缺口统一记录于[P0 目录与 DAV 证据](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p0-library-dav.md)。本决定不改变只读、独立双宿主、免费路线优先或第三方插件的产品合同。

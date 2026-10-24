@@ -1,6 +1,6 @@
 # 大目录刷新与按需读取
 
-本文描述现行路径。来源资料及文件表示见[可选补标签](audio-tags.md)，缓存期限见[缓存策略](cache-policy.md)，候选与停止条件见[实施计划](../planning/implementation.md)。历史耗时均保留版本及适用范围，不作为当前实机速度承诺。
+本文描述现行路径。来源资料及文件表示见[可选补标签](audio-tags.md)，缓存期限见[缓存策略](cache-policy.md)。诊断入口见[开发检查](../development-reference.md)。
 
 ## 清单、属性与正文分开
 
@@ -22,7 +22,7 @@ flowchart TD
 
 准确大小仍是协议前提。需要全属性的 rclone 不能使用零、未知值或原音频大小来代替最终大小。显式延迟条目通过已有 `file-info` 持久任务准备，期间整体返回 `503`、重试头与操作 ID，不返回属性失真的成功目录。旧路径要求先准备的限制不再用来描述网易云预留表示。
 
-预留预算使整文件复制额外携带填充，超预算须单曲换成精确表示再刷新；不是所有容器都适合。旧表示不随资料 TTL 改变，具体格式限制见[按需挂载记录](../verification/lazy-mount-feasibility.md)。清单完成也不代表播放器已经逐曲扫描完毕。
+预留预算使整文件复制额外携带填充，超预算须单曲换成精确表示再刷新；不是所有容器都适合。旧表示不随资料 TTL 改变，具体格式限制见[按需挂载记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/lazy-mount-feasibility.md)。清单完成也不代表播放器已经逐曲扫描完毕。
 
 ## SDK 与来源请求减法
 
@@ -35,7 +35,7 @@ flowchart TD
 - 网易云后续打开/seek只读复用清单已保存的有效播放版本定位，完整媒体身份与原生期限匹配才使用；沿原5分钟/原生到期取较早的新鲜度，不续期或另写定位缓存。缺失、过期或版本不匹配仍走原SDK解析；每次读取调用新增一次资料缓存查询，调用内多个Range共用该结果。
 - HTTP 批次包装不等于逐曲歌词有真批量能力；不通过无证据路径变体、更多并发或叠加重试试探平台。
 
-200 首是已验证默认，不是精确平台上限。真实富详情/版本均返回完整 ID；另一次更大样本 HTTP 成功却截断，因此不继续扩大。端点与 SDK 注释须对应实际调用，另一条 API 的上限不能套用。[SDK 与请求证据](../verification/netease-cold-request-reduction.md)、[批量样本](../verification/data/netease-sdk-batch-200-2026-10-21.json)、[截断样本](../verification/data/netease-sdk-batch-500-2026-10-21.json)
+200 首是已验证默认，不是精确平台上限。真实富详情/版本均返回完整 ID；另一次更大样本 HTTP 成功却截断，因此不继续扩大。端点与 SDK 注释须对应实际调用，另一条 API 的上限不能套用。[SDK 与请求证据](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/netease-cold-request-reduction.md)、[批量样本](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/data/netease-sdk-batch-200-2026-10-21.json)、[截断样本](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/data/netease-sdk-batch-500-2026-10-21.json)
 
 ## 持久执行与免费基准
 
@@ -62,14 +62,6 @@ flowchart TD
 
 缓存命中不延长临时地址或会话期限；资料、准备索引和永久表示计划分开。浏览和扫描取得哪些字节另由[读取缓存](shared-read-cache.md)处理。
 
-## 历史性能证据
+## 性能诊断
 
-| 证据 | 能确认的结果 | 不能外推的结论 |
-|---|---|---|
-| [旧真实冷基线](../verification/real-netease-cold-dev5.md)与[两阶段清单](../verification/deferred-catalogue.md) | 首次全量补标签曾近 13 分钟；100 首批次清单约 25 秒，工作范围显著减少 | 不是补标签吞吐提高同样倍数，也不是当前 200 首全库耗时 |
-| [SDK 冷准备](../verification/netease-cold-request-reduction.md) | 富详情、封面及 MP3 多 Range 的请求减法 | 不证明平台精确限流阈值或所有格式均受益 |
-| [离线热路径计数](../verification/data/performance-round2-2026-10-21.json) | 路径、描述、SQL 和前台等待的局部成本下降 | 不等同真实平台整库刷新 |
-| [打包 SDK / 本地 D1 批次](../verification/data/deferred-catalogue-worker-200-2026-10-21.json) | 实际模块的单页存储预算与精确属性 | 不证明真实免费 Worker CPU |
-| [Windows / WSL 按需挂载](../verification/lazy-mount-feasibility.md) | 准确预留表示、冷枚举和单曲读取可行，限制明确 | 不代表所有第三方格式、播放器或当前整库 GUI 均重测 |
-
-进一步优化按真实使用收益重开，不因理论上仍有微小空间恢复全账号扫描或平台压力验证。
+区分目录刷新、文件属性、单曲资料准备、播放器扫描和音频下载。在相同工作范围与缓存状态下比较上游请求、缓存命中和等待时间；目录先可见不代表整个播放器已入库。可复用探针见[开发检查](../development-reference.md)，平台与格式范围见[兼容性说明](../verification.md)。

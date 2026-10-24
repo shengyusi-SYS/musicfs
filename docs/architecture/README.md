@@ -63,9 +63,9 @@ WebDAV 与上下游 IO 的日志归宿主和适配边界，领域不依赖日志
 
 插件实例配置通过 JSON Schema 和有限 UI 数据声明；前端 RJSF/Ant Design 生成表单，TanStack Query 管请求与失效。Zod 检查核心管理输入，官方插件工具在构建时用 Ajv standalone 生成结构校验；来源可达性与账号能力仍由插件判断。插件不传 React 组件、验证器对象或任意前端代码。
 
-`sources` 持久化交互操作、挑战与版本，取消先提交终态，再尝试来源清理。两个示例在凭据就绪时完成授权，补充账号资料按内容需要取得。按需续期由插件判断渠道和期限，核心只用短租约/CAS 协调同实例，不把普通读取都串行化。[会话证据](../verification/p2-session-lifecycle.md)
+`sources` 持久化交互操作、挑战与版本，取消先提交终态，再尝试来源清理。两个示例在凭据就绪时完成授权，补充账号资料按内容需要取得。按需续期由插件判断渠道和期限，核心只用短租约/CAS 协调同实例，不把普通读取都串行化。[会话证据](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p2-session-lifecycle.md)
 
-安装检查与运行分开。桌面准备不可变外置代码，Worker 发布并核对精确模块集合；结构升级冻结完整实例输入、逐个准备候选，再原子切换安装和全部实例。Cloudflare 与 SQL 没有全局事务，响应不明时原操作核对结果；不能盲目重传或只回退代码而忽略已变更状态。详见[插件变更图](diagrams.md#插件变更)、[Worker 发布](../worker.md)和[迁移证据](../verification/p2-plugin-migration.md)。
+安装检查与运行分开。桌面准备不可变外置代码，Worker 发布并核对精确模块集合；结构升级冻结完整实例输入、逐个准备候选，再原子切换安装和全部实例。Cloudflare 与 SQL 没有全局事务，响应不明时原操作核对结果；不能盲目重传或只回退代码而忽略已变更状态。详见[插件变更图](diagrams.md#插件变更)、[Worker 发布](../worker.md)和[迁移证据](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p2-plugin-migration.md)。
 
 ## 桌面资源与共享读取
 
@@ -89,4 +89,4 @@ rclone RC 进程由桌面装配统一拥有，挂载和共享读取模块各管�
 | 系统 / 缓存 | rclone、Bun.spawn、proper-lockfile、env-paths、open、selfsigned、lru-cache | 资源生命周期、缓存身份及必要宿主适配 |
 | DAV / 依赖方向 | Fetch 原生映射、xmldom、range-parser；dependency-cruiser | 只读协议接线、允许的依赖边界 |
 
-采用现成机制不等于把领域责任交给库。缺失的协议或运行时合同须明确比较修正 Adapter 与替代成本；不为“用了依赖”额外造一层框架。历史 DAV 候选取舍见[ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)，依赖解释与比较见[选型说明](../research/dependency-selection.md)。
+采用现成机制不等于把领域责任交给库。缺失的协议或运行时合同须明确比较修正 Adapter 与替代成本；不为“用了依赖”额外造一层框架。历史 DAV 候选取舍见[ADR 0004](../adr/0004-shared-fetch-readonly-dav.md)，依赖解释与比较见[选型说明](../dependencies.md)。

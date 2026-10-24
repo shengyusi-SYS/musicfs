@@ -1,6 +1,6 @@
 # 普通 Worker 通过代码发布安装插件
 
-日期：2026-10-20。状态：已采用；本地与[真实云端插件生命周期及作者接入](../verification/p4-worker-cloud.md)已有证据，在途切换与免费计划额度仍独立待验。延续 [ADR 0002](0002-worker-plugin-installation-by-deployment.md)：用户接受在 WebUI 安装、更新或移除插件时后台重新发布普通 Worker；我们保留这条避免额外付费产品前提的路线，采用固定核心、独立注册表和预构建插件模块，并把外部发布与 D1 安装激活分开确认。
+日期：2026-10-20。状态：已采用；本地与[真实云端插件生命周期及作者接入](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p4-worker-cloud.md)已有证据，在途切换与免费计划额度仍独立待验。延续 [ADR 0002](0002-worker-plugin-installation-by-deployment.md)：用户接受在 WebUI 安装、更新或移除插件时后台重新发布普通 Worker；我们保留这条避免额外付费产品前提的路线，采用固定核心、独立注册表和预构建插件模块，并把外部发布与 D1 安装激活分开确认。
 
 ## 发布集合与激活边界
 
@@ -40,4 +40,4 @@ MusicFS构建、变更发布和下载恢复共用模块命名规则：js/mjs为E
 
 Dynamic Workers 当前有付费计划前提，本路线使用普通 Worker 发布，不采用其运行时 Loader。避免该前提不等于本项目已通过免费计划的包体、CPU、D1 或请求额度验证。[官方 Dynamic Workers 定价](https://developers.cloudflare.com/dynamic-workers/pricing/)
 
-本地[正式入口探针](../../scripts/probe-worker-service.ts)运行实际core/registry/插件模块、ASSETS、管理API、DAV与D1；[发布集成测试](../../tests/worker-publishing.test.ts)使用真实本地D1和官方SDK，仅控制平台网络，覆盖multipart、安装/移除、响应丢失、精确新调用逐实例迁移/激活和失败保留；[共同持久化测试](../../tests/plugin-change-persistence.test.ts)覆盖两驱动条件事务及重启。它们不能证明真实云端部署、配置保留、权限、传播时序、免费额度或在途播放。部署边界见[Worker指南](../worker.md)，迁移证据见[记录](../verification/p2-plugin-migration.md)。
+本地[正式入口探针](../../scripts/probes/worker-service.ts)运行实际core/registry/插件模块、ASSETS、管理API、DAV与D1；[发布集成测试](../../tests/worker-publishing.test.ts)使用真实本地D1和官方SDK，仅控制平台网络，覆盖multipart、安装/移除、响应丢失、精确新调用逐实例迁移/激活和失败保留；[共同持久化测试](../../tests/plugin-change-persistence.test.ts)覆盖两驱动条件事务及重启。它们不能证明真实云端部署、配置保留、权限、传播时序、免费额度或在途播放。部署边界见[Worker指南](../worker.md)，迁移证据见[记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p2-plugin-migration.md)。

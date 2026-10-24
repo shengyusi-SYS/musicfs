@@ -11,7 +11,7 @@
 - [桌面构建器](../../scripts/build-desktop.ts)用 `Bun.build({compile:{target,outfile}})` 生成四目标程序，单独复制页面、rclone 和插件包；当时未传入 `executablePath`。只记录 `Bun.version` 还不足以描述另行修改的运行时来源。
 - [现有 Bun 原文](../../third-party/bun-1.4.3-LICENSE.md)与固定官方 `LICENSE.md` 一致，SHA-256 为 `056696884250b0d682365260cf1487a6501b1665a343ec60e23a1e647043c572`。它提供运行时、静态链接库和 polyfill 的说明及链接，没有汇总所有相关许可正文；开头的 MIT 声明也不是 MIT 正文。[固定官方文件](https://github.com/oven-sh/bun/blob/c6da4a4d3010e5553438c60f6bd76d981976867c/LICENSE.md)
 - [npm 正文收集器](../../scripts/helpers/bundle-licenses.ts)读取应用的 Bun 构建清单，范围是应用实际打包的 npm 输入；它不枚举 Bun 原生运行时、JSC 或 Rust crate。Vite 的页面许可、rclone 原始 README、插件原许可各有单独交付路径，不能相互代替。
-- [发行记录](../verification/p4-release-artifacts.md)已经证明项目源码包可在仓库外重建 Linux 应用；这仍使用现成 Bun 运行时，不是修改 JSC 后重新链接 Bun 的证明。Worker 交付 ESM，不包含本项目的 Bun standalone 运行时。
+- [发行记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p4-release-artifacts.md)已经证明项目源码包可在仓库外重建 Linux 应用；这仍使用现成 Bun 运行时，不是修改 JSC 后重新链接 Bun 的证明。Worker 交付 ESM，不包含本项目的 Bun standalone 运行时。
 
 ## 2 固定身份与源码分发入口
 

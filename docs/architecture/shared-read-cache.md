@@ -1,6 +1,6 @@
 # 桌面 WebDAV 共享读取缓存
 
-桌面 `src/hosts/desktop/read-cache.ts` 复用随包 rclone 的服务端 VFS，缓存直接 DAV 客户端已读取的最终表示片段。对外协议仍由 MusicFS DAV 负责，Worker 沿用来源流；无需新增插件 API、字节存储依赖或自制分块引擎。实测范围与版本见[验证记录](../verification/shared-read-cache.md)。
+桌面 `src/hosts/desktop/read-cache.ts` 复用随包 rclone 的服务端 VFS，缓存直接 DAV 客户端已读取的最终表示片段。对外协议仍由 MusicFS DAV 负责，Worker 沿用来源流；无需新增插件 API、字节存储依赖或自制分块引擎。实测范围与版本见[验证记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/shared-read-cache.md)。
 
 ## 所有权与调用
 
@@ -47,4 +47,4 @@ flowchart LR
 
 首次资料准备、新范围、版本变化和淘汰后仍可能取源。开放 GET 的取消时机、预读及区段对齐可使再次打开取得不同范围，不能承诺任意第二次打开零网络。HTTP 源排队、读取器消费和 VFS 实存是不同计数；已缓存一段不代表整曲已保存。
 
-不将单曲回环或 VM 结果外推为真实全库 GUI 耗时，也不将桌面磁盘收益外推为免费 Worker 成本。候选比较及重开条件见[缓存决定](../planning/cache-optimization.md)。
+不将单曲回环或 VM 结果外推为真实全库 GUI 耗时，也不将桌面磁盘收益外推为免费 Worker 成本。候选比较及重开条件见[缓存决定](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/planning/cache-optimization.md)。

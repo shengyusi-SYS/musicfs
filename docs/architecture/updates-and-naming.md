@@ -61,4 +61,4 @@ API `0.1.11` 增加可选的 `SourcePlugin.naming.fields` 字段说明和文件 
 
 桌面改名通过已有布局/快照定位实际可见路径，再通知本机挂载清单失效；定位也使用相同命名投影，保持同名目录正确。按路径缓存的 rclone/播放器可能重新识别，按最终表示键的缓存可保留。外部 DAV 客户端重列目录仍服从其自身缓存策略。
 
-实现范围与离线证据见[验证记录](../verification/updates-and-naming.md)。
+实现范围与离线证据见[验证记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/updates-and-naming.md)。

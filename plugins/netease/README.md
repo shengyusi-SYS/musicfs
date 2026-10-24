@@ -6,7 +6,7 @@
 
 `@musicfs/audio-tags` 为来源实际返回的MP3、FLAC、M4A构造最终文件的区段计划，保留声音数据；文件描述和读取始终使用准确的最终大小与内容身份。歌曲和专辑详情提供多位歌手、专辑、专辑艺术家、发行日期及原专辑曲号/碟号，缺失字段留空；曲号不使用歌单序号。封面及原文/译文/罗马音歌词按上游返回补充，不刮削其他平台。第三方插件可保持透传，不需要使用补标签能力。
 
-alpha.11已有的请求减法继续用于文件准备（当时批量100首，alpha.13提升至200）：通过原SDK的通用`api`模块调用富歌曲详情，返回的专辑艺术家和日期避免逐专辑查询，缺失资料仍可回补；已知图片CDN分片按同一资源共享封面；MP3准备可用一次多Range请求读取头尾。MIME解析使用固定`@remix-run/multipart-parser 0.16.5`，容纳已实测的CDN外层类型错误，不手写解析器。单曲原生版本核对、取消、429冷却与精确最终文件保持不变。此前接口证据见[冷准备验证](../../docs/verification/netease-cold-request-reduction.md)。
+alpha.11已有的请求减法继续用于文件准备（当时批量100首，alpha.13提升至200）：通过原SDK的通用`api`模块调用富歌曲详情，返回的专辑艺术家和日期避免逐专辑查询，缺失资料仍可回补；已知图片CDN分片按同一资源共享封面；MP3准备可用一次多Range请求读取头尾。MIME解析使用固定`@remix-run/multipart-parser 0.16.5`，容纳已实测的CDN外层类型错误，不手写解析器。单曲原生版本核对、取消、429冷却与精确最终文件保持不变。此前接口证据见[冷准备验证](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/netease-cold-request-reduction.md)。
 
 认证行为沿用alpha.7：扫码得到有效MUSIC_U即完成授权，不再把额外账号资料查询放在二维码步骤内。昵称不是登录条件；个人歌单首次需要UID时查询并保存，根入口已有的账号查询也会更新身份。换号先清旧UID/昵称，避免后续内容误用旧账号。
 
@@ -16,7 +16,7 @@ v4引用保存原表示、紧凑`tag-seed`、扫描代次与时间；首次GET�
 
 预算包含新增标签和容器结构，不承诺任意资料都放得下。超预算仅对该首走精确准备，旧读取返回`content_changed`并提示刷新，下一次目录使用新的准确大小；不截断歌词/封面，不改变旧引用已公布大小。M4A支持当前普通单moov布局，分片MP4仍明确不支持；网易云不增加APE等上游未提供格式。缺少缓存时新目录准备明确返回不支持；没有`putIfAbsent`的合同测试/旧宿主实现维持原v3延迟准备路线。
 
-alpha.12本机隔离冷缓存实测：4,159首完整清单用时24.945秒、42页、87次平台调用（歌单列表1、成员名单2、详情42、播放版本42），导出1,915文件、隐藏2,244曲目，没有生成标签计划。首个单文件HEAD为306.74毫秒、热HEAD为2.62毫秒、仅名称DAV请求为24.71毫秒。它们不是全库标签准备或播放器完整扫描耗时；环境与范围见[两阶段验证](../../docs/verification/deferred-catalogue.md)。下文旧版本证据不自动延伸到当前全部能力。
+alpha.12本机隔离冷缓存实测：4,159首完整清单用时24.945秒、42页、87次平台调用（歌单列表1、成员名单2、详情42、播放版本42），导出1,915文件、隐藏2,244曲目，没有生成标签计划。首个单文件HEAD为306.74毫秒、热HEAD为2.62毫秒、仅名称DAV请求为24.71毫秒。它们不是全库标签准备或播放器完整扫描耗时；环境与范围见[两阶段验证](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/deferred-catalogue.md)。下文旧版本证据不自动延伸到当前全部能力。
 
 alpha.13另以两次真实调用确认200首详情/播放版本全部返回，约322/421ms；随后离线4,000首验证20页、43次基础调用，本地workerd/D1的200首清单一页26SQL、精确准备最多38SQL/步。没有再次真实整库测速，不把请求数减少写成已测耗时减半。
 
@@ -27,7 +27,7 @@ alpha.13另以两次真实调用确认200首详情/播放版本全部返回，�
 ```sh
 bun run scripts/build-netease.ts
 bun test tests/netease-plugin.test.ts
-bun run scripts/probe-worker-netease.ts
+bun run scripts/probes/worker-netease.ts
 ```
 
 作者构建输出 `dist/netease/org.musicfs.netease.zip`，安装到桌面服务后新建网易云实例，选择“来源授权”并开始扫码。二维码由共用界面呈现，使用网易云音乐 App 扫描并确认。实例 Cookie 只存为插件私有状态；后续内容读取独立处理账号状态。每次调用持有自己的 CookieJar、Fetch 与 AbortSignal，取消/旧结果写入由宿主公开合同控制。
@@ -50,7 +50,7 @@ API0.1.9提供可选原子缓存`putIfAbsent`固定首读计划；SQLite与D1共
 
 回退顺序为 Hi-Res → 无损 → 极高 → 标准。原生响应直接返回较低实际档位时，也只有回退策略允许使用。文件标签和扩展名以实际版本生成；多个目标取得同一实际引用时每个曲目位置只导出一次，重复曲目位置仍各自保留。曲目、文件、隐藏曲目、缺失目标、回退目标和合并重复版本分别统计。试听不作为完整版本；暂时请求、认证、限流和解析错误直接失败，不通过回退掩盖。已引用文件的读取只重新解析该实际版本，不能因当前回退设置换成其他字节。
 
-alpha.3 已在真实账号与本地 workerd 复测：每日30曲，多目标无损/标准+回退导出35文件（极高17、标准18），统计一致；真实极高MP3的完整/范围/rclone通过。该阶段没有取得真实FLAC，因此不表示全部档位已验，后续结果以[实际来源记录](../../docs/verification/p2-netease-source.md)为准。当前支持范围之外的特殊音效/格式、真实会话过期后重登，以及免费 Worker 下的新多目标请求预算仍待后续收口。
+alpha.3 已在真实账号与本地 workerd 复测：每日30曲，多目标无损/标准+回退导出35文件（极高17、标准18），统计一致；真实极高MP3的完整/范围/rclone通过。该阶段没有取得真实FLAC，因此不表示全部档位已验，后续结果以[实际来源记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/p2-netease-source.md)为准。当前支持范围之外的特殊音效/格式、真实会话过期后重登，以及免费 Worker 下的新多目标请求预算仍待后续收口。
 
 alpha.2 处理原生音频响应中“同曲多个实际版本”的情况：先核对请求编号均有回应，再选择所配置音质的完整版本；格式名仅做大小写规范。其他音质不参与隐式回退；同一目标音质的候选仅在编号、音质、格式、MD5 和大小全部一致时合并，临时 URL 可以不同。缺少/未知编号或目标音质存在冲突实际文件仍失败。
 
@@ -71,9 +71,9 @@ alpha.3 定向回归另外覆盖旧极高配置保持原义、多版本不受旧
 ```sh
 MUSICFS_NETEASE_TEST_STATE_DB=/absolute/path/state.sqlite \
 MUSICFS_NETEASE_TEST_INSTANCE_ID=instance-id \
-bun run scripts/probe-worker-netease.ts
+bun run scripts/probes/worker-netease.ts
 ```
 
 探针只输出计数与通过状态，临时 D1 完成后删除。不要把账号 Cookie、私有状态、二维码或真实账号截图放入仓库。
 
-SDK 候选与取舍见 [研究记录](../../docs/research/netease-worker-sdk.md)。插件自有代码采用GPL-3.0-only；发布包保留该正文及实际打包依赖各自的第三方许可和署名。
+SDK 候选与取舍见 [构建脚本](../../scripts/build-netease.ts)。插件自有代码采用GPL-3.0-only；发布包保留该正文及实际打包依赖各自的第三方许可和署名。
