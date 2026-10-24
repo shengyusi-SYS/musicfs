@@ -100,7 +100,25 @@ bun run package:release -- --targets windows-x64,linux-x64
 
 Adjust the target list to your toolchains. If release inputs change afterward, rebuild affected artifacts. `dist/releases/<version>/` contains ZIPs, plugins, `release-manifest.json` and `SHA256SUMS`. Run `sha256sum -c SHA256SUMS` there. Windows can compare `Get-FileHash <archive.zip> -Algorithm SHA256` with the checksum list. Check the extracted bilingual entry pages and author-kit build, then publish matching attachments and download instructions together.
 
-Packaging checks source, WebUI and plugin identity; it does not upload a public release. Desktop, Worker and author packages carry their relevant bilingual guides. Complete designs, references and historical evidence live in the source package. [Downloads and upgrades](release.md)
+Local packaging checks source, WebUI and plugin identity; the GitHub workflow below handles uploads. Desktop, Worker and author packages carry their relevant bilingual guides. Complete designs, references and historical evidence live in the source package. [Downloads and upgrades](release.md)
+
+## GitHub releases
+
+[Build and release](../../.github/workflows/release.yml) builds Windows x64, Linux x64, Worker, the author kit, source and all three example plugins on GitHub.
+
+- To try a build, open **Actions → Build and release → Run workflow** and select a branch. Download the complete package set from that run's **Artifacts**, retained for 7 days.
+- To publish, update `package.json`, commit the version change, then push a matching tag with a `v` prefix. For version `0.1.0-dev.32`:
+
+```sh
+git tag v0.1.0-dev.32
+git push origin v0.1.0-dev.32
+```
+
+The tag must match `package.json`. After checks, builds and checksum verification pass, the workflow creates a GitHub Release with all attachments. Versions with suffixes such as `-dev` or `-alpha` are marked as prereleases and do not replace the latest stable release. GitHub generates release notes from commits; edit them on the Release page as needed. Manual runs only build packages.
+
+The workflow uses the built-in `GITHUB_TOKEN`; no extra secrets are needed. A single Linux runner builds the release with cached dependencies and tools. MinGW cross-compiles the Windows native helper. `bun run check` runs the offline checks, without contacting music platforms or deploying Cloudflare. macOS remains available through the source-build commands above.
+
+GitHub attachments do not retain subdirectories. Automated builds use `--flat-plugins` to place standalone plugin ZIPs at the release root, with matching paths in the manifest and `SHA256SUMS`. Local packaging still uses `plugins/` by default. Download all attachments for a version into one directory, then run `sha256sum -c SHA256SUMS`.
 
 ## Build from a source archive
 

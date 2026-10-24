@@ -90,7 +90,7 @@ export async function archive(directory: string, stem: string, staging: string):
 }
 
 export async function copyProjectSource(directory: string, identity: ReleaseIdentity): Promise<void> {
-  const directories = ['src', 'native', 'packages', 'plugins', 'scripts', 'tests', 'docs', 'outputs', 'worker-template', 'third-party'];
+  const directories = ['.github', 'src', 'native', 'packages', 'plugins', 'scripts', 'tests', 'docs', 'outputs', 'worker-template', 'third-party'];
   const rootFiles = ['package.json', 'bun.lock', 'bunfig.toml', 'tsconfig*.json', 'vite.config.*',
     '.dependency-cruiser.cjs', '.gitignore', '.gitattributes', 'README*', 'LICENSE*'];
   const selected = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--',
@@ -123,7 +123,9 @@ export async function copyProjectSource(directory: string, identity: ReleaseIden
 }
 
 async function main() {
-  const { values } = parseArgs({ args: Bun.argv.slice(2), strict: true, options: { targets: { type: 'string' } } });
+  const { values } = parseArgs({ args: Bun.argv.slice(2), strict: true, options: {
+    targets: { type: 'string' }, 'flat-plugins': { type: 'boolean' }
+  } });
   const selected = values.targets === undefined ? [...targets] : values.targets.split(',').map(item => item.trim());
   if (!selected.length || selected.some(item => !targets.includes(item as Target)) || new Set(selected).size !== selected.length) {
     throw new Error(`Use --targets with a comma-separated selection of: ${targets.join(', ')}`);
@@ -183,9 +185,9 @@ async function main() {
     archives.push({ ...await archive(kitDirectory, `musicfs-${releaseVersion}-plugin-author-kit`, staging), kind: 'plugin-author-kit' });
     archives.push({ ...await archive(sourceDirectory, `musicfs-${releaseVersion}-source`, staging), kind: 'source' });
     const pluginFiles: (ReleaseFile & { id: string; version: string; revision: string })[] = [];
-    await mkdir(join(staging, 'plugins'));
+    if (!values['flat-plugins']) await mkdir(join(staging, 'plugins'));
     for (const plugin of plugins) {
-      const file = `plugins/${plugin.id}-${plugin.version}.zip`; const path = join(staging, file);
+      const file = `${values['flat-plugins'] ? '' : 'plugins/'}${plugin.id}-${plugin.version}.zip`; const path = join(staging, file);
       await cp(plugin.path, path);
       const copied = await describe(path, file);
       if (copied.sha256 !== plugin.revision) throw new Error(`Plugin changed while packaging: ${plugin.id}`);

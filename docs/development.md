@@ -100,7 +100,25 @@ bun run package:release -- --targets windows-x64,linux-x64
 
 按实际目标调整列表。构建完成后不再修改发行输入；有变化则重建受影响产物。输出位于 `dist/releases/<版本>/`，包含 ZIP、插件、`release-manifest.json` 和 `SHA256SUMS`。在版本目录执行 `sha256sum -c SHA256SUMS`，Windows 可用 `Get-FileHash <归档.zip> -Algorithm SHA256` 与清单核对。检查解压后的双语使用入口及作者包构建，再将对应附件和下载说明一起发布。
 
-打包工具核对源码、页面和插件身份，不会把生成文件自动上传为公开发行。桌面包、Worker 包和作者包携带各自需要的双语文档；完整设计、参考与历史证据在源码包。发行入口见[下载与升级](release.md)。
+本地打包工具核对源码、页面和插件身份；上传由下面的 GitHub workflow 完成。桌面包、Worker 包和作者包携带各自需要的双语文档；完整设计、参考与历史证据在源码包。发行入口见[下载与升级](release.md)。
+
+## GitHub 自动发行
+
+[Build and release](../.github/workflows/release.yml) 在 GitHub 上构建 Windows x64、Linux x64、Worker、插件作者包、源码包和三个示例插件。
+
+- 试构建：进入仓库 **Actions → Build and release → Run workflow**，选择分支。完成后从该次运行的 **Artifacts** 下载整套包，保留 7 天。
+- 发布：先修改 `package.json` 的版本并提交，再推送同名的 `v` 前缀标签。例如版本为 `0.1.0-dev.32` 时：
+
+```sh
+git tag v0.1.0-dev.32
+git push origin v0.1.0-dev.32
+```
+
+标签必须与 `package.json` 一致。检查、构建和校验通过后，workflow 创建 GitHub Release 并上传全部附件；带 `-dev`、`-alpha` 等后缀的版本自动标为预发布，不替代最新正式版。发布说明由 GitHub 根据提交生成，可在 Release 页面编辑。手动运行只构建，不发布。
+
+workflow 使用内置 `GITHUB_TOKEN`，无需新增密钥。构建在一个 Linux runner 内完成，缓存依赖和工具；Windows 原生辅助程序使用 MinGW 交叉编译。完整离线检查使用 `bun run check`，不调用音乐平台或部署 Cloudflare。macOS 仍按上面的源码构建入口使用。
+
+GitHub 附件不保留子目录，所以自动发行采用 `--flat-plugins`，将独立插件 ZIP 放在发行目录根部，清单和 `SHA256SUMS` 同步使用这些文件名。本地默认仍放在 `plugins/` 中。下载同一版本的全部附件后，可直接运行 `sha256sum -c SHA256SUMS`。
 
 ## 从源码发行包构建
 

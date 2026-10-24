@@ -18,6 +18,8 @@ Windows x64 和 Linux x64 使用同版源码构建。macOS 目前提供构建入
 
 版本内的插件 ZIP 在 `plugins/` 目录中；各包内容和摘要见[发行清单](../dist/releases/0.1.0-dev.31/release-manifest.json)、[SHA256SUMS](../dist/releases/0.1.0-dev.31/SHA256SUMS)。
 
+推送版本标签可通过 GitHub Actions 自动构建并发布上述整套包；自动发行的独立插件与其他附件并列。维护者见[自动发行步骤](development.md#github-自动发行)。
+
 ## 首次使用
 
 完整解压桌面包，保留程序旁的 `resources/` 和 `plugins/`。Windows 打开 `MusicFS.exe`，Linux 运行 `musicfs`，按[使用指南](user-guide.md)添加来源和连接播放器。普通使用无需安装 Bun 或 Node。

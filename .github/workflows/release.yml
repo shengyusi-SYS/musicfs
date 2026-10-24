@@ -1,0 +1,134 @@
+name: Build and release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    env:
+      CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc-posix
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Cache package downloads
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'package.json') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Read release version
+        id: version
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { valid, prerelease } from 'semver';
+          const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (valid(version) !== version) throw new Error(`Invalid release version: ${version}`);
+          if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME !== `v${version}`) {
+            throw new Error(`Tag must match package.json: v${version}`);
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nprerelease=${prerelease(version) !== null}\n`);
+          JS
+
+      - name: Check source
+        run: bun run check
+
+      - name: Set up native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl-tools gcc-mingw-w64-x86-64-posix
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-unknown-linux-musl x86_64-pc-windows-gnu
+
+      - name: Cache native dependencies and tools
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            dist/tools
+          key: native-${{ runner.os }}-${{ hashFiles('native/desktop/Cargo.lock', 'scripts/build-desktop*.ts', 'scripts/helpers/winfsp.ts') }}
+          restore-keys: native-${{ runner.os }}-
+
+      - name: Fetch native dependency metadata
+        # The offline license inventory reads metadata for every locked package.
+        run: cargo fetch --locked --manifest-path native/desktop/Cargo.toml
+
+      - name: Build desktop, Worker and author kit
+        run: |
+          bun run build:desktop -- --targets windows-x64,linux-x64
+          bun run build:worker dist/plugins/org.musicfs.sample.zip dist/plugins/org.musicfs.qq.zip dist/netease/org.musicfs.netease.zip
+          bun run build:author-kit
+
+      - name: Package release
+        run: bun run package:release -- --targets windows-x64,linux-x64 --flat-plugins
+
+      - name: Verify checksums
+        working-directory: dist/releases/${{ steps.version.outputs.version }}
+        run: sha256sum -c SHA256SUMS
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: musicfs-${{ steps.version.outputs.version }}
+          path: dist/releases/${{ steps.version.outputs.version }}/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: musicfs-${{ needs.build.outputs.version }}
+          path: release
+
+      - name: Publish GitHub Release
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+        run: |
+          sha256sum -c SHA256SUMS
+          options=(--verify-tag --generate-notes --title "MusicFS ${RELEASE_TAG}")
+          if [[ "$PRERELEASE" == 'true' ]]; then
+            options+=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_TAG" ./*.zip ./release-manifest.json ./SHA256SUMS "${options[@]}"

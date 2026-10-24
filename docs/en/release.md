@@ -18,6 +18,8 @@ Windows x64 and Linux x64 are built from the same source. macOS currently has a 
 
 Plugin ZIPs are in `plugins/`. Package identities and checksums are in the [manifest](../../dist/releases/0.1.0-dev.31/release-manifest.json) and [SHA256SUMS](../../dist/releases/0.1.0-dev.31/SHA256SUMS).
 
+Pushing a version tag can build and publish this package set through GitHub Actions. Standalone plugins in automated releases appear alongside the other attachments. [Maintainer instructions](development.md#github-releases)
+
 ## First use
 
 Extract the complete desktop package, keeping `resources/` and `plugins/` beside the program. Open `MusicFS.exe` on Windows or run `musicfs` on Linux, then follow the [user guide](user-guide.md). Users do not need Bun or Node.
