@@ -7,7 +7,7 @@ import { setVersion } from '../scripts/set-version';
 const script = resolve(import.meta.dir, '../scripts/set-version.ts');
 const releaseGuides = ['docs/release.md', 'docs/en/release.md'];
 
-test('the version command updates both real release guides and every download path while preserving other versions', async () => {
+test('the version command updates both release guides and package names while preserving other versions', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-set-version-'));
   const metadata = { name: 'musicfs', version: '0.1.0-dev.31', scripts: { test: 'bun test' } };
   const history = 'Previous release: 0.1.0-dev.31\n';
@@ -30,12 +30,11 @@ test('the version command updates both real release guides and every download pa
     for (const file of releaseGuides) {
       const text = await readFile(join(directory, file), 'utf8');
       expect(text).toContain('**0.1.0-dev.32**');
-      const links = [...text.matchAll(/\]\(([^)]+dist\/releases\/[^)]+)\)/g)].map(match => match[1]!);
-      expect(links).toHaveLength(7);
-      for (const link of links) {
-        expect(link).toContain('/releases/0.1.0-dev.32/');
-        if (link.endsWith('.zip')) expect(link).toContain('/musicfs-0.1.0-dev.32-');
-      }
+      const packages = [...text.matchAll(/`(musicfs-[^`]+\.zip)`/g)].map(match => match[1]!);
+      expect(packages).toHaveLength(5);
+      for (const name of packages) expect(name).toStartWith('musicfs-0.1.0-dev.32-');
+      expect(text).toContain('https://github.com/shengyusi-SYS/musicfs/releases');
+      expect(text).not.toMatch(/\]\((?:\.\.\/)+dist\//);
       expect(text).toContain('Unrelated version: 0.1.0-dev.31');
     }
     expect((await setVersion('0.1.0-dev.32', directory)).changed).toEqual([]);

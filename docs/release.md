@@ -7,17 +7,19 @@
 
 ## 选择下载
 
-| 你要做什么 | 下载 |
+已发布附件统一在 [GitHub Releases](https://github.com/shengyusi-SYS/musicfs/releases)。按下表选择包名；从源码运行见[开发指南](development.md)。
+
+| 你要做什么 | 包名 |
 |---|---|
-| 在 Linux 上使用 | [Linux x64](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-linux-x64.zip) |
-| 在 Windows 上使用 | [Windows x64](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-windows-x64.zip) |
-| 部署 Cloudflare Worker | [Worker 部署包](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-worker.zip) |
-| 编写自己的来源插件 | [插件作者包](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-plugin-author-kit.zip) |
-| 修改或构建 MusicFS | [完整源码](../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-source.zip) |
+| 在 Linux 上使用 | `musicfs-0.1.0-dev.31-linux-x64.zip` |
+| 在 Windows 上使用 | `musicfs-0.1.0-dev.31-windows-x64.zip` |
+| 部署 Cloudflare Worker | `musicfs-0.1.0-dev.31-worker.zip` |
+| 编写自己的来源插件 | `musicfs-0.1.0-dev.31-plugin-author-kit.zip` |
+| 修改或构建 MusicFS | `musicfs-0.1.0-dev.31-source.zip` |
 
 Windows x64 和 Linux x64 使用同版源码构建。macOS 目前提供构建入口。
 
-版本内的插件 ZIP 在 `plugins/` 目录中；各包内容和摘要见[发行清单](../dist/releases/0.1.0-dev.31/release-manifest.json)、[SHA256SUMS](../dist/releases/0.1.0-dev.31/SHA256SUMS)。
+桌面包中附带 `plugins/` 目录，独立插件则作为 Release 附件提供。各包内容和摘要见 `release-manifest.json`、`SHA256SUMS`。
 
 推送版本标签可通过 GitHub Actions 自动构建并发布上述整套包；自动发行的独立插件与其他附件并列。维护者见[自动发行步骤](development.md#github-自动发行)。
 

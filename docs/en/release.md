@@ -7,19 +7,21 @@ Current version: **0.1.0-dev.31** (prerelease).
 
 ## Choose a package
 
-| Goal | Download |
+Published attachments are available from [GitHub Releases](https://github.com/shengyusi-SYS/musicfs/releases). Use the filenames below to choose a package, or follow the [source development guide](development.md).
+
+| Goal | Package |
 |---|---|
-| Use on Linux | [Linux x64](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-linux-x64.zip) |
-| Use on Windows | [Windows x64](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-windows-x64.zip) |
-| Deploy Cloudflare Worker | [Worker package](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-worker.zip) |
-| Develop a source plugin | [Author kit](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-plugin-author-kit.zip) |
-| Modify or build MusicFS | [Complete source](../../dist/releases/0.1.0-dev.31/musicfs-0.1.0-dev.31-source.zip) |
+| Use on Linux | `musicfs-0.1.0-dev.31-linux-x64.zip` |
+| Use on Windows | `musicfs-0.1.0-dev.31-windows-x64.zip` |
+| Deploy Cloudflare Worker | `musicfs-0.1.0-dev.31-worker.zip` |
+| Develop a source plugin | `musicfs-0.1.0-dev.31-plugin-author-kit.zip` |
+| Modify or build MusicFS | `musicfs-0.1.0-dev.31-source.zip` |
 
 Windows x64 and Linux x64 are built from the same source. macOS currently has a source-build entry.
 
-Plugin ZIPs are in `plugins/`. Package identities and checksums are in the [manifest](../../dist/releases/0.1.0-dev.31/release-manifest.json) and [SHA256SUMS](../../dist/releases/0.1.0-dev.31/SHA256SUMS).
+Desktop packages include a `plugins/` folder. Standalone plugins are separate Release attachments. Package identities and checksums are in `release-manifest.json` and `SHA256SUMS`.
 
-Pushing a version tag can build and publish this package set through GitHub Actions. Standalone plugins in automated releases appear alongside the other attachments. [Maintainer instructions](development.md#github-releases)
+Pushing a version tag builds and publishes the package set through GitHub Actions. [Maintainer instructions](development.md#github-releases)
 
 ## First use
 

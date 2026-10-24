@@ -22,9 +22,7 @@ export async function setVersion(version: string, directory = process.cwd()) {
     const marker = /(<!-- release-version -->\r?\n)[^\r\n]*/;
     if (!marker.test(text)) throw new Error(`Missing release-version marker in ${guide.file}`);
     return text.replace(marker, (_, prefix: string) => prefix + guide.summary(version, prerelease(version) !== null))
-      .replace(/(\]\((?:\.\.\/)+dist\/releases\/)([^/)\s]+)\/([^\s)]+)\)/g,
-        (_, prefix: string, oldVersion: string, file: string) =>
-          `${prefix}${version}/${file.replace(`musicfs-${oldVersion}-`, `musicfs-${version}-`)})`);
+      .replaceAll(`musicfs-${previous}-`, `musicfs-${version}-`);
   })];
   const changed = files.filter((_, index) => original[index] !== updated[index]);
   await Promise.all(files.map((file, index) => original[index] === updated[index]

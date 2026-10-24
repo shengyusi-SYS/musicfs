@@ -92,7 +92,7 @@ Output is `dist/worker/`. No plugin arguments means an empty registry; pass alre
 bun run version:set 0.1.0-dev.32
 ```
 
-This updates `package.json`, the version and all download/checksum links in both release guides, and the prerelease label. Plugins, the plugin API and historical records keep their own versions. The command only edits files; build locally or commit and publish as described below.
+This updates `package.json`, the version and package names in both release guides, and the prerelease label. Downloads use the shared GitHub Releases entry. Plugins, the plugin API and historical records keep their own versions. The command only edits files; build locally or commit and publish as described below.
 
 ## Prepare a release
 
