@@ -9,7 +9,7 @@ The Worker serves the same library, management interface and WebDAV over HTTPS. 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
 
 1. Connect GitHub and Cloudflare to create your repository copy, Worker and D1 database.
-2. Choose and save `ADMIN_TOKEN` for management and `DAV_USERNAME` / `DAV_PASSWORD` for players. Enter `CF_API_TOKEN`, an API token created in Cloudflare with **Workers Scripts → Edit** permission for this account. It lets the Worker install, update and remove plugins; it is not your MusicFS login token.
+2. Choose and save `ADMIN_TOKEN` for management and `DAV_USERNAME` / `DAV_PASSWORD` for players. [Create an API token](https://dash.cloudflare.com/profile/api-tokens/) in Cloudflare with **Account → Workers Scripts → Edit** permission for this account. Paste it into `CF_API_TOKEN` to let the Worker install, update and remove plugins.
 3. Keep the repository root, use `bun run build` as the build command and `bun run deploy` as the deploy command. Then follow [Access and credentials](#access-and-credentials) below.
 4. In **Plugins → Install plugin → Download link**, use a bundled ZIP on your own domain: `https://your-domain/plugin-packages/org.musicfs.netease.zip` for NetEase or `https://your-domain/plugin-packages/org.musicfs.qq.zip` for QQ. Then add a source and sign in.
 
@@ -43,7 +43,7 @@ Create a JSON file outside the release directory:
 }
 ```
 
-The first three values provide initial management access and reader credentials. `CF_API_TOKEN` lets the running Worker publish plugin installs, updates and removals. Use an **Account → Workers Scripts → Edit** token for the target account. Wrangler login authorizes your local deployment; it does not supply this runtime credential.
+The first three values provide initial management access and reader credentials. `CF_API_TOKEN` lets the running Worker publish plugin installs, updates and removals. [Create an API token](https://dash.cloudflare.com/profile/api-tokens/) with **Account → Workers Scripts → Edit** permission for the target account. Wrangler login authorizes your local deployment; it does not supply this runtime credential.
 
 Apply all bundled migrations, then deploy:
 

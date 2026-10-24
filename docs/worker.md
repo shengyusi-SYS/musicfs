@@ -9,7 +9,7 @@ Worker 版通过 HTTPS 提供同一套音乐库、管理页面和 WebDAV。可�
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
 
 1. 连接 GitHub 和 Cloudflare，创建自己的仓库副本、Worker 和 D1 数据库。
-2. 自行设置并保存 `ADMIN_TOKEN`（管理令牌）、`DAV_USERNAME`、`DAV_PASSWORD`（播放器账号密码），填写 `CF_API_TOKEN`。最后一项是在 Cloudflare 创建的 API Token，需要当前账号的 **Workers Scripts → Edit** 权限，用于安装、更新和移除插件；它不是 MusicFS 的登录口令。
+2. 自行设置并保存 `ADMIN_TOKEN`（管理令牌）、`DAV_USERNAME`、`DAV_PASSWORD`（播放器账号密码）。在 Cloudflare [创建 API Token](https://dash.cloudflare.com/profile/api-tokens/)，选择 **Account → Workers Scripts → Edit** 权限和当前账号，将生成的 Token 填入 `CF_API_TOKEN`，用于安装、更新和移除插件。
 3. 构建命令使用 `bun run build`，部署命令使用 `bun run deploy`，根目录保持仓库根目录。完成后按下方[访问与凭据](#访问与凭据)打开管理页。
 4. 在「插件 → 安装插件 → 下载链接」填写自己域名下的插件地址：网易云为 `https://你的域名/plugin-packages/org.musicfs.netease.zip`，QQ 音乐为 `https://你的域名/plugin-packages/org.musicfs.qq.zip`。安装后添加来源并登录。
 
@@ -43,7 +43,7 @@ bunx wrangler@4.119.0 d1 create musicfs
 }
 ```
 
-前三项分别用于首次进入管理页及播放器读取。`CF_API_TOKEN` 用于 Worker 在管理页安装、更新或移除插件时发布代码；创建目标账号的 **Account → Workers Scripts → Edit** Token 即可。Wrangler 登录用于本机部署，不能替代云端运行时的发布凭据。
+前三项分别用于首次进入管理页及播放器读取。`CF_API_TOKEN` 用于 Worker 在管理页安装、更新或移除插件时发布代码；[创建 API Token](https://dash.cloudflare.com/profile/api-tokens/) 时选择 **Account → Workers Scripts → Edit** 权限和目标账号。Wrangler 登录用于本机部署，不能替代云端运行时的发布凭据。
 
 应用包内全部迁移，再部署：
 

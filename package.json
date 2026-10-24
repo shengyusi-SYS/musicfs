@@ -112,7 +112,7 @@
         "description": "Choose a password for WebDAV players. / 设置播放器使用的 WebDAV 密码。"
       },
       "CF_API_TOKEN": {
-        "description": "An API Token with Workers Scripts Edit permission for this account, used to install and update plugins. / 当前账号具备 Workers Scripts Edit 权限的 Token，用于安装和更新插件。"
+        "description": "[Create an API token](https://dash.cloudflare.com/profile/api-tokens/) with Account → Workers Scripts → Edit permission for this account, then paste it here to manage plugins. / [创建 API Token](https://dash.cloudflare.com/profile/api-tokens/)，选择 Account → Workers Scripts → Edit 权限和当前账号，粘贴到此处，用于管理插件。"
       }
     }
   }
