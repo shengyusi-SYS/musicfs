@@ -76,7 +76,7 @@ flowchart TD
 
 ### Windows VM：实际 App/WinFsp 路径
 
-用户在 VM 内重连网络后，同一 `192.0.2.74` SSH 恢复。只在这台已授权 Windows 11 VM 操作，复用已安装 WinFsp，未调用 Windows 宿主或修改网络、认证策略、注册表/证书。使用已有正式 dev.6 ZIP 的 `MusicFS.exe`（SHA256 `f29ef85c141c83e35abccefd3cbbdb05fa015024b4e1baf1519d972d7e0421a4`），独立临时数据目录。
+用户在 VM 内重连网络后，同一测试 VM 的 SSH 恢复。只在这台已授权 Windows 11 VM 操作，复用已安装 WinFsp，未调用 Windows 宿主或修改网络、认证策略、注册表/证书。使用已有正式 dev.6 ZIP 的 `MusicFS.exe`（SHA256 `f29ef85c141c83e35abccefd3cbbdb05fa015024b4e1baf1519d972d7e0421a4`），独立临时数据目录。
 
 App 正式 `POST /api/mounts` 创建远程来源挂载，自动分配 `Z:`，由随包 rclone v1.75.2/WinFsp cmount 执行。目标通过仅绑定 VM 回环的临时 SSH 反向转发，连接 WSL 的真实 Library/DAV 离线原型；它验证 Windows 消费端，没有将测试插件装入正式网易云实例。六文件采用 **1MiB** 预算，每首准确大小为1,067,471字节。
 

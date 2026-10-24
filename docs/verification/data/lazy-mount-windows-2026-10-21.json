@@ -1,7 +1,7 @@
 {
   "date": "2026-10-21",
   "success": true,
-  "scope": "Windows 11 VM 192.0.2.74, dev.6 production App mount API using remote source pointed over loopback SSH reverse forward to real MusicFS Library/DAV offline MP3 prototype in WSL. Not a production NetEase plugin integration, Explorer GUI or audible playback acceptance.",
+  "scope": "Windows 11 test VM, dev.6 production App mount API using remote source pointed over loopback SSH reverse forward to real MusicFS Library/DAV offline MP3 prototype in WSL. Not a production NetEase plugin integration, Explorer GUI or audible playback acceptance.",
   "mountAndRead": {
     "scope": "Windows VM, native dev.6 App mount API, rclone/WinFsp, immutable offline MP3 prototype over loopback SSH forward",
     "success": true,
