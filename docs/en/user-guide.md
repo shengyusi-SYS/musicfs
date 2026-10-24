@@ -12,11 +12,13 @@ Closing the browser leaves the service and mounts running. Double-click the Wind
 
 Use [remote mode](headless.md) for a NAS, server or SSH session. The language button switches between English and Simplified Chinese without clearing your current input.
 
+For Cloudflare hosting, open your deployed HTTPS address and enter the admin token you set during deployment. See [cloud access](worker.md#access-and-credentials) for addresses, credentials and recovery.
+
 ## Sign in and manage from a phone
 
 Create a management account in **Settings → Login account** when you need password sign-in. **Remember me** uses a 30-day session. Signing out ends this browser session; music and mounts keep running.
 
-For phone management, connect to the same network, allow **LAN devices** in **Settings → Management page access**, then open **Service actions → Mobile access**. Scan the code. Choose a reachable address if the machine has several network interfaces, and refresh the QR code for another sign-in.
+To manage the desktop app from a phone, connect to the same network, allow **LAN devices** in **Settings → Management page access**, then open **Service actions → Mobile access**. Scan the code. Choose a reachable address if the machine has several network interfaces, and refresh the QR code for another sign-in. For cloud hosting, open the same HTTPS address on your phone and sign in.
 
 ## Add a music source
 

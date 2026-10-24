@@ -9,8 +9,8 @@ Worker 版通过 HTTPS 提供同一套音乐库、管理页面和 WebDAV。可�
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
 
 1. 连接 GitHub 和 Cloudflare，创建自己的仓库副本、Worker 和 D1 数据库。
-2. 填写 `ADMIN_TOKEN`（首次进入管理页的令牌）、`DAV_USERNAME`、`DAV_PASSWORD`（播放器账号密码）和 `CF_API_TOKEN`。最后一项需要当前账号的 **Workers Scripts → Edit** 权限，用于在管理页安装、更新和移除插件。
-3. 构建命令使用 `bun run build`，部署命令使用 `bun run deploy`，根目录保持仓库根目录。完成后打开返回的网址，用 `ADMIN_TOKEN` 进入。
+2. 自行设置并保存 `ADMIN_TOKEN`（管理令牌）、`DAV_USERNAME`、`DAV_PASSWORD`（播放器账号密码），填写 `CF_API_TOKEN`。最后一项是在 Cloudflare 创建的 API Token，需要当前账号的 **Workers Scripts → Edit** 权限，用于安装、更新和移除插件；它不是 MusicFS 的登录口令。
+3. 构建命令使用 `bun run build`，部署命令使用 `bun run deploy`，根目录保持仓库根目录。完成后按下方[访问与凭据](#访问与凭据)打开管理页。
 4. 在「插件 → 安装插件 → 下载链接」填写自己域名下的插件地址：网易云为 `https://你的域名/plugin-packages/org.musicfs.netease.zip`，QQ 音乐为 `https://你的域名/plugin-packages/org.musicfs.qq.zip`。安装后添加来源并登录。
 
 账号 ID 和 Worker 名称由部署工具填写，数据库迁移自动执行。来源平台的扫码登录仍在 MusicFS 中完成。官方流程见 [Deploy to Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/)。
@@ -52,9 +52,33 @@ bunx wrangler@4.119.0 d1 migrations apply musicfs --remote
 bunx wrangler@4.119.0 deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 ```
 
-打开命令返回的域名，使用 `ADMIN_TOKEN` 进入，在「设置 → 登录账号」按需创建管理账号。然后安装插件、添加来源并登录，日常流程见[使用指南](user-guide.md)。
+## 访问与凭据
 
-播放器使用 `https://你的域名/dav/` 和读取凭据，管理页也可生成导入二维码。管理账号、读取凭据、来源平台授权分别设置。
+部署完成后，打开部署结果中的 HTTPS 网址，也可从 Cloudflare 控制台选择这个 Worker，打开其 `workers.dev` 域名，例如 `https://musicfs.你的子域.workers.dev/`。收藏这个地址即可再次访问；手机也直接打开它。
+
+1. 首次打开，在「管理令牌」中输入部署时自行设置的 `ADMIN_TOKEN`，点击「连接」。没有项目统一的默认口令。
+2. 在「设置 → 登录账号」按需设置用户名和密码。以后可以直接用账号密码登录，并勾选「记住登录」；`ADMIN_TOKEN` 仍可用于找回账号。
+3. 安装插件并添加音乐来源，按插件提示登录音乐平台。日常操作见[使用指南](user-guide.md)。
+4. 在「连接与挂载 → WebDAV 播放器」复制地址、用户名和密码，或显示导入二维码。播放器地址是同一域名下的 `/dav/`，例如 `https://musicfs.你的子域.workers.dev/dav/`。
+
+云端通过同一 HTTPS 域名的不同路径提供管理与 WebDAV，分别校验凭据；无需桌面版的局域网开关或本地端口设置。
+
+| 凭据 | 用于哪里 | 设置与修改 |
+|---|---|---|
+| `ADMIN_TOKEN` | 管理页首次进入、找回管理账号 | 部署时自行设置，保存到自己的密码管理器；在 Cloudflare Worker 的 Secrets 中修改 |
+| 管理用户名、密码 | 管理页日常登录 | 在「设置 → 登录账号」创建或修改，保存于 D1 |
+| `DAV_USERNAME`、`DAV_PASSWORD` | 播放器、远程挂载读取音乐 | 部署时设置初始值；之后在「WebDAV 播放器 → 修改账号密码」修改，已保存的值以 D1 为准 |
+| `CF_API_TOKEN` | Worker 后台发布插件 | 在 Cloudflare 创建，在 Worker Secrets 中保存或替换；不填入管理登录页或播放器 |
+
+部署表单中的口令保存在 Worker Secrets，不写进公开仓库。修改运行时凭据的位置是 **Workers & Pages → 你的 Worker → Settings → Variables and Secrets**，选择 Secret 类型并部署生效；构建环境变量是另一处设置。[Cloudflare Secrets 说明](https://developers.cloudflare.com/workers/configuration/secrets/)
+
+### 忘记或更换凭据
+
+- **忘记管理账号或密码：** 登录页展开「使用管理令牌」，输入 `ADMIN_TOKEN`，进入后在「设置 → 登录账号」重新设置。
+- **忘记 `ADMIN_TOKEN`：** Cloudflare 不再显示已保存的 Secret 原文。在上述 Worker 设置中把 `ADMIN_TOKEN` 换成新值并部署，再用新令牌进入。更换令牌后浏览器需要重新登录，管理账号和音乐数据保留。
+- **忘记播放器密码：** 登录管理页，在「WebDAV 播放器」中查看或修改，并同步更新播放器。已在页面保存过的凭据不会被 Cloudflare 中的初始 `DAV_*` 值覆盖。
+
+升级沿用现有 Secrets 和 D1，无需重新生成口令。音乐平台登录状态由对应插件保存，与以上凭据分开。
 
 ## 日常运行
 

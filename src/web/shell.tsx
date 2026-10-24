@@ -63,6 +63,7 @@ function ManagementSignIn({ api, passwordConfigured, onConnected }: { api: Api; 
   const login = useMutation({ mutationFn: (values: ManagementLogin) => api.login(values.username.trim(), values.password, values.rememberMe), onSuccess: onConnected });
   const bootstrap = useMutation({ mutationFn: (token: string) => api.bootstrap(token.trim()), onSuccess: onConnected });
   const tokenForm = <Form<{ token: string }> layout="vertical" onFinish={values => bootstrap.mutate(values.token)}>
+    <Typography.Paragraph type="secondary">{t("云端请使用部署时设置的 ADMIN_TOKEN；桌面版可重新运行 MusicFS 获取登录入口。")}</Typography.Paragraph>
     <Form.Item label={t("管理令牌")} name="token" rules={[{ required: true, whitespace: true, message: t("请输入管理令牌") }]}><Input.Password autoComplete="off" /></Form.Item>
     <Failure error={bootstrap.error} /><Button type={passwordConfigured ? 'default' : 'primary'} htmlType="submit" block loading={bootstrap.isPending}>{t("连接")}</Button>
   </Form>;
@@ -72,7 +73,7 @@ function ManagementSignIn({ api, passwordConfigured, onConnected }: { api: Api; 
     <Form.Item name="rememberMe" valuePropName="checked"><Checkbox>{t("记住登录")}</Checkbox></Form.Item>
     <Failure error={login.error} /><Button type="primary" htmlType="submit" block loading={login.isPending}>{t("登录")}</Button>
   </Form><Collapse ghost items={[{ key: 'bootstrap', label: t("使用管理令牌"), children: tokenForm }]} /></>
-    : <><Typography.Paragraph type="secondary">{t("重新运行 MusicFS 获取登录入口，也可使用部署时的管理令牌。")}</Typography.Paragraph>{tokenForm}</>}</>;
+    : tokenForm}</>;
 }
 
 function Workspace({ api, disconnect, logoutError }: { api: Api; disconnect: () => void; logoutError: Error | null }) {

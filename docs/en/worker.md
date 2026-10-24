@@ -9,8 +9,8 @@ The Worker serves the same library, management interface and WebDAV over HTTPS. 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
 
 1. Connect GitHub and Cloudflare to create your repository copy, Worker and D1 database.
-2. Enter `ADMIN_TOKEN` for the first management login, `DAV_USERNAME` and `DAV_PASSWORD` for players, and `CF_API_TOKEN`. The last token needs **Workers Scripts → Edit** permission for this account so management can install, update and remove plugins.
-3. Keep the repository root, use `bun run build` as the build command and `bun run deploy` as the deploy command. Open the resulting URL and enter `ADMIN_TOKEN`.
+2. Choose and save `ADMIN_TOKEN` for management and `DAV_USERNAME` / `DAV_PASSWORD` for players. Enter `CF_API_TOKEN`, an API token created in Cloudflare with **Workers Scripts → Edit** permission for this account. It lets the Worker install, update and remove plugins; it is not your MusicFS login token.
+3. Keep the repository root, use `bun run build` as the build command and `bun run deploy` as the deploy command. Then follow [Access and credentials](#access-and-credentials) below.
 4. In **Plugins → Install plugin → Download link**, use a bundled ZIP on your own domain: `https://your-domain/plugin-packages/org.musicfs.netease.zip` for NetEase or `https://your-domain/plugin-packages/org.musicfs.qq.zip` for QQ. Then add a source and sign in.
 
 The deployment tool fills in the account ID and Worker name and applies database migrations. Sign in to your music providers inside MusicFS afterward. [Official deployment flow](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
@@ -52,9 +52,33 @@ bunx wrangler@4.119.0 d1 migrations apply musicfs --remote
 bunx wrangler@4.119.0 deploy --secrets-file /absolute/path/to/musicfs-secrets.json
 ```
 
-Open the printed domain, enter `ADMIN_TOKEN`, then create a management account in **Settings → Login account** if desired. Install a plugin and add your source as described in the [user guide](user-guide.md).
+## Access and credentials
 
-Players use `https://your-domain/dav/` with the reader credentials; the page also offers an import QR code. Management, reader credentials and source-platform sign-in are separate.
+Open the HTTPS URL in the deployment result, or select your Worker in the Cloudflare dashboard and open its `workers.dev` domain, such as `https://musicfs.your-subdomain.workers.dev/`. Bookmark this address for later visits. Phones can open it directly too.
+
+1. On the first visit, enter the `ADMIN_TOKEN` you chose during deployment and select **Connect**. There is no shared default token.
+2. Optionally create a username and password in **Settings → Login account**. Use them for future visits with **Remember me**. `ADMIN_TOKEN` remains available for account recovery.
+3. Install a plugin, add your music source and follow its sign-in steps. See the [user guide](user-guide.md) for daily use.
+4. In **Connect → WebDAV players**, copy the address, username and password, or show the import QR code. The player address ends in `/dav/`, for example `https://musicfs.your-subdomain.workers.dev/dav/`.
+
+Cloud hosting uses separate paths on the same HTTPS domain for management and WebDAV, each with its own credentials. Desktop LAN switches and local port settings are not needed.
+
+| Credential | Used for | Set or change it |
+|---|---|---|
+| `ADMIN_TOKEN` | First management login and account recovery | Choose it during deployment and save it in your password manager; change it in the Worker's Secrets |
+| Management username and password | Everyday management login | Create or change them in **Settings → Login account**; stored in D1 |
+| `DAV_USERNAME`, `DAV_PASSWORD` | Players and remote mounts reading music | Set the initial values during deployment; later use **WebDAV players → Edit credentials**. Values saved in D1 take precedence |
+| `CF_API_TOKEN` | Background plugin publishing | Create it in Cloudflare and store or replace it in Worker Secrets; do not enter it into MusicFS login or player fields |
+
+Deployment credentials are stored as Worker Secrets, outside your public repository. To change a runtime secret, open **Workers & Pages → your Worker → Settings → Variables and Secrets**, use the Secret type and deploy the change. Build environment variables are a separate setting. [Cloudflare Secrets documentation](https://developers.cloudflare.com/workers/configuration/secrets/)
+
+### Recover or replace credentials
+
+- **Forgot the management username or password:** expand **Use an admin token** on the login page, enter `ADMIN_TOKEN`, then reset the account in **Settings → Login account**.
+- **Forgot `ADMIN_TOKEN`:** Cloudflare does not show a saved Secret's original value. Replace `ADMIN_TOKEN` in the Worker settings above and deploy it, then enter the new token. Browsers need to sign in again; your management account and music data remain.
+- **Forgot the player password:** sign in to management, view or change it under **WebDAV players**, and update your players. Once saved there, these credentials override the initial `DAV_*` Secrets.
+
+Upgrades retain Secrets and D1, so credentials do not need to be generated again. Music-provider sign-in is stored by its plugin, separately from these credentials.
 
 ## Daily operation
 
