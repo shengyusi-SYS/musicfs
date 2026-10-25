@@ -67,6 +67,8 @@ bun test tests/你的相关测试.test.ts
 
 完整离线检查用 `bun run check`，它会先构建三个示例插件，再检查类型、边界、词典和测试。浏览器改动另走一次真实操作，核对中英文、导航和未保存输入。专项探针、真实来源及播放器验证见[验证参考](development-reference.md)，按受影响链路选择即可。
 
+修改桌面进程锁或崩溃恢复时，再运行 `bun test ./tests/probes/desktop-recovery.ts`。这项验收会实际强杀并恢复独立测试后台，等待约 30 秒，不随日常检查执行。
+
 ## 构建桌面与 Worker
 
 ```sh

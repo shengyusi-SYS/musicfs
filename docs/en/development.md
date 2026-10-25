@@ -67,6 +67,8 @@ bun test tests/your-related.test.ts
 
 `bun run check` builds all three example plugins and runs the complete offline type, boundary, dictionary and test suite. For UI changes, also walk the affected flow in a browser, checking both languages, navigation and unsaved input. Select focused probes by the affected path; [specialist commands, Chinese](../development-reference.md) list platform and player tools.
 
+After changing desktop process locking or crash recovery, also run `bun test ./tests/probes/desktop-recovery.ts`. This acceptance check kills and restores a separate test backend, taking about 30 seconds; routine checks do not run it.
+
 ## Build desktop and Worker
 
 ```sh

@@ -15,11 +15,12 @@ bun test
 
 ## 专项探针
 
-可复用诊断入口统一位于 `scripts/probes/`，运行所需的宿主样本位于 `tests/probes/`。先用 `bun run build` 生成页面和示例插件；探针的临时或构建结果保存在忽略目录，原始回执不写入文档目录。
+可复用诊断入口统一位于 `scripts/probes/`，宿主样本与按需测试位于 `tests/probes/`。先用 `bun run build` 生成页面和示例插件；探针的临时或构建结果保存在忽略目录，原始回执不写入文档目录。
 
 | 要检查的行为 | 命令 | 运行条件 |
 |---|---|---|
 | 单管理员与浏览器会话 | `bun test tests/management-auth.test.ts tests/worker-management-auth.test.ts` | 本地 SQLite、workerd/D1 |
+| 桌面进程强杀后的恢复 | `bun test ./tests/probes/desktop-recovery.ts` | 独立临时后台，约 30 秒；修改进程锁或崩溃恢复时运行 |
 | 插件编译后加载与持久化 | `bun run probe:compiled` | 当前宿主的 Bun 编译环境 |
 | Worker 插件合同与文件读取 | `bun run probe:worker`、`bun run probe:worker:dav` | 本地 workerd，无云部署 |
 | 正式 Worker 页面/API/DAV | `bun run probe:worker:service` | 本地 workerd 与已构建资源 |

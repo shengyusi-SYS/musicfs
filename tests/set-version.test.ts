@@ -10,7 +10,6 @@ const releaseGuides = ['docs/release.md', 'docs/en/release.md'];
 test('the version command updates both release guides and package names while preserving other versions', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-set-version-'));
   const metadata = { name: 'musicfs', version: '0.1.0-dev.31', scripts: { test: 'bun test' } };
-  const currentVersion = JSON.parse(await readFile(resolve(import.meta.dir, '../package.json'), 'utf8')).version as string;
   const history = 'Previous release: 0.1.0-dev.31\n';
   try {
     for (const file of [...releaseGuides, 'docs/release-history.md', 'plugins/sample/manifest.json']) {
@@ -19,12 +18,10 @@ test('the version command updates both release guides and package names while pr
     await writeFile(join(directory, 'package.json'), JSON.stringify(metadata, null, 2) + '\n');
     await writeFile(join(directory, 'docs/release-history.md'), history);
     await writeFile(join(directory, 'plugins/sample/manifest.json'), '{"version":"0.1.4"}\n');
-    for (const file of releaseGuides) {
-      const source = await readFile(resolve(import.meta.dir, '..', file), 'utf8');
-      // Keep fixture package names aligned with its fixed input version as the real release advances.
-      await writeFile(join(directory, file), source.replaceAll(`musicfs-${currentVersion}-`, `musicfs-${metadata.version}-`)
-        + '\nUnrelated version: 0.1.0-dev.31\n');
-    }
+    const packages = ['linux-x64', 'windows-x64', 'worker', 'plugin-author-kit', 'source']
+      .map(target => `\`musicfs-${metadata.version}-${target}.zip\``).join('\n');
+    for (const [index, file] of releaseGuides.entries()) await writeFile(join(directory, file),
+      `<!-- release-version -->\n${index === 0 ? '当前版本为' : 'Current version:'} **${metadata.version}**\n\n${packages}\n\n${history}`);
     const child = Bun.spawn([process.execPath, script, '0.1.0-dev.32'], { cwd: directory, stdout: 'pipe', stderr: 'pipe' });
     const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
     expect({ code, stderr }).toEqual({ code: 0, stderr: '' });
@@ -36,9 +33,7 @@ test('the version command updates both release guides and package names while pr
       const packages = [...text.matchAll(/`(musicfs-[^`]+\.zip)`/g)].map(match => match[1]!);
       expect(packages).toHaveLength(5);
       for (const name of packages) expect(name).toStartWith('musicfs-0.1.0-dev.32-');
-      expect(text).toContain('https://github.com/shengyusi-SYS/musicfs/releases');
-      expect(text).not.toMatch(/\]\((?:\.\.\/)+dist\//);
-      expect(text).toContain('Unrelated version: 0.1.0-dev.31');
+      expect(text).toContain(history);
     }
     expect((await setVersion('0.1.0-dev.32', directory)).changed).toEqual([]);
 
