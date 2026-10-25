@@ -30,6 +30,8 @@ The bundled NetEase Cloud Music and QQ Music plugins support personal playlists,
 
 The example plugins also supply music tags, covers and lyrics in supported audio formats. Read audio fragments are cached, playlists can update on a schedule, and filename templates let you choose how songs appear to your players.
 
+The desktop cache uses sparse files. On Windows, **Size** may be much larger than **Size on disk**; use **Size on disk** to check actual disk usage.
+
 Running on a NAS or over SSH? Use `./musicfs --headless --language en` for access URLs and a login link. Management and WebDAV have separate access settings and ports. [Remote use](docs/en/headless.md)
 
 MusicFS can also run on Cloudflare Workers with the same management interface. [Worker deployment](docs/en/worker.md)
