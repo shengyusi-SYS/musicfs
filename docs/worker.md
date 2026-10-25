@@ -10,8 +10,12 @@ Worker 版通过 HTTPS 提供同一套音乐库、管理页面和 WebDAV。可�
 
 1. 连接 GitHub 和 Cloudflare，创建自己的仓库副本、Worker 和 D1 数据库。
 2. 自行设置并保存 `ADMIN_TOKEN`（管理令牌）、`DAV_USERNAME`、`DAV_PASSWORD`（播放器账号密码）。在 Cloudflare [创建 API Token](https://dash.cloudflare.com/profile/api-tokens/)，选择 **Account → Workers Scripts → Edit** 权限和当前账号，将生成的 Token 填入 `CF_API_TOKEN`，用于安装、更新和移除插件。
-3. 构建命令使用 `bun run build`，部署命令使用 `bun run deploy`，根目录保持仓库根目录。完成后按下方[访问与凭据](#访问与凭据)打开管理页。
+3. 根目录保持 `/`，构建命令保留 `bun run build`，部署命令保留 `bun run deploy`。关闭「启用预览构建」；默认的 `npx wrangler preview` 不经过 MusicFS 的模块组装和数据库迁移流程。部署完成后按下方[访问与凭据](#访问与凭据)打开管理页。
 4. 在「插件 → 安装插件 → 下载链接」填写自己域名下的插件地址：网易云为 `https://你的域名/plugin-packages/org.musicfs.netease.zip`，QQ 音乐为 `https://你的域名/plugin-packages/org.musicfs.qq.zip`。安装后添加来源并登录。
+
+**两个 API 令牌分别做什么？** `CF_API_TOKEN` 保存在 Worker 中，让 MusicFS 在安装、更新或移除插件时发布插件代码；它不是 MusicFS 登录密码，也不是音乐平台令牌。页面「高级设置 → API 令牌」则供 Cloudflare 构建系统部署项目、执行 D1 迁移。选择为本次项目创建的构建令牌，不要直接沿用其他项目的令牌；它不会自动填入 `CF_API_TOKEN`。
+
+**为什么用 Bun？** Bun 只负责云端构建和部署脚本，运行后的服务使用 Cloudflare Workers。构建环境原生支持 Bun，仓库通过 `packageManager` 固定版本，不需要在自己电脑安装。[Cloudflare 构建环境](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
 
 账号 ID 和 Worker 名称由部署工具填写，数据库迁移自动执行。来源平台的扫码登录仍在 MusicFS 中完成。官方流程见 [Deploy to Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/)。
 

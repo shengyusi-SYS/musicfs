@@ -10,8 +10,12 @@ The Worker serves the same library, management interface and WebDAV over HTTPS. 
 
 1. Connect GitHub and Cloudflare to create your repository copy, Worker and D1 database.
 2. Choose and save `ADMIN_TOKEN` for management and `DAV_USERNAME` / `DAV_PASSWORD` for players. [Create an API token](https://dash.cloudflare.com/profile/api-tokens/) in Cloudflare with **Account → Workers Scripts → Edit** permission for this account. Paste it into `CF_API_TOKEN` to let the Worker install, update and remove plugins.
-3. Keep the repository root, use `bun run build` as the build command and `bun run deploy` as the deploy command. Then follow [Access and credentials](#access-and-credentials) below.
+3. Keep `/` as the root directory, `bun run build` as the build command and `bun run deploy` as the deploy command. Turn off **Preview builds**: the default `npx wrangler preview` bypasses MusicFS module assembly and database migrations. After deployment, follow [Access and credentials](#access-and-credentials) below.
 4. In **Plugins → Install plugin → Download link**, use a bundled ZIP on your own domain: `https://your-domain/plugin-packages/org.musicfs.netease.zip` for NetEase or `https://your-domain/plugin-packages/org.musicfs.qq.zip` for QQ. Then add a source and sign in.
+
+**Why are there two API tokens?** `CF_API_TOKEN` is stored in the Worker so MusicFS can publish plugin code when you install, update or remove a plugin. It is neither your MusicFS password nor a music-provider token. **Advanced settings → API token** authorizes Cloudflare Builds to deploy the project and apply D1 migrations. Select a build token created for this project instead of reusing another project's token; it does not automatically populate `CF_API_TOKEN`.
+
+**Why Bun?** Bun runs the cloud build and deployment scripts; the deployed service runs on Cloudflare Workers. The build environment supports Bun and the repository pins its version through `packageManager`. You do not need to install it on your computer. [Cloudflare build environment](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
 
 The deployment tool fills in the account ID and Worker name and applies database migrations. Sign in to your music providers inside MusicFS afterward. [Official deployment flow](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
 
