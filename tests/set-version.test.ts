@@ -10,6 +10,7 @@ const releaseGuides = ['docs/release.md', 'docs/en/release.md'];
 test('the version command updates both release guides and package names while preserving other versions', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-set-version-'));
   const metadata = { name: 'musicfs', version: '0.1.0-dev.31', scripts: { test: 'bun test' } };
+  const currentVersion = JSON.parse(await readFile(resolve(import.meta.dir, '../package.json'), 'utf8')).version as string;
   const history = 'Previous release: 0.1.0-dev.31\n';
   try {
     for (const file of [...releaseGuides, 'docs/release-history.md', 'plugins/sample/manifest.json']) {
@@ -20,7 +21,9 @@ test('the version command updates both release guides and package names while pr
     await writeFile(join(directory, 'plugins/sample/manifest.json'), '{"version":"0.1.4"}\n');
     for (const file of releaseGuides) {
       const source = await readFile(resolve(import.meta.dir, '..', file), 'utf8');
-      await writeFile(join(directory, file), source + '\nUnrelated version: 0.1.0-dev.31\n');
+      // Keep fixture package names aligned with its fixed input version as the real release advances.
+      await writeFile(join(directory, file), source.replaceAll(`musicfs-${currentVersion}-`, `musicfs-${metadata.version}-`)
+        + '\nUnrelated version: 0.1.0-dev.31\n');
     }
     const child = Bun.spawn([process.execPath, script, '0.1.0-dev.32'], { cwd: directory, stdout: 'pipe', stderr: 'pipe' });
     const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
