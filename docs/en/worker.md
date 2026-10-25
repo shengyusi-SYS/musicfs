@@ -17,7 +17,7 @@ The Worker serves the same library, management interface and WebDAV over HTTPS. 
 
 **Why Bun?** Bun runs the cloud build and deployment scripts; the deployed service runs on Cloudflare Workers. The build environment supports Bun and the repository pins its version through `packageManager`. You do not need to install it on your computer. [Cloudflare build environment](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
 
-The deployment tool fills in the account ID and Worker name and applies database migrations. Sign in to your music providers inside MusicFS afterward. [Official deployment flow](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
+The deployment tool fills in the account ID and Worker name and applies database migrations. The first deployment replaces placeholder code in the target Worker; later deployments preserve installed MusicFS plugins. Sign in to your music providers inside MusicFS afterward. [Official deployment flow](https://developers.cloudflare.com/workers/platform/deploy-buttons/)
 
 Future repository updates use the same deploy command, retaining D1, credentials and the exact plugins installed through management while replacing the core and WebUI. Let any plugin install or removal finish before updating. For source deployments, `bun run deploy --dry-run` assembles and checks the files without applying migrations or deploying.
 

@@ -6,6 +6,10 @@ export type WorkerArtifact = { mainModule: string; modules: WorkerModule[] };
 export const workerModuleType = (name: string): WorkerModule['type'] => /\.m?js$/i.test(name) ? 'esm' : /\.(json|txt|md)$/i.test(name) ? 'text' : 'data';
 const mediaType = (type: WorkerModule['type']) => type === 'esm' ? 'application/javascript+module' : type === 'text' ? 'text/plain' : 'application/octet-stream';
 
+export class MusicFsNotInstalledError extends Error {
+  constructor() { super('The target Worker has no MusicFS installation'); this.name = 'MusicFsNotInstalledError'; }
+}
+
 /** Code-only updates leave bindings, secrets, assets and script settings with Cloudflare. */
 export function createWorkerPublisher(input: { accountId: string; scriptName: string; apiToken: string; fetcher?: typeof fetch }) {
   const client = createClient({ resources: [BaseContent], apiToken: input.apiToken,
@@ -36,7 +40,12 @@ export function createWorkerPublisher(input: { accountId: string; scriptName: st
         if (typeof part === 'string') { modules.push({ name, type, bytes: new TextEncoder().encode(part) }); continue; }
         modules.push({ name, type, bytes: new Uint8Array(await part.arrayBuffer()) });
       }
-      if (!modules.some(module => module.name === mainModule) || !modules.some(module => module.name === 'registry.mjs') || !modules.some(module => module.name === 'core.mjs')) throw new Error('The deployed Worker is not a MusicFS module bundle');
+      // Deploy-to-Cloudflare can provision code before the first MusicFS deployment.
+      // Partial MusicFS bundles remain errors so upgrades cannot discard their plugins.
+      if (!modules.some(module => ['worker.mjs', 'core.mjs', 'registry.mjs'].includes(module.name) || module.name.startsWith('plugins/'))) {
+        throw new MusicFsNotInstalledError();
+      }
+      if (!modules.some(module => module.name === mainModule) || !modules.some(module => module.name === 'registry.mjs') || !modules.some(module => module.name === 'core.mjs')) throw new Error(`The deployed Worker is not a MusicFS module bundle (entry: ${mainModule}; missing: ${[mainModule, 'registry.mjs', 'core.mjs'].filter(name => !modules.some(module => module.name === name)).join(', ')})`);
       return { mainModule, modules };
     },
     async replace(artifact: WorkerArtifact, signal: AbortSignal): Promise<void> {

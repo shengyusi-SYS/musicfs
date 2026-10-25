@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from 'typescript';
 import { buildWorker, type WorkerBundle } from './build-worker';
 import { buildWorkerUpgrade, type UpgradeConfig } from './build-worker-upgrade';
+import { MusicFsNotInstalledError } from '../src/hosts/worker/publisher';
 import { directoryDigest } from './helpers/release-identity';
 
 const wrangler = [process.execPath, 'x', 'wrangler@4.119.0'];
@@ -27,8 +28,9 @@ export async function prepareWorkerDeployment(input: {
     bundle = await buildWorkerUpgrade({ config: sourcePath, out: directory, accountId: input.accountId, apiToken: input.apiToken,
       ...(input.fetcher ? { fetcher: input.fetcher } : {}) });
   } catch (error) {
-    // A missing Worker is a first deployment. Auth/network failures must not reset an existing registry.
-    if (!(error && typeof error === 'object' && 'status' in error && error.status === 404)) throw error;
+    // A new target can already contain Cloudflare-provisioned code.
+    // Auth/network failures and incomplete MusicFS bundles must not reset an existing registry.
+    if (!(error instanceof MusicFsNotInstalledError) && !(error && typeof error === 'object' && 'status' in error && error.status === 404)) throw error;
     mode = 'initial';
     bundle = await buildWorker({ directory, pluginArchives: input.pluginArchives ?? initialPlugins });
   }

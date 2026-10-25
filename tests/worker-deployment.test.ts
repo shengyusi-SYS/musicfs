@@ -48,3 +48,43 @@ test('an authorization failure never falls back to an initial empty registry', a
     expect(await Bun.file(join(directory, 'dist/worker/bundle.json')).exists()).toBe(false);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+
+test('a provisioned module Worker without a MusicFS installation receives the initial bundle', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-provisioned-'));
+  try {
+    const config = join(directory, 'wrangler.jsonc');
+    await Bun.write(config, JSON.stringify({ name: 'provisioned-music', assets: { directory: './dist/web' },
+      d1_databases: [{ binding: 'DB', database_id: 'provisioned-db', database_name: 'music' }] }));
+    const fetcher = (async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      const form = new FormData();
+      form.set('index.js', new File(['export default { fetch() { return new Response("Hello World!"); } };'],
+        'index.js', { type: 'application/javascript+module' }));
+      return new Response(form, { headers: { 'cf-worker-main-module-part': 'index.js' } });
+    }) as typeof fetch;
+    const result = await prepareWorkerDeployment({ config, out: join(directory, 'bundle'),
+      accountId: 'fixture-account', apiToken: 'fixture-token', fetcher });
+    expect(result.mode).toBe('initial');
+    expect(result.bundle.mainModule).toBe('worker.mjs');
+    expect(result.bundle.plugins).toHaveLength(3);
+    expect((await Bun.file(result.config).json()).d1_databases[0].database_id).toBe('provisioned-db');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+
+test('an incomplete MusicFS installation is not replaced by an initial bundle', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-incomplete-'));
+  try {
+    const config = join(directory, 'wrangler.jsonc');
+    await Bun.write(config, JSON.stringify({ name: 'existing-music', assets: { directory: './dist/web' } }));
+    const fetcher = (async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      const form = new FormData();
+      form.set('worker.mjs', new File(['export default {};'], 'worker.mjs', { type: 'application/javascript+module' }));
+      return new Response(form, { headers: { 'cf-worker-main-module-part': 'worker.mjs' } });
+    }) as typeof fetch;
+    await expect(prepareWorkerDeployment({ config, out: join(directory, 'bundle'),
+      accountId: 'fixture-account', apiToken: 'fixture-token', fetcher }))
+      .rejects.toThrow('The deployed Worker is not a MusicFS module bundle');
+    expect(await Bun.file(join(directory, 'bundle/bundle.json')).exists()).toBe(false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

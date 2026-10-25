@@ -17,7 +17,7 @@ Worker 版通过 HTTPS 提供同一套音乐库、管理页面和 WebDAV。可�
 
 **为什么用 Bun？** Bun 只负责云端构建和部署脚本，运行后的服务使用 Cloudflare Workers。构建环境原生支持 Bun，仓库通过 `packageManager` 固定版本，不需要在自己电脑安装。[Cloudflare 构建环境](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)
 
-账号 ID 和 Worker 名称由部署工具填写，数据库迁移自动执行。来源平台的扫码登录仍在 MusicFS 中完成。官方流程见 [Deploy to Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/)。
+账号 ID 和 Worker 名称由部署工具填写，数据库迁移自动执行。首次部署会替换目标 Worker 的占位代码；已有 MusicFS 安装则保留插件升级。来源平台的扫码登录仍在 MusicFS 中完成。官方流程见 [Deploy to Cloudflare](https://developers.cloudflare.com/workers/platform/deploy-buttons/)。
 
 之后更新自己的仓库，沿用同一部署命令即可保留 D1、凭据和云端已安装插件，替换核心与页面。更新前先等管理页中的插件安装或移除完成。源码部署也可用 `bun run deploy --dry-run` 只组装并检查部署文件。
 
