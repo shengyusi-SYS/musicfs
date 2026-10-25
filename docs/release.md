@@ -3,7 +3,7 @@
 [English](en/release.md)
 
 <!-- release-version -->
-当前版本为 **0.1.0-dev.31**（预发布版）。
+当前版本为 **0.1.0**。
 
 ## 选择下载
 
@@ -11,11 +11,11 @@
 
 | 你要做什么 | 包名 |
 |---|---|
-| 在 Linux 上使用 | `musicfs-0.1.0-dev.31-linux-x64.zip` |
-| 在 Windows 上使用 | `musicfs-0.1.0-dev.31-windows-x64.zip` |
-| 部署 Cloudflare Worker | `musicfs-0.1.0-dev.31-worker.zip` |
-| 编写自己的来源插件 | `musicfs-0.1.0-dev.31-plugin-author-kit.zip` |
-| 修改或构建 MusicFS | `musicfs-0.1.0-dev.31-source.zip` |
+| 在 Linux 上使用 | `musicfs-0.1.0-linux-x64.zip` |
+| 在 Windows 上使用 | `musicfs-0.1.0-windows-x64.zip` |
+| 部署 Cloudflare Worker | `musicfs-0.1.0-worker.zip` |
+| 编写自己的来源插件 | `musicfs-0.1.0-plugin-author-kit.zip` |
+| 修改或构建 MusicFS | `musicfs-0.1.0-source.zip` |
 
 Windows x64 和 Linux x64 使用同版源码构建。macOS 目前提供构建入口。
 
