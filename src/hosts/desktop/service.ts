@@ -71,7 +71,7 @@ export async function createDesktopService(input: { directory: string; adminToke
       return saved;
     },
     deleteInstance(id: string) { store.deleteInstance(id); refreshMounts(); }
-  }, host.registry, observeFetch(fetch, 'source')));
+  }, host.registry, observeFetch(fetch, 'source', process.env)));
   const library = createLibrary(sources, { ...store,
     saveLayout(...args: Parameters<typeof store.saveLayout>) { const saved = store.saveLayout(...args); if (saved) refreshMounts(); return saved; },
     saveFileNamingPolicy(...args: Parameters<typeof store.saveFileNamingPolicy>) {

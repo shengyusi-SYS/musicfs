@@ -1,5 +1,6 @@
 import { getLogger, withContext } from '@logtape/logtape';
 import { errorFields } from './logging';
+import { connectionFailure, requestNetworkFields, responseNetworkFields, type ProxyEnvironment } from './network-diagnostics';
 import type { Sources } from '../core/sources';
 import type { Outcome } from '@musicfs/plugin-api';
 
@@ -37,20 +38,25 @@ export function observeSources(sources: Sources): Sources {
 }
 
 /** Observe connection setup without reading bodies or copying request data into logs. */
-export function observeFetch(fetcher: typeof fetch, peer: 'source' | 'cache' | 'rclone') {
+export function observeFetch(fetcher: typeof fetch, peer: 'source' | 'cache' | 'rclone', environment?: ProxyEnvironment) {
   const request = fetcher.bind(globalThis);
   const logger = getLogger(['musicfs', 'io', peer]);
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const started = performance.now(); const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
     const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    const network = requestNetworkFields(input, init, environment);
+    logger.debug('Upstream request started', () => ({ ...network, method, ioStage: 'headers' }));
     try {
       const response = await request(input, init);
-      const fields = { method, status: response.status, elapsedMs: Math.round(performance.now() - started) };
+      const elapsedMs = Math.round(performance.now() - started);
+      const fields = () => ({ ...network, method, ioStage: 'headers', status: response.status,
+        elapsedMs, ...responseNetworkFields(response) });
       if (response.status >= 400 && response.status !== 404) logger.warning('Upstream response failed', fields);
       else logger.debug('Upstream response ready', fields);
       return response;
     } catch (error) {
-      const fields = { method, elapsedMs: Math.round(performance.now() - started), timedOut: deadlineExceeded(signal), ...errorFields(error) };
+      const fields = { ...network, method, ioStage: 'headers', elapsedMs: Math.round(performance.now() - started),
+        timedOut: deadlineExceeded(signal), connectionFailure: connectionFailure(error), ...errorFields(error) };
       if (signal?.aborted && !deadlineExceeded(signal)) logger.debug('Upstream request cancelled', fields);
       else logger.warning('Upstream connection failed', fields);
       throw error;
@@ -63,11 +69,13 @@ export function observeAudio(body: ReadableStream<Uint8Array>, fields: { request
   contentId?: string; rangeStart?: number; rangeEnd?: number }, signal: AbortSignal) {
   const logger = getLogger(['musicfs', 'io', 'dav']).with(fields);
   const reader = body.getReader(); const started = performance.now(); let lastByteAt = started; let bytes = 0; let finished = false;
+  let firstReadWaitMs: number | undefined; let maxReadWaitMs = 0;
   const finish = (event: 'completed' | 'failed' | 'cancelled', error?: unknown, cancellation?: string) => {
     if (finished) return; finished = true;
     const details = { ioStage: 'body', bytes, elapsedMs: Math.round(performance.now() - started),
       timedOut: deadlineExceeded(signal),
       idleMs: Math.round(performance.now() - lastByteAt),
+      ...(firstReadWaitMs !== undefined ? { firstReadWaitMs, maxReadWaitMs } : {}),
       ...(event === 'failed' ? { failureKind: error ? 'stream_error' : 'unexpected_eof' } : {}),
       ...(cancellation ? { cancellation } : {}), ...(error ? errorFields(error) : {}) };
     if (event === 'failed') logger.warning('Audio stream failed', details);
@@ -76,7 +84,13 @@ export function observeAudio(body: ReadableStream<Uint8Array>, fields: { request
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
-        const next = await reader.read();
+        const readingAt = performance.now();
+        let next: Awaited<ReturnType<typeof reader.read>>;
+        try { next = await reader.read(); }
+        finally {
+          const waited = Math.round(performance.now() - readingAt);
+          firstReadWaitMs ??= waited; maxReadWaitMs = Math.max(maxReadWaitMs, waited);
+        }
         if (next.done) {
           const cancelled = signal.aborted && !deadlineExceeded(signal);
           finish(cancelled ? 'cancelled' : deadlineExceeded(signal) || bytes !== fields.expectedBytes ? 'failed' : 'completed',

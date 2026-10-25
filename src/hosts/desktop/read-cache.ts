@@ -17,7 +17,7 @@ const storedSettingsSchema = settingsSchema.extend({ cacheDefaultsVersion: z.lit
 const defaults: ReadCacheSettings = { maxMiB: SHARED_READ_CACHE_MIB, maxAgeHours: CACHE_YEAR_HOURS };
 const remote = 'musicfs_shared_reads';
 const logger = getLogger(['musicfs', 'io', 'cache']);
-const cacheFetch = observeFetch(fetch, 'cache');
+const cacheFetch = observeFetch(fetch, 'cache', process.env);
 const fixedTime = '2000-01-01T00:00:00.000Z';
 const directory = (path: string): Description => ({ kind: 'directory', path, name: path.split('/').at(-1) ?? '', etag: path, modifiedAt: fixedTime });
 const bucketNames = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
@@ -96,7 +96,9 @@ export async function createDesktopReadCache(input: {
     async open(file, range, signal) {
       try {
         const resourceKey = keyFor(file);
-        logger.debug('Cache requested source bytes', { resourceKey });
+        logger.debug('Cache requested source bytes', { resourceKey, fileBytes: file.handle.content.size,
+          requestedBytes: range ? range.end - range.start + 1 : file.handle.content.size,
+          ...(range ? { rangeStart: range.start, rangeEnd: range.end } : {}) });
         return await withContext({ resourceKey }, () => input.view.open(file, range, signal));
       }
       catch (error) { if (error instanceof LibraryError) failures.set(keyFor(file), error); throw error; }
@@ -147,7 +149,9 @@ export async function createDesktopReadCache(input: {
   const files: FileView = { ...input.view, async open(file, range, signal): Promise<ReadResult> {
     if (!accepting) throw new LibraryError('source_failed', 'Desktop is stopping');
     const key = settings.maxMiB === 0 ? undefined : keyFor(file);
-    logger.debug('Audio read selected', { cache: key === undefined ? 'bypass' : 'native', ...(key ? { resourceKey: key } : {}) });
+    logger.debug('Audio read selected', { cache: key === undefined ? 'bypass' : 'native', ...(key ? { resourceKey: key } : {}),
+      fileBytes: file.handle.content.size, requestedBytes: range ? range.end - range.start + 1 : file.handle.content.size,
+      ...(range ? { rangeStart: range.start, rangeEnd: range.end } : {}), activeReaders: active + 1 });
     active++;
     if (key !== undefined) {
       const old = pinned.get(key);

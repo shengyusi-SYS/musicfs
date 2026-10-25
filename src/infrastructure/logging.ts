@@ -9,7 +9,9 @@ export function configureApplicationLogging(sinks: Record<string, Sink>, level =
     filters: { minimum: record => minimum(record), io: getThrottlingFilter({ limit: 20, windowMs: 60_000, maxKeys: 128,
       key: record => JSON.stringify([record.category, record.level, record.rawMessage,
         record.properties.errorCode, record.properties.sourceFaultKind, record.properties.ioStage,
-        record.properties.errorType, record.properties.failureKind, record.properties.timedOut]),
+        record.properties.errorType, record.properties.failureKind, record.properties.timedOut,
+        record.properties.targetHost, record.properties.targetPort, record.properties.method,
+        record.properties.status, record.properties.connectionFailure, record.properties.proxyMode]),
       summary: { logger: getLogger(['musicfs', 'diagnostics']), level: summary => summary.firstRecord.level } }) }, loggers: [
     { category: 'musicfs', lowestLevel: 'trace', filters: ['minimum'], sinks: Object.keys(sinks) },
     { category: ['musicfs', 'io'], filters: ['minimum', 'io'] },
@@ -36,8 +38,15 @@ export function errorFields(error: unknown, depth = 0): Record<string, unknown> 
     ...('status' in error && typeof error.status === 'number' ? { upstreamStatus: error.status } : {}),
     ...('operationId' in error && typeof error.operationId === 'string' ? { operationId: error.operationId } : {}),
     ...('syscall' in error && typeof error.syscall === 'string' ? { syscall: error.syscall } : {}),
+    ...('errno' in error && typeof error.errno === 'number' ? { errno: error.errno } : {}),
+    ...('address' in error && typeof error.address === 'string' && error.address.length <= 253 && /^[\w.:[\]-]+$/.test(error.address)
+      ? { address: error.address } : {}),
+    ...('hostname' in error && typeof error.hostname === 'string' && error.hostname.length <= 253 && /^[\w.:[\]-]+$/.test(error.hostname)
+      ? { hostname: error.hostname } : {}),
+    ...('port' in error && typeof error.port === 'number' && Number.isInteger(error.port) && error.port >= 0 && error.port <= 65535 ? { port: error.port } : {}),
     ...(fault && typeof fault === 'object' && 'kind' in fault && typeof fault.kind === 'string' ? { sourceFaultKind: fault.kind } : {}),
     frames: error.stack?.split('\n').filter(line => /^\s+at\s/.test(line)).slice(0, 8),
-    ...(error.cause && depth < 1 ? { cause: errorFields(error.cause, depth + 1) } : {})
+    ...(error.cause && depth < 2 ? { cause: errorFields(error.cause, depth + 1) } : {}),
+    ...(error instanceof AggregateError && depth < 2 ? { errors: error.errors.slice(0, 4).map(item => errorFields(item, depth + 1)) } : {})
   };
 }

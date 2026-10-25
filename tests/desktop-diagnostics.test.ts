@@ -39,7 +39,8 @@ test('desktop diagnostics change the live logger, persist settings and download 
     const archive = unzipSync(new Uint8Array(await blob.arrayBuffer()));
     expect(Object.keys(archive).sort()).toEqual(['application/musicfs.log', 'diagnostics.json', 'native/rclone.log']);
     expect(strFromU8(archive['native/rclone.log']!)).toContain('fixture-native-log');
-    expect(JSON.parse(strFromU8(archive['diagnostics.json']!))).toMatchObject({ settings: { level: 'debug', nativeLevel: 'DEBUG' }, startedAt: initial.startedAt });
+    expect(JSON.parse(strFromU8(archive['diagnostics.json']!))).toMatchObject({ settings: { level: 'debug', nativeLevel: 'DEBUG' }, startedAt: initial.startedAt,
+      network: { runtime: 'bun', runtimeVersion: Bun.version, runtimeRevision: Bun.revision, platform: process.platform, arch: process.arch } });
     expect(JSON.stringify(Object.values(archive).map(value => strFromU8(value)))).not.toContain('fixture-not-exported');
     logging.close(); logging = await configureDesktopLogging(directory);
     expect(logging.inspect().settings).toEqual({ level: 'debug', nativeLevel: 'DEBUG' });

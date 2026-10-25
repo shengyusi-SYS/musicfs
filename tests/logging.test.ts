@@ -141,6 +141,8 @@ test('stream diagnostics preserve pull and cancellation and record a midstream f
     await expect(new Response(observed).arrayBuffer()).rejects.toThrow('fixture-private-provider-url');
     expect(records.filter(record => record.rawMessage === 'Audio stream failed')).toHaveLength(1);
     expect(records[0]!.properties).toMatchObject({ requestId: 'fixture-request', bytes: 2 });
+    expect(records[0]!.properties.firstReadWaitMs).toBeNumber();
+    expect(records[0]!.properties.maxReadWaitMs).toBeNumber();
     expect(JSON.stringify(records)).not.toContain('fixture-private-provider-url');
     const short = observeAudio(new ReadableStream<Uint8Array>({ start(controller) {
       controller.enqueue(new Uint8Array([1])); controller.close();

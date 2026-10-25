@@ -8,7 +8,7 @@ import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path';
 import { z } from 'zod';
 
-const controlFetch = observeFetch(fetch, 'rclone');
+const controlFetch = observeFetch(fetch, 'rclone', process.env);
 
 export class MountError extends Error {
   override readonly name = 'MountError';

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { version } from '../../../package.json';
 import { diagnosticLevels, nativeLogLevels, type DesktopDiagnosticsView, type DiagnosticSettings, type NativeLogLevel } from '../../contracts/diagnostics';
 import { configureApplicationLogging, errorFields } from '../../infrastructure/logging';
+import { proxyEnvironmentFields } from '../../infrastructure/network-diagnostics';
 import { writePrivateJson } from './rclone-control';
 
 export const diagnosticSettingsSchema = z.object({ level: z.enum(diagnosticLevels), nativeLevel: z.enum(nativeLogLevels) }).strict();
@@ -36,7 +37,10 @@ export async function configureDesktopLogging(directory: string) {
   if (fileError) logger.warning('File logging unavailable; using process output', errorFields(fileError));
   if (settingsError) logger.warning('Log settings unavailable; using startup defaults', errorFields(settingsError));
   const startedAt = new Date().toISOString();
-  logger.info('Application logging started', { version, revision, pid: process.pid, startedAt, level: settings.level, nativeLevel: settings.nativeLevel });
+  const networkEnvironment = () => ({ runtime: 'bun', runtimeVersion: Bun.version, runtimeRevision: Bun.revision,
+    platform: process.platform, arch: process.arch, proxyEnvironment: proxyEnvironmentFields(process.env) });
+  logger.info('Application logging started', { version, revision, pid: process.pid, startedAt, level: settings.level,
+    nativeLevel: settings.nativeLevel, network: networkEnvironment() });
   let native: ((level: NativeLogLevel) => Promise<void>) | undefined;
   const inspect = (): DesktopDiagnosticsView => ({ settings: { ...settings }, version, revision, startedAt, directory: folder, fileLogging: !!file,
     nativeAvailable: native !== undefined });
@@ -79,7 +83,7 @@ export async function configureDesktopLogging(directory: string) {
           }
         }
         await writer.add('diagnostics.json', new TextReader(JSON.stringify({ version, revision, startedAt, exportedAt: new Date().toISOString(),
-          pid: process.pid, platform: process.platform, settings, fileLogging: !!file, files: entries }, null, 2)));
+          pid: process.pid, platform: process.platform, settings, network: networkEnvironment(), fileLogging: !!file, files: entries }, null, 2)));
         return await writer.close();
       } catch (error) { await writer.close().catch(() => {}); throw error; }
     },
