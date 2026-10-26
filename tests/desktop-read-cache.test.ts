@@ -135,3 +135,54 @@ test('a failed uncached open releases its quit reservation', async () => {
     f.cache.prepareQuit()();
   } finally { pending.reject(failure); await opening.catch(() => {}); await f.close(); }
 });
+
+test('an obsolete internal cache URL becomes not-found and a fresh source generation remains readable', async () => {
+  const { LibraryError } = await import('../src/core/library');
+  const directory = await mkdtemp(join(tmpdir(), 'musicfs-stale-read-cache-'));
+  let epoch = 1, opens = 0, origin = '', authorization = '', lastPath = '', changeOnOpen = false;
+  const bridge = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
+    lastPath = new URL(request.url).pathname.slice(1);
+    const response = await fetch(origin + lastPath, { headers: { Authorization: authorization }, signal: request.signal });
+    return new Response(await response.arrayBuffer(), { status: response.status, headers: response.headers });
+  } });
+  const unused = async (): Promise<never> => { throw new Error('Unexpected ordinary metadata lookup'); };
+  const cache = await createDesktopReadCache({ directory, controlDirectory: join(directory, 'control'),
+    current: value => value.handle.stamp.epoch === epoch,
+    view: { stat: unused, list: unused, statMany: unused, async open(value) {
+      opens++;
+      if (changeOnOpen) { epoch++; changeOnOpen = false; }
+      if (value.handle.stamp.epoch !== epoch) throw new LibraryError('stale_call', 'Source changed before audio request');
+      return { content: value.handle.content, servedRange: null, body: new Blob([bytes]).stream() };
+    } },
+    control: { async call<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+      if (method === 'serve/list') return { list: [] } as T;
+      if (method === 'config/create') {
+        const settings = params!.parameters as { url: string; user: string; pass: string };
+        origin = settings.url; authorization = `Basic ${btoa(`${settings.user}:${settings.pass}`)}`;
+      }
+      if (method === 'serve/start') return { id: 'fixture', addr: `127.0.0.1:${bridge.port}` } as T;
+      return {} as T;
+    }, async removeRemote() {}, async close() {} } });
+  try {
+    const signal = new AbortController().signal;
+    const first = await cache.files.open(file, undefined, signal);
+    expect(new Uint8Array(await new Response(first.body).arrayBuffer())).toEqual(bytes);
+    const oldUrl = origin + lastPath;
+    epoch++;
+    // The native cache can still request an old immutable URL after reauthorization.
+    const stale = await fetch(oldUrl, { headers: { Authorization: authorization } });
+    expect(stale.status).toBe(404); await stale.body?.cancel();
+    expect(opens).toBe(1);
+    const fresh = structuredClone(file); fresh.handle.stamp.epoch = epoch;
+    const next = await cache.files.open(fresh, undefined, signal);
+    expect(new Uint8Array(await new Response(next.body).arrayBuffer())).toEqual(bytes);
+    expect(origin + lastPath).not.toBe(oldUrl); expect(opens).toBe(2);
+    // Also retire a URL when the source changes between metadata and opening.
+    const raceUrl = origin + lastPath; changeOnOpen = true;
+    const raced = await fetch(raceUrl, { headers: { Authorization: authorization } });
+    expect(raced.status).toBe(404); await raced.body?.cancel();
+    const repeated = await fetch(raceUrl, { headers: { Authorization: authorization } });
+    expect(repeated.status).toBe(404); await repeated.body?.cancel();
+    expect(opens).toBe(3);
+  } finally { await cache.close(); await bridge.stop(true); await rm(directory, { recursive: true, force: true }); }
+});

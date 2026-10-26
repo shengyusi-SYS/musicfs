@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { ReadResult } from '@musicfs/plugin-api';
 import type { ReadCacheManager, ReadCacheSettings, ReadCacheStatus } from '../../contracts/read-cache';
 import { LibraryError, type Description, type FileDescription, type FileView } from '../../core/library';
+import { SourceError } from '../../core/sources';
 import { createDav, type ReadCredentials } from '../../transport/dav';
 import { MountError, writePrivateJson, type RcloneControl } from './rclone-control';
 import { CACHE_YEAR_HOURS, SHARED_READ_CACHE_MIB } from '../../contracts/cache-defaults';
@@ -64,10 +65,21 @@ export async function createDesktopReadCache(input: {
     return new Bun.CryptoHasher('sha256').update(JSON.stringify([stamp.id, stamp.epoch, stamp.pluginId, stamp.pluginRevision,
       stamp.pluginGeneration, fileRef, content.contentId, content.size, content.mediaType])).digest('hex');
   };
-  const lookup = (path: string) => {
+  const retire = (file: FileDescription) => {
+    const key = keyFor(file);
+    entries.delete(key);
+    failures.set(key, new LibraryError('stale_call', 'Cached source generation is no longer active'));
+    // This immutable URL can never become valid again. A 503 invites native
+    // range retries against the same obsolete handle instead of a fresh file.
+    return new LibraryError('not_found', 'Cached source generation is no longer active');
+  };
+  const lookup = async (path: string, signal: AbortSignal) => {
     const parts = path.split('/').filter(Boolean), key = parts[2];
     const file = key && (pinned.get(key)?.file ?? entries.get(key));
     if (!file || parts.length !== 3 || parts[1] !== key!.slice(0, 2)) throw new LibraryError('not_found', 'Cached file is not active');
+    signal.throwIfAborted();
+    if (!await input.current(file)) throw retire(file);
+    signal.throwIfAborted();
     return { ...file, path, name: key!, modifiedAt: fixedTime };
   };
   const internalView: FileView = {
@@ -75,7 +87,7 @@ export async function createDesktopReadCache(input: {
       const path = typeof entry === 'string' ? entry : entry.path;
       if (!path.startsWith('/__reads')) return input.view.stat(entry, signal);
       if (path === '/__reads' || /^\/__reads\/[a-f0-9]{2}$/.test(path)) return directory(path);
-      return lookup(path);
+      return lookup(path, signal);
     },
     async list(path, signal) {
       if (!path.startsWith('/__reads')) return input.view.list(path, signal);
@@ -101,7 +113,13 @@ export async function createDesktopReadCache(input: {
           ...(range ? { rangeStart: range.start, rangeEnd: range.end } : {}) });
         return await withContext({ resourceKey }, () => input.view.open(file, range, signal));
       }
-      catch (error) { if (error instanceof LibraryError) failures.set(keyFor(file), error); throw error; }
+      catch (error) {
+        if (file.path.startsWith('/__reads/') && (error instanceof LibraryError || error instanceof SourceError) && error.code === 'stale_call') {
+          throw retire(file);
+        }
+        if (error instanceof LibraryError) failures.set(keyFor(file), error);
+        throw error;
+      }
     }
   };
   const gateway = createDav(internalView, credentials);

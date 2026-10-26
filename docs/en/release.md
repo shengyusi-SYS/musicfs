@@ -3,7 +3,7 @@
 [简体中文](../release.md)
 
 <!-- release-version -->
-Current version: **0.1.1**.
+Current version: **0.1.2**.
 
 ## Choose a package
 
@@ -11,11 +11,11 @@ Published attachments are available from [GitHub Releases](https://github.com/sh
 
 | Goal | Package |
 |---|---|
-| Use on Linux | `musicfs-0.1.1-linux-x64.zip` |
-| Use on Windows | `musicfs-0.1.1-windows-x64.zip` |
-| Deploy Cloudflare Worker | `musicfs-0.1.1-worker.zip` |
-| Develop a source plugin | `musicfs-0.1.1-plugin-author-kit.zip` |
-| Modify or build MusicFS | `musicfs-0.1.1-source.zip` |
+| Use on Linux | `musicfs-0.1.2-linux-x64.zip` |
+| Use on Windows | `musicfs-0.1.2-windows-x64.zip` |
+| Deploy Cloudflare Worker | `musicfs-0.1.2-worker.zip` |
+| Develop a source plugin | `musicfs-0.1.2-plugin-author-kit.zip` |
+| Modify or build MusicFS | `musicfs-0.1.2-source.zip` |
 
 Windows x64 and Linux x64 are built from the same source. macOS currently has a source-build entry.
 
