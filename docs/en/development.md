@@ -112,6 +112,12 @@ Adjust the target list to your toolchains. If release inputs change afterward, r
 
 Local packaging checks source, WebUI and plugin identity; the GitHub workflow below handles uploads. Desktop, Worker and author packages carry their relevant bilingual guides. Complete designs, references and historical evidence live in the source package. [Downloads and upgrades](release.md)
 
+## Cloud update tooling
+
+`.github/workflows/update-musicfs.yml` selects a published release, checks the build and opens an update request using `peter-evans/create-pull-request`. `scripts/update-worker-source.ts` updates source files and merges Wrangler configuration between two checkouts without calling Cloudflare. Deployment remains in `scripts/deploy-worker.ts`. Existing installations only copy the workflow; the updater is loaded from the selected release tag.
+
+When changing the updater, run `bun test tests/update-worker-source.test.ts tests/worker-deployment.test.ts tests/worker-upgrade.test.ts`. These cover independent repositories, retained configuration and installed plugins without contacting music providers or creating cloud resources.
+
 ## GitHub releases
 
 [Build and release](../../.github/workflows/release.yml) builds Windows x64, Linux x64, Worker, the author kit, source and all three example plugins on GitHub.

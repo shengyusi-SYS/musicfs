@@ -68,7 +68,7 @@ Windows 首次挂载时，可按页面提示安装 WinFsp；Linux 挂载需要 F
 
 按页面提示连接 GitHub 和 Cloudflare，填写管理令牌、WebDAV 账号密码和插件发布 Token。数据库会自动创建，部署后即可打开管理页面。
 
-→ [Worker 部署指南](docs/worker.md)
+→ [Worker 部署指南](docs/worker.md) · [网页更新版本](docs/worker.md#网页更新版本)
 
 ## 继续了解
 

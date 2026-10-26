@@ -21,6 +21,35 @@ The deployment tool fills in the account ID and Worker name and applies database
 
 Future repository updates use the same deploy command, retaining D1, credentials and the exact plugins installed through management while replacing the core and WebUI. Let any plugin install or removal finish before updating. For source deployments, `bun run deploy --dry-run` assembles and checks the files without applying migrations or deploying.
 
+## Update in your browser
+
+In the GitHub repository connected to Cloudflare, open **Actions → 更新 MusicFS / Update MusicFS → Run workflow**. Keep `latest` for the latest stable release, or enter a published version such as `v0.1.1`. Run it from the repository's default branch.
+
+1. Wait for the checks, then select **Review and merge** in the run summary.
+2. Read the release notes and select **Merge pull request → Confirm merge**.
+3. Open **Cloudflare → your Worker → Deployments** to check the deployment result. Reopen MusicFS after it succeeds; merging and deploying are separate steps.
+
+No update request is created when you already have that version or a newer one. The workflow does not downgrade or follow development branches. Prereleases require an explicit published version. Repeated runs update the same pending pull request.
+
+The update replaces application source and removes obsolete source files while retaining your Worker name, account, database IDs, custom domains, variables and deployment settings. Entrypoints, module rules and migration paths advance with the application. The existing deployment process retains D1 data, Worker Secrets and installed plugins. Repository workflows and local environment files are left in place. If you modified application code, review the diff before merging.
+
+### Add the updater to an existing deployment
+
+Add one file to your deployment repository. No new cloud resources or API token are needed:
+
+1. Open the official [update workflow file](https://github.com/shengyusi-SYS/musicfs/blob/main/.github/workflows/update-musicfs.yml) and select **Copy raw file**.
+2. In the GitHub repository connected to Cloudflare, select **Add file → Create new file**. Name it `.github/workflows/update-musicfs.yml`, paste the contents and commit to the default branch. If it already exists, edit and replace it.
+3. Under **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests** and save. Organization repositories may need an administrator to enable this. New deployments also need this setting enabled once.
+4. Return to **Actions** and follow the update steps above. The workflow obtains the updater from the selected release; the old repository does not need an updater script. Update targets are releases `0.1.1` and later.
+
+Adding the workflow may trigger a Cloudflare build of the old code. Continue with the update button; you do not need another Worker. Keep Cloudflare **Preview builds** off so the update request runs local build checks and deployment happens after merging.
+
+### If an update fails
+
+- **Update checks fail:** your running service is unchanged. Read the failed Actions step, resolve the issue and run again. If pull request creation fails, check the permission setting above.
+- **Deployment fails after merging:** inspect the Cloudflare build log, fix the cause and retry that build. Keep the existing database and Worker. Database migrations may already have run; a failed deployment does not mean every change was rolled back.
+- **No automatic build:** under Cloudflare **Settings → Builds**, check that the connected branch is your repository's default branch and automatic production deployments are enabled.
+
 <a id="first-deployment"></a>
 
 ## Deploy a release archive

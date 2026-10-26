@@ -38,7 +38,7 @@ MusicFS can also run on Cloudflare Workers with the same management interface. [
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shengyusi-SYS/musicfs)
 
-Connect GitHub and Cloudflare, then enter a management token, WebDAV credentials and a plugin publishing token. The database is created automatically.
+Connect GitHub and Cloudflare, then enter a management token, WebDAV credentials and a plugin publishing token. The database is created automatically. Update later with the [browser update workflow](docs/en/worker.md#update-in-your-browser).
 
 ## Keep exploring
 

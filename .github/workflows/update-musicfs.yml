@@ -1,0 +1,122 @@
+name: 更新 MusicFS / Update MusicFS
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本 / Version: latest 或具体版本，例如 v0.1.1'
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-musicfs
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Resolve published release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          version = os.environ['REQUESTED_VERSION'].strip()
+          if version == 'latest':
+              endpoint = 'releases/latest'
+          else:
+              tag = version if version.startswith('v') else 'v' + version
+              if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?', tag):
+                  raise SystemExit('填写 latest 或发行版本 / Enter latest or a release version')
+              endpoint = 'releases/tags/' + tag
+          release = json.loads(subprocess.check_output(['gh', 'api', 'repos/shengyusi-SYS/musicfs/' + endpoint]))
+          tag = release['tag_name']
+          if release['draft'] or not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?', tag):
+              raise SystemExit('Not a published MusicFS version')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('tag=' + tag + '\nversion=' + tag[1:] + '\nurl=' + release['html_url'] + '\n')
+          PY
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: deployment
+
+      - uses: actions/checkout@v7
+        with:
+          repository: shengyusi-SYS/musicfs
+          ref: ${{ steps.release.outputs.tag }}
+          path: upstream
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: upstream/package.json
+
+      - name: Prepare update
+        id: prepare
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          cd upstream
+          bun install --frozen-lockfile --ignore-scripts
+          bun run scripts/update-worker-source.ts --source . --target ../deployment --version "$VERSION" > "$RUNNER_TEMP/musicfs-update.json"
+          python3 - <<'PY'
+          import json, os
+          result = json.load(open(os.environ['RUNNER_TEMP'] + '/musicfs-update.json'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('changed=' + str(result['changed']).lower() + '\nprevious=' + result['previous'] + '\n')
+          PY
+
+      - name: Check updated deployment source
+        if: steps.prepare.outputs.changed == 'true'
+        working-directory: deployment
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun run build
+          bun run typecheck
+          bun run build:worker
+          git diff --check
+
+      - name: Open update for confirmation
+        if: steps.prepare.outputs.changed == 'true'
+        id: pr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          path: deployment
+          base: ${{ github.event.repository.default_branch }}
+          branch: musicfs-update
+          commit-message: 'chore: update MusicFS to ${{ steps.release.outputs.tag }}'
+          title: '更新 MusicFS / Update MusicFS: ${{ steps.prepare.outputs.previous }} → ${{ steps.release.outputs.version }}'
+          body: |
+            [版本说明 / Release notes](${{ steps.release.outputs.url }})
+
+            已检查构建和类型。点击 Merge pull request → Confirm merge，Cloudflare 将部署新版。
+            Build and type checks passed. Select Merge pull request → Confirm merge to start the Cloudflare deployment.
+
+            保留 Worker 名称、数据库绑定和部署设置；现有 Secrets、音乐数据和已安装插件沿用。
+            Worker name, database bindings and deployment settings are retained, as are existing Secrets, music data and installed plugins.
+
+            部署结果请到 Cloudflare → Worker → Deployments 查看。合并成功不代表部署已完成。
+            Check Cloudflare → Worker → Deployments for the result; merging is not deployment completion.
+          delete-branch: true
+
+      - name: Show next step
+        env:
+          CHANGED: ${{ steps.prepare.outputs.changed }}
+          PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          if [ "$CHANGED" = true ]; then
+            printf '## 更新已准备 / Update ready\n\n[确认更新 / Review and merge](%s)\n' "$PR_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '## 已是该版本或更新版本 / Already at this version or newer\n' >> "$GITHUB_STEP_SUMMARY"
+          fi

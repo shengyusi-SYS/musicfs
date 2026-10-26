@@ -112,6 +112,12 @@ bun run package:release -- --targets windows-x64,linux-x64
 
 本地打包工具核对源码、页面和插件身份；上传由下面的 GitHub workflow 完成。桌面包、Worker 包和作者包携带各自需要的双语文档；完整设计、参考与历史证据在源码包。发行入口见[下载与升级](release.md)。
 
+## 云端更新工具
+
+`.github/workflows/update-musicfs.yml` 负责选择正式发行、检查构建和创建更新请求，复用 `peter-evans/create-pull-request`。`scripts/update-worker-source.ts` 只处理两个源码目录的文件更新与 Wrangler 配置合并，不调用 Cloudflare；部署仍由 `scripts/deploy-worker.ts` 负责。旧部署只复制工作流即可接入，更新工具从选定的发行标签加载。
+
+修改更新工具时运行 `bun test tests/update-worker-source.test.ts tests/worker-deployment.test.ts tests/worker-upgrade.test.ts`。这些测试覆盖独立仓库更新、配置保留和既有插件保留；不需要访问音乐平台或新建云资源。
+
 ## GitHub 自动发行
 
 [Build and release](../.github/workflows/release.yml) 在 GitHub 上构建 Windows x64、Linux x64、Worker、插件作者包、源码包和三个示例插件。

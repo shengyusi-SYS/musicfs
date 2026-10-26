@@ -21,6 +21,35 @@ Worker 版通过 HTTPS 提供同一套音乐库、管理页面和 WebDAV。可�
 
 之后更新自己的仓库，沿用同一部署命令即可保留 D1、凭据和云端已安装插件，替换核心与页面。更新前先等管理页中的插件安装或移除完成。源码部署也可用 `bun run deploy --dry-run` 只组装并检查部署文件。
 
+## 网页更新版本
+
+在 Cloudflare 关联的 GitHub 仓库中打开 **Actions → 更新 MusicFS / Update MusicFS → Run workflow**，保留 `latest` 即可更新到最新正式版，也可填写 `v0.1.1` 这样的发行版本。使用仓库默认分支运行。
+
+1. 等检查完成，在运行摘要点击「确认更新 / Review and merge」。
+2. 查看版本说明，点击 **Merge pull request → Confirm merge**。
+3. 到 **Cloudflare → 你的 Worker → Deployments** 查看部署结果；成功后重新打开 MusicFS。合并完成与部署完成是两个步骤。
+
+已是目标版本或更新版本时不会创建更新请求。默认不降级、不追踪开发分支；预发布版只有填写对应发行版本才会使用。重复运行会更新同一个待合并请求。
+
+更新会替换应用源码并删除已移除的源码文件，同时保留 Worker 名称、账号、数据库 ID、自定义域名、变量和用户部署设置；新版入口、模块规则和迁移路径随程序升级。D1 数据、Worker Secrets 和已安装插件由现有部署流程保留。工作流文件与本地环境文件不参与覆盖。自己改过程序源码时，可在合并前查看差异。
+
+### 旧部署首次接入
+
+只需在自己的部署仓库添加一个文件，无需重新部署资源或创建 Token：
+
+1. 打开官方的 [更新工作流文件](https://github.com/shengyusi-SYS/musicfs/blob/main/.github/workflows/update-musicfs.yml)，点击 **Copy raw file** 复制全部内容。
+2. 打开 Cloudflare 关联的 GitHub 仓库，选择 **Add file → Create new file**，文件名填写 `.github/workflows/update-musicfs.yml`，粘贴并提交到默认分支。已有同名文件时直接编辑替换。
+3. 在 **Settings → Actions → General → Workflow permissions** 勾选 **Allow GitHub Actions to create and approve pull requests**，保存。组织仓库若不允许修改此项，需要组织管理员开启。新部署也只需开启一次此选项。
+4. 返回 **Actions**，按上面的步骤运行。此方式从目标发行版本取得更新工具，旧仓库不需要已有更新脚本；支持从 `0.1.1` 及之后的发行版本获取更新。
+
+首次提交工作流可能触发 Cloudflare 对旧代码的构建；无需重复创建 Worker，继续运行更新按钮即可。Cloudflare 的「预览构建」保持关闭，让更新请求只做本地构建检查，合并后才部署。
+
+### 更新失败时
+
+- **更新检查失败：** 当前服务不受影响；在 Actions 中查看失败步骤，修正后重新运行。提示无法创建 Pull Request 时检查上述权限设置。
+- **合并后部署失败：** 在 Cloudflare 构建日志中定位原因，修正后重试该构建；不要删除数据库或重新走一键部署。数据库迁移可能已经执行，不应把失败理解为所有变更均已回滚。
+- **没有自动构建：** 在 Cloudflare 的 **Settings → Builds** 确认关联的是本仓库默认分支、生产分支自动部署已开启。
+
 <a id="首次部署"></a>
 
 ## 用发行包部署
