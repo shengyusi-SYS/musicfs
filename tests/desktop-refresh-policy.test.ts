@@ -42,7 +42,9 @@ test('desktop schedules progress without a page and retain mount listings when p
     clock.close(); publications.length = 0;
     service = await createDesktopService(options);
     const deadline = Date.now() + 2_000;
-    while (service.store.snapshotHeader(instanceId, { kind: 'directory', ref: '/' })?.completedAt === previous!.completedAt && Date.now() < deadline) await Bun.sleep(5);
+    // Publication precedes schedule settlement; wait for both resident-runner phases.
+    while ((service.store.snapshotHeader(instanceId, { kind: 'directory', ref: '/' })?.completedAt === previous!.completedAt
+      || service.store.nextRefreshScheduleAt() === null) && Date.now() < deadline) await Bun.sleep(5);
     const current = service.store.snapshot(instanceId, { kind: 'directory', ref: '/' })?.value;
     expect(current?.id).toBe(previous!.id);
     expect(current?.completedAt).not.toBe(previous!.completedAt);
