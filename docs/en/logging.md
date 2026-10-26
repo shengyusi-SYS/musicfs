@@ -39,6 +39,8 @@ Provider outcomes are observed as well as HTTP: a provider fault can be recorded
 
 Streams report one completion, cancellation or failure event with expected/actual bytes, range, content identity, elapsed time and time since the last data. `firstReadWaitMs` and `maxReadWaitMs` measure the first and longest await of `reader.read()`, excluding consumer pauses between pulls. Premature EOF, stream errors and request/consumer cancellation are distinguished. Backpressure and cancellation propagate normally; ordinary seek cancellation is not a warning; deadline expiry remains a warning. Unexpected HTTP 500 errors expose a copyable error ID. Repeated events remain bounded by IO limits.
 
+Before response headers, an aborted request ends with status 499 and a debug cancellation event. The client may already be disconnected. Classification follows the request signal, rather than the exception name alone; deadline expiry remains a failure. After headers, the stream observer records completion, cancellation or interruption.
+
 ## Implementation
 
 [LogTape](https://logtape.org/manual/start) supplies structured logging, levels, async context and throttling for Bun and edge runtimes. `@logtape/file` supplies desktop rotation; rclone uses its own rotation options. This keeps one logging API across hosts without bundling desktop file sinks into Worker. Pino or Winston would fit an existing Node logging stack; MusicFS prioritizes shared runtime support.

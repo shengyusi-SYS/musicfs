@@ -10,10 +10,11 @@ flowchart LR
   DAV --> Shared[桌面 read-cache Adapter]
   Shared -->|缓存命中前后核对| Current[sources.current 来源代际]
   Shared --> VFS[rclone 服务端 VFS 稀疏片段]
-  VFS -->|缺失范围| Key[不可变键定位与来源代际核对]
-  Key --> Private[回环内部 DAV]
-  App[App 本机挂载 VFS] -->|普通路径，绕过共享落盘| Private
-  Private --> Library[原 library FileView]
+  VFS -->|缺失范围| KeyDAV[内部 DAV：不可变键路径]
+  KeyDAV --> Key[定位与来源代际核对]
+  App[App 本机挂载 VFS] -->|绕过共享落盘| PathDAV[内部 DAV：普通路径]
+  Key --> Library[原 library FileView]
+  PathDAV --> Library
   Library -->|持久任务写入| Store[桌面持久化接线]
   Store -->|写入成功后唤醒| Runner[桌面后台队列]
   Runner -->|续步并发布目录| Library
@@ -38,7 +39,7 @@ flowchart TD
   Open -->|stale_call| Recheck{重新核对来源代际}
   Recheck -->|已改变| Retire
   Recheck -->|仍有效| Retry[保留定位，返回临时失败]
-  Retire --> Fresh[客户端重新获取公开文件，登记新键]
+  Retire -.->|客户端重新打开时| Fresh[重新获取公开文件，登记新键]
   Retry --> Again[后续请求可重试同一地址]
 ```
 

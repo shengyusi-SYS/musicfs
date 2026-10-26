@@ -38,3 +38,9 @@ App-local mounts and direct desktop WebDAV have separate read-byte caches. Worke
 ## Historical evidence
 
 Earlier records, raw data and screenshots remain in [Git history](https://github.com/shengyusi-SYS/musicfs/tree/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification). Current documentation keeps conclusions useful for choosing and using MusicFS.
+
+## Read-cache boundaries
+
+Local regressions cover expired source generations returning 404 at internal cache URLs, same-generation state conflicts remaining retryable, and distinguishing pre-header request cancellation from timeouts.
+
+A local rclone 1.75.2 VFS check against the production DAV adapter confirmed an unresolved mount-cache limit: changing content and ETag while keeping the path, size and modification time can reuse old bytes after a directory refresh. Direct DAV's shared cache uses immutable content keys instead. This check did not exercise Windows/FUSE drivers or a music platform. See the [mount-cache design](../architecture/desktop-mounts.md).
