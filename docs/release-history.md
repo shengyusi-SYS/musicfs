@@ -2,6 +2,10 @@
 
 按版本记录主要变化。当前下载、升级和构建身份见[发行页](release.md)；各版本的实测范围见[验收台账](verification.md)。旧归档已从本地清理，历史细节保留在 Git 与对应验证记录中。
 
+## 0.1.1 云端部署与网页更新
+
+修正 Cloudflare 一键部署已创建占位 Worker 时首次安装失败的问题。新增「更新 MusicFS / Update MusicFS」工作流，默认选择正式版，检查后生成更新请求；合并后沿用现有资源部署。补齐旧仓库接入、中英文更新说明，以及构建令牌与插件发布令牌的用途说明。
+
 ## dev.31 中英文与完整文档
 
 中英文界面覆盖页面、插件显示、表单校验、错误提示、终端和托盘；无桌面启动提供可用入口。桌面、Worker、源码和作者包携带对应双语指南，README 加入工具定位声明。 [中英文记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/i18n.md)、[无桌面记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/headless-access.md)。
