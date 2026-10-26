@@ -10,8 +10,9 @@ flowchart LR
   DAV --> Shared[桌面 read-cache Adapter]
   Shared -->|缓存命中前后核对| Current[sources.current 来源代际]
   Shared --> VFS[rclone 服务端 VFS 稀疏片段]
-  VFS -->|缺失范围| Private[回环内部 DAV]
-  App[App 本机挂载 VFS] -->|绕过共享落盘| Private
+  VFS -->|缺失范围| Key[不可变键定位与来源代际核对]
+  Key --> Private[回环内部 DAV]
+  App[App 本机挂载 VFS] -->|普通路径，绕过共享落盘| Private
   Private --> Library[原 library FileView]
   Library -->|持久任务写入| Store[桌面持久化接线]
   Store -->|写入成功后唤醒| Runner[桌面后台队列]
@@ -26,6 +27,22 @@ flowchart LR
 内部键由实例/代际、插件身份/修订/代际、文件引用和最终 `contentId/size/mediaType` 组成。不以路径、大小或 mtime 单独判断表示；相同路径和大小的新内容身份进入新键。键不可变，内部固定 mtime 只服务该键，外部 mtime/ETag 保持原值。命中前后沿原 `current` 核对来源有效性，无需仅为验证缓存重新解析 CDN URL。
 
 内部定位使用有界 LRU 与活动读取引用，文件视图在打开前重新登记；不持久化第二套目录。新键只失效所属固定桶的清单。App 内部直读保留原 `statMany`，不退化成逐首查属性。
+
+## 失效与恢复
+
+```mermaid
+flowchart TD
+  Read[内部缓存地址读取] --> Current{来源代际仍有效?}
+  Current -->|否| Retire[移除定位，返回 404]
+  Current -->|是| Open[核心打开文件]
+  Open -->|stale_call| Recheck{重新核对来源代际}
+  Recheck -->|已改变| Retire
+  Recheck -->|仍有效| Retry[保留定位，返回临时失败]
+  Retire --> Fresh[客户端重新获取公开文件，登记新键]
+  Retry --> Again[后续请求可重试同一地址]
+```
+
+`stale_call` 也可能表示私有会话状态的并发提交冲突，不能仅凭错误码永久废弃文件。只有来源代际核对失败才退役不可变地址；公开路径仍遵循原 DAV 错误合同。退役不强制删除正在消费的磁盘片段，也不保证客户端自动重新打开公开路径。
 
 ## 设置与容量
 

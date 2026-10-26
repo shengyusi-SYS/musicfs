@@ -80,6 +80,11 @@ App 挂载使用原生 full 稀疏缓存，只保存已读片段。读取采用 
 
 WebDAV remote 使用支持 Last-Modified 的 rclone 兼容配置参与缓存指纹，避免只比较大小误用同大小更新。默认容量、期限与软上限见[缓存策略](cache-policy.md)。关闭缓存保留旧片段，卸载保留片段，移除才清理所属命名空间。
 
+**已确认的内容版本边界：** 同一路径的最终字节发生变化，但大小和 Last-Modified 都未变化时，即使 ETag 已改变，当前 rclone 挂载 VFS 仍可能复用旧片段；目录 `forget` 不会修复这一情况。2026-10-26 使用 rclone 1.75.2、生产 DAV 和四字节本地样本复现：AAAA 更新为 BBBB，刷新后仍读到 AAAA，取源次数保持一次。此验证覆盖 VFS，不代表重新进行了 Windows/FUSE 驱动验收。
+
+后续修复应将最终表示版本接入挂载字节缓存的身份判断，保留未变化文件的缓存；不以整盘清空、伪造内容校验和或缩短所有 TTL 代替。现有“清理缓存”操作可用于主动移除旧片段。直接 DAV 的共享不可变键缓存不受这一身份判断限制。
+
+
 缓存管理查询实际 VFS 模式、路径、文件数、占用和采样时间，不把配置冒充运行状态；未运行不启动进程或扫描磁盘。清理先正常卸载，再删除该挂载片段并按原设置重挂，失败不删。它与目录清单 `forget` 分开，也不清除来源资料或标签计划。
 
 历史预读对照、播放成本、真实重挂与 Windows 消费证据见[缓存消费记录](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/cache-consumption-2026-10-21.md)及[共享读取验证](https://github.com/shengyusi-SYS/musicfs/blob/b637d4d19da97e3473942be9ad7925b740afd47a/docs/verification/shared-read-cache.md)，不在设计页重复运行计数。

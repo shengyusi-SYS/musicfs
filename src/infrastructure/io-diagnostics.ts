@@ -4,7 +4,7 @@ import { connectionFailure, requestNetworkFields, responseNetworkFields, type Pr
 import type { Sources } from '../core/sources';
 import type { Outcome } from '@musicfs/plugin-api';
 
-function deadlineExceeded(signal?: AbortSignal | null): boolean {
+export function deadlineExceeded(signal?: AbortSignal | null): boolean {
   const reason: unknown = signal?.reason;
   return signal?.aborted === true && typeof reason === 'object' && reason !== null && 'name' in reason && reason.name === 'TimeoutError';
 }

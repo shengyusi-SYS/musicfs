@@ -39,3 +39,7 @@ export function reportPendingRead(c: Context, error: Error) {
     ...requestFields(c), status: 503, retryAfterSeconds: 2, ...errorFields(error)
   });
 }
+
+export function reportRequestCancelled(c: Context) {
+  getLogger(['musicfs', 'io', 'http']).debug('HTTP request cancelled', { ...requestFields(c), status: 499 });
+}

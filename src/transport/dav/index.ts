@@ -7,8 +7,8 @@ import { LibraryError, PendingRefreshError, type FileView } from '../../core/lib
 import { SourceError } from '../../core/sources';
 import { needsFileMetadata, parsePropfind, propfindResponse } from './xml';
 import type { DavCredentials } from '../../contracts/dav-access';
-import { reportPendingRead, reportRequestFailure, reportSourceFailure, requestDiagnostics } from '../diagnostics';
-import { observeAudio } from '../../infrastructure/io-diagnostics';
+import { reportRequestCancelled, reportPendingRead, reportRequestFailure, reportSourceFailure, requestDiagnostics } from '../diagnostics';
+import { deadlineExceeded, observeAudio } from '../../infrastructure/io-diagnostics';
 
 export type ReadCredentials = DavCredentials;
 export type DavOptions = { fixedLength?: (size: number) => TransformStream<Uint8Array, Uint8Array> };
@@ -44,6 +44,10 @@ export function createDav(view: FileView, credentials: ReadCredentials | (() => 
     : basicAuth(credentials);
   const limit = bodyLimit({ maxSize: 64 * 1024 });
   app.onError((error, c) => {
+    if (c.req.raw.signal.aborted && !deadlineExceeded(c.req.raw.signal)) {
+      reportRequestCancelled(c);
+      return new Response(null, { status: 499 });
+    }
     if (error instanceof HTTPException) {
       if (error.status >= 500) reportSourceFailure(c, error, error.status);
       return error.getResponse();

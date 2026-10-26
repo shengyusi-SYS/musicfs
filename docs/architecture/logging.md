@@ -65,3 +65,5 @@ DAV 的 5xx 默认记录，包括等待文件准备的 503。记录中带请求 
 应用日志选择请求/操作 ID、目标主机与端口、路由模板、状态、耗时、字节数、错误类型/代码与栈位置；不传入完整 URL、查询参数、凭据、Cookie、请求正文、音乐路径或原始上游错误消息。原生工具日志由工具管理，公开问题记录只保留必要且去标识的信息。
 
 Cloudflare 默认记录应用事件、关闭每次访问的 invocation log，减少扫描和 Range 请求的记录量；没有额外日志服务、Tail Worker 或日志数据库。现有部署自定义配置继续保留。[Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)、[rclone 日志](https://rclone.org/docs/#logging)
+
+DAV 在响应头返回前遇到已取消的请求时，以 499 结束处理，仅记录 debug 级取消事件；客户端通常已断开，不依赖它接收此状态。判断以请求 signal 为准，不把任意名为 AbortError 的异常视为正常取消。TimeoutError 仍进入故障日志；响应头后的流完成、取消与中断由流观察器记录。

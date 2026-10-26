@@ -139,7 +139,7 @@ test('a failed uncached open releases its quit reservation', async () => {
 test('an obsolete internal cache URL becomes not-found and a fresh source generation remains readable', async () => {
   const { LibraryError } = await import('../src/core/library');
   const directory = await mkdtemp(join(tmpdir(), 'musicfs-stale-read-cache-'));
-  let epoch = 1, opens = 0, origin = '', authorization = '', lastPath = '', changeOnOpen = false;
+  let epoch = 1, opens = 0, origin = '', authorization = '', lastPath = '', changeOnOpen = false, conflict = false;
   const bridge = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
     lastPath = new URL(request.url).pathname.slice(1);
     const response = await fetch(origin + lastPath, { headers: { Authorization: authorization }, signal: request.signal });
@@ -150,6 +150,7 @@ test('an obsolete internal cache URL becomes not-found and a fresh source genera
     current: value => value.handle.stamp.epoch === epoch,
     view: { stat: unused, list: unused, statMany: unused, async open(value) {
       opens++;
+      if (conflict) { conflict = false; const { SourceError } = await import('../src/core/sources'); throw new SourceError('stale_call', 'State revision conflict'); }
       if (changeOnOpen) { epoch++; changeOnOpen = false; }
       if (value.handle.stamp.epoch !== epoch) throw new LibraryError('stale_call', 'Source changed before audio request');
       return { content: value.handle.content, servedRange: null, body: new Blob([bytes]).stream() };
@@ -168,21 +169,26 @@ test('an obsolete internal cache URL becomes not-found and a fresh source genera
     const first = await cache.files.open(file, undefined, signal);
     expect(new Uint8Array(await new Response(first.body).arrayBuffer())).toEqual(bytes);
     const oldUrl = origin + lastPath;
+    conflict = true;
+    const transient = await fetch(oldUrl, { headers: { Authorization: authorization } });
+    expect(transient.status).toBe(503); await transient.body?.cancel();
+    const recovered = await fetch(oldUrl, { headers: { Authorization: authorization } });
+    expect(recovered.status).toBe(200); expect(new Uint8Array(await recovered.arrayBuffer())).toEqual(bytes);
     epoch++;
     // The native cache can still request an old immutable URL after reauthorization.
     const stale = await fetch(oldUrl, { headers: { Authorization: authorization } });
     expect(stale.status).toBe(404); await stale.body?.cancel();
-    expect(opens).toBe(1);
+    expect(opens).toBe(3);
     const fresh = structuredClone(file); fresh.handle.stamp.epoch = epoch;
     const next = await cache.files.open(fresh, undefined, signal);
     expect(new Uint8Array(await new Response(next.body).arrayBuffer())).toEqual(bytes);
-    expect(origin + lastPath).not.toBe(oldUrl); expect(opens).toBe(2);
+    expect(origin + lastPath).not.toBe(oldUrl); expect(opens).toBe(4);
     // Also retire a URL when the source changes between metadata and opening.
     const raceUrl = origin + lastPath; changeOnOpen = true;
     const raced = await fetch(raceUrl, { headers: { Authorization: authorization } });
     expect(raced.status).toBe(404); await raced.body?.cancel();
     const repeated = await fetch(raceUrl, { headers: { Authorization: authorization } });
     expect(repeated.status).toBe(404); await repeated.body?.cancel();
-    expect(opens).toBe(3);
+    expect(opens).toBe(5);
   } finally { await cache.close(); await bridge.stop(true); await rm(directory, { recursive: true, force: true }); }
 });

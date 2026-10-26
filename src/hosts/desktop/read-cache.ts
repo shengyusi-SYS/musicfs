@@ -114,7 +114,8 @@ export async function createDesktopReadCache(input: {
         return await withContext({ resourceKey }, () => input.view.open(file, range, signal));
       }
       catch (error) {
-        if (file.path.startsWith('/__reads/') && (error instanceof LibraryError || error instanceof SourceError) && error.code === 'stale_call') {
+        if (file.path.startsWith('/__reads/') && (error instanceof LibraryError || error instanceof SourceError) && error.code === 'stale_call'
+          && !await input.current(file)) {
           throw retire(file);
         }
         if (error instanceof LibraryError) failures.set(keyFor(file), error);

@@ -176,3 +176,25 @@ test('desktop logging writes structured failures to the data directory and suppr
     expect(records.some(record => record.message === 'Routine activity')).toBe(false);
   } finally { close?.(); await rm(directory, { recursive: true, force: true }); }
 });
+
+
+test('DAV cancellation before headers is quiet, but deadlines remain failures', async () => {
+  const records: LogRecord[] = [];
+  configureApplicationLogging({ capture: record => { records.push(record); } });
+  try {
+    for (const timeout of [false, true]) {
+      records.length = 0;
+      const controller = new AbortController();
+      const view = { stat: async () => {
+        controller.abort(new DOMException('fixture', timeout ? 'TimeoutError' : 'AbortError'));
+        throw controller.signal.reason;
+      } } as unknown as FileView;
+      const dav = createDav(view, { username: 'reader', password: 'fixture-password' });
+      const response = await dav.fetch(new Request('http://localhost/dav/file.mp3', {
+        signal: controller.signal, headers: { Authorization: 'Basic ' + btoa('reader:fixture-password') }
+      }));
+      expect(response.status).toBe(timeout ? 500 : 499);
+      expect(records.length).toBe(timeout ? 1 : 0);
+    }
+  } finally { disposeSync(); }
+});
